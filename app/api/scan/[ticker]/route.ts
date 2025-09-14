@@ -1,94 +1,149 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
+import yahooFinance from "yahoo-finance2";
 
-// Force node runtime
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// Helper: limit risk score
+function capScore(score: number) {
+  return Math.min(100, Math.max(0, score));
+}
+
+// Helper: get SEC filings from EDGAR
+async function fetchSECFilings(ticker: string) {
+  try {
+    // Step 1: Lookup CIK
+    const cikRes = await fetch(`https://www.sec.gov/files/company_tickers.json`, {
+      headers: { "User-Agent": "pump-scorecard (your-email@example.com)" },
+    });
+    const allTickers = await cikRes.json();
+
+    const entry = Object.values<any>(allTickers).find(
+      (c: any) => c.ticker.toUpperCase() === ticker.toUpperCase()
+    );
+    if (!entry) return [];
+
+    const cik = entry.cik_str.toString().padStart(10, "0");
+
+    // Step 2: Pull filings
+    const filingsRes = await fetch(
+      `https://data.sec.gov/submissions/CIK${cik}.json`,
+      { headers: { "User-Agent": "pump-scorecard (your-email@example.com)" } }
+    );
+
+    const filingsJson = await filingsRes.json();
+    const recent = filingsJson.filings.recent;
+
+    const out = [];
+    for (let i = 0; i < recent.accessionNumber.length; i++) {
+      out.push({
+        date: recent.filingDate[i],
+        form: recent.form[i],
+        reason: recent.primaryDocDescription?.[i] ?? "N/A",
+        url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[i].replace(/-/g, "")}/${recent.primaryDocument[i]}`,
+      });
+    }
+
+    return out.slice(0, 10); // latest 10 filings
+  } catch (err) {
+    console.error("SEC fetch error", err);
+    return [];
+  }
+}
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { ticker: string } }
 ) {
+  const ticker = params.ticker.toUpperCase();
+
   try {
-    const tkr = params.ticker.toUpperCase();
+    // === Market Data ===
+    const quote = await yahooFinance.quote(ticker, {
+      modules: ["price", "summaryDetail", "defaultKeyStatistics"],
+    });
 
-    // --- Mock price/volume ---
-    const latest = { close: 3.25, volume: 1000000 };
-    const avgVol = 500000;
-    const sudden_volume_spike = latest.volume > avgVol * 3;
-    const sudden_price_spike = false;
-    const valuation_fundamentals_mismatch = true;
+    // === Historical Data ===
+    const history = await yahooFinance.historical(ticker, {
+      period1: "2024-01-01",
+      period2: new Date(),
+      interval: "1d",
+    });
 
-    // --- Mock SEC ---
-    const sec_flags: Array<{ form: string; date: string; reason: string; url?: string }> = [
-      {
-        form: 'S-3',
-        date: '2025-09-01',
-        reason: 'Shelf registration (possible dilution)',
-        url: 'https://www.sec.gov/Archives/edgar/data/0000000000/filing-s3.htm',
-      },
-    ];
+    // === SEC Filings ===
+    const sec_flags = await fetchSECFilings(ticker);
 
-    // --- Mock hype ---
+    // === Mock Social Media Hype ===
     const hype = {
-      redditMentions: 12,
-      twitterMentions: 30,
-      timeline: [
-        { day: '1d ago', reddit: 2, twitter: 5 },
-        { day: '2d ago', reddit: 4, twitter: 10 },
-        { day: '3d ago', reddit: 6, twitter: 15 },
-      ],
-      keywordHeatmap: {
-        pump: 3,
-        moon: 2,
-        telegram: 1,
-      },
+      redditMentions: Math.floor(Math.random() * 500),
+      twitterMentions: Math.floor(Math.random() * 500),
+      timeline: Array.from({ length: 7 }).map((_, i) => ({
+        day: `Day ${i + 1}`,
+        reddit: Math.floor(Math.random() * 100),
+        twitter: Math.floor(Math.random() * 100),
+      })),
+      keywordHeatmap: { "pump": 10, "moon": 7, "rocket": 5 },
     };
 
-    // --- Mock squeeze risk ---
-    const squeezeRiskScore = 75;
-    const squeezeLabel = squeezeRiskScore >= 80 ? '🔥 Extreme'
-      : squeezeRiskScore >= 60 ? '⚠️ Elevated'
-      : squeezeRiskScore >= 40 ? 'Moderate'
-      : 'Low';
+    // === Signals (stubbed for now) ===
+    const sudden_volume_spike = true;
+    const sudden_price_spike = false;
+    const valuation_fundamentals_mismatch = true;
+    const no_fundamental_news = false;
 
-    return NextResponse.json({
-      ticker: tkr,
-
+    // Count auto signals
+    const autoSignals = [
       sudden_volume_spike,
       sudden_price_spike,
       valuation_fundamentals_mismatch,
-      reverse_split_or_dilution: true,
-      recent_auditor_change: false,
-      insider_or_major_holder_selloff: true,
+      no_fundamental_news,
+    ];
+    const triggered = autoSignals.filter(Boolean).length;
 
-      last_price: latest.close,
-      avg_volume: avgVol,
-      latest_volume: latest.volume,
-      marketCap: 100_000_000,
-      sharesOutstanding: 50_000_000,
-      floatShares: 40_000_000,
+    const squeezeRiskScore = capScore((triggered / autoSignals.length) * 100);
 
-      shortFloat: 25,
-      insiderOwn: 5,
-      instOwn: 12,
-      squeezeRiskScore: Math.min(squeezeRiskScore, 100),
-      squeezeLabel,
+    return NextResponse.json({
+      ticker,
+      last_price: quote.price?.regularMarketPrice,
+      latest_volume: quote.price?.regularMarketVolume,
+      marketCap: quote.price?.marketCap,
+      sharesOutstanding: quote.defaultKeyStatistics?.sharesOutstanding,
+      floatShares: quote.defaultKeyStatistics?.floatShares,
+      shortFloat: quote.defaultKeyStatistics?.shortPercentOfFloat
+        ? quote.defaultKeyStatistics.shortPercentOfFloat * 100
+        : null,
+      instOwn: quote.defaultKeyStatistics?.institutionPercentHeld
+        ? quote.defaultKeyStatistics.institutionPercentHeld * 100
+        : null,
+      insiderOwn: quote.defaultKeyStatistics?.insiderPercentHeld
+        ? quote.defaultKeyStatistics.insiderPercentHeld * 100
+        : null,
 
-      history: [
-        { date: '2025-09-10', close: 3.0, volume: 400000 },
-        { date: '2025-09-11', close: 3.25, volume: 1000000 },
-      ],
+      // signals
+      sudden_volume_spike,
+      sudden_price_spike,
+      valuation_fundamentals_mismatch,
+      no_fundamental_news,
 
-      sec_flags: sec_flags ?? [], // ✅ always array
-      hype: hype ?? {             // ✅ always shaped object
-        redditMentions: 0,
-        twitterMentions: 0,
-        timeline: [],
-        keywordHeatmap: {},
-      },
+      // derived
+      squeezeRiskScore,
+      squeezeLabel:
+        squeezeRiskScore >= 80
+          ? "High"
+          : squeezeRiskScore >= 60
+          ? "Elevated"
+          : "Low",
+
+      // history
+      history: history.map((h) => ({
+        date: h.date.toISOString().split("T")[0],
+        close: h.close,
+        volume: h.volume,
+      })),
+
+      // filings + hype
+      sec_flags,
+      hype,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'scan failed' }, { status: 500 });
+    console.error(err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

@@ -65,10 +65,13 @@ export default function Page() {
     pdf.save(`${ticker}_pump_scorecard.pdf`);
   };
 
-  // Recalculate every render when result or manualOverrides changes
+  // Calculate triggered signals
   const autoTriggered = allSignals.filter(k => autoSignals.has(k) && (result?.[k] ?? false)).length;
   const manualTriggered = allSignals.filter(k => !autoSignals.has(k) && (manualOverrides[k] ?? false)).length;
   const triggeredSignals = autoTriggered + manualTriggered;
+
+  // Calculate squeeze risk score capped at 100
+  const squeezeScore = Math.min(100, Math.round((triggeredSignals / allSignals.length) * 100));
 
   return (
     <div className="p-6 space-y-6">
@@ -116,11 +119,8 @@ export default function Page() {
                             type="checkbox"
                             checked={checked}
                             onChange={(e) => {
-                              if (isAuto) return; 
-                              setManualOverrides((prev) => ({
-                                ...prev,
-                                [sig]: e.target.checked,
-                              }));
+                              if (isAuto) return;
+                              setManualOverrides({ ...manualOverrides, [sig]: e.target.checked });
                             }}
                             disabled={isAuto}
                           />
@@ -151,8 +151,8 @@ export default function Page() {
           {/* Squeeze Risk */}
           <Card><CardContent className="p-4">
             <h3 className="text-lg font-bold">🧨 Squeeze Risk Score</h3>
-            <p className={riskColor(result.squeezeRiskScore)}>
-              {result.squeezeLabel} ({Math.min(100, result.squeezeRiskScore)}/100)
+            <p className={riskColor(squeezeScore)}>
+              {squeezeScore >= 80 ? "High" : squeezeScore >= 60 ? "Elevated" : "Low"} ({squeezeScore}/100)
             </p>
           </CardContent></Card>
 
@@ -171,50 +171,6 @@ export default function Page() {
                 <Bar yAxisId="right" dataKey="volume" fill="#82ca9d" name="Volume" />
               </LineChart>
             </ResponsiveContainer>
-          </CardContent></Card>
-
-          {/* SEC Filings */}
-          <Card><CardContent className="p-4">
-            <h3 className="text-lg font-bold">📝 SEC Filings</h3>
-            {result.sec_flags?.length ? (
-              <ul className="list-disc pl-6">
-                {result.sec_flags.map((f: any, idx: number) => (
-                  <li key={idx}>
-                    {f.date} — {f.form} — {f.reason}{' '}
-                    {f.url && <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">[link]</a>}
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="text-gray-400">No recent SEC filings flagged.</p>}
-          </CardContent></Card>
-
-          {/* Social Media */}
-          <Card><CardContent className="p-4">
-            <h3 className="text-lg font-bold">📣 Social Media Hype</h3>
-            <p>Reddit Mentions (7d): <strong>{result.hype?.redditMentions ?? 'N/A'}</strong></p>
-            <p>Twitter Mentions (7d): <strong>{result.hype?.twitterMentions ?? 'N/A'}</strong></p>
-            {result.hype?.timeline?.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={result.hype.timeline}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="day" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="reddit" stroke="#ff4500" name="Reddit" />
-                  <Line type="monotone" dataKey="twitter" stroke="#1DA1F2" name="Twitter" />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : <p className="text-gray-400">No timeline data available.</p>}
-            {result.hype?.keywordHeatmap && (
-              <p className="mt-2 text-sm">
-                <strong>Keywords:</strong>{" "}
-                {Object.entries(result.hype.keywordHeatmap)
-                  .filter(([_, v]) => v > 0)
-                  .map(([k, v]) => `${k} (${v})`)
-                  .join(', ') || "None"}
-              </p>
-            )}
           </CardContent></Card>
         </div>
       )}
