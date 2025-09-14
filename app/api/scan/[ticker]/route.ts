@@ -5,111 +5,16 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const padCIK = (cik: number | string) => cik.toString().padStart(10, '0');
-
-// === SEC LOOKUP HELPERS ===
-let tickerMap: Record<string, { cik_str: number, ticker: string, title: string }> | null = null;
-
-async function loadTickerMap() {
-  if (!tickerMap) {
-    const res = await fetch('https://www.sec.gov/files/company_tickers.json', {
-      headers: { 'User-Agent': 'PumpScorecard/1.0 (email@example.com)' },
-      cache: 'no-store'
-    });
-    tickerMap = await res.json();
-  }
-  return tickerMap!;
+// Helper: safe fetch
+async function fetchText(url: string, headers: Record<string, string>) {
+  const r = await fetch(url, { headers, cache: 'no-store', next: { revalidate: 0 } });
+  return await r.text();
+}
+async function fetchJson<T>(url: string, headers: Record<string, string>): Promise<T> {
+  const r = await fetch(url, { headers, cache: 'no-store', next: { revalidate: 0 } });
+  return await r.json() as T;
 }
 
-async function getCIK(ticker: string): Promise<string | null> {
-  const map = await loadTickerMap();
-  const match = Object.values(map).find(
-    (v: any) => v.ticker?.toUpperCase() === ticker.toUpperCase()
-  );
-  return match ? padCIK(match.cik_str) : null;
-}
-
-// === Filing parser ===
-function parseFilingText(text: string): string[] {
-  const lower = text.toLowerCase();
-  const reasons: string[] = [];
-
-  if (lower.includes('going concern') || lower.includes('substantial doubt'))
-    reasons.push('Going concern risk');
-  if (lower.includes('reverse stock split'))
-    reasons.push('Reverse split');
-  if (lower.includes('equity line') || lower.includes('at-the-market') || lower.includes('atm program'))
-    reasons.push('ATM / shelf offering');
-  if (lower.includes('convertible') || lower.includes('warrants') || lower.includes('registered direct'))
-    reasons.push('Dilution financing');
-  if (lower.includes('auditor resigned') || lower.includes('change in accountants'))
-    reasons.push('Auditor change');
-  if (lower.includes('unregistered sale of equity'))
-    reasons.push('Unregistered equity sale');
-
-  return reasons;
-}
-
-function scoreReasons(reasons: string[]): number {
-  let score = 0;
-  for (const r of reasons) {
-    if (r.includes('Going concern')) score += 30;
-    else if (r.includes('ATM') || r.includes('Dilution')) score += 25;
-    else if (r.includes('Reverse split')) score += 20;
-    else if (r.includes('Unregistered')) score += 15;
-    else if (r.includes('Auditor')) score += 15;
-    else if (r.includes('Recent S-')) score += 10;
-  }
-  return score;
-}
-
-async function fetchFilings(cik: string) {
-  const res = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, {
-    headers: { 'User-Agent': 'PumpScorecard/1.0 (email@example.com)' },
-    cache: 'no-store'
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-
-  const filings = data.filings?.recent || {};
-  const forms: string[] = filings.form || [];
-  const dates: string[] = filings.filingDate || [];
-  const accNums: string[] = filings.accessionNumber || [];
-  const docs: string[] = filings.primaryDocument || [];
-
-  const risky = ['S-1','S-3','424B','8-K','10-K','10-Q'];
-  const flags: any[] = [];
-
-  for (let i = 0; i < forms.length; i++) {
-    const f = forms[i];
-    if (risky.some(r => f.startsWith(r))) {
-      const url = `https://www.sec.gov/Archives/edgar/data/${parseInt(cik)}/${accNums[i].replace(/-/g,'')}/${docs[i]}`;
-      let reasons: string[] = [`Recent ${f} filing`];
-
-      try {
-        const filingRes = await fetch(url, {
-          headers: { 'User-Agent': 'PumpScorecard/1.0 (email@example.com)' },
-          cache: 'no-store'
-        });
-        if (filingRes.ok) {
-          const text = await filingRes.text();
-          reasons = [...reasons, ...parseFilingText(text)];
-        }
-      } catch {}
-
-      flags.push({
-        date: dates[i],
-        form: f,
-        url,
-        reasons,
-        scoreImpact: scoreReasons(reasons)
-      });
-    }
-  }
-  return flags;
-}
-
-// === API handler ===
 export async function GET(
   _req: Request,
   { params }: { params: { ticker: string } }
@@ -117,7 +22,7 @@ export async function GET(
   try {
     const tkr = params.ticker.toUpperCase();
 
-    // Price / volume
+    // === Price / Volume (Yahoo) ===
     const quote = await yahooFinance.quote(tkr);
     const chart = await yahooFinance.chart(tkr, {
       period1: new Date(Date.now() - 14 * 86400 * 1000),
@@ -143,33 +48,106 @@ export async function GET(
       date: q.date?.toISOString().split('T')[0] || '',
       close: q.close,
       volume: q.volume,
-      pctFromMin: ((q.close - minClose) / minClose) * 100,
-      spike: q.close > minClose * 2,
     }));
 
-    // SEC filings + score
-    let sec_flags: any[] = [];
+    // === SEC filings ===
+    let sec_flags: Array<{ form: string; date: string; reasons: string[]; url?: string; scoreImpact: number }> = [];
     let secScore = 0;
-    const cik = await getCIK(tkr);
-    if (cik) {
-      sec_flags = await fetchFilings(cik);
-      secScore = sec_flags.reduce((s, f) => s + (f.scoreImpact || 0), 0);
+
+    try {
+      const headers = { 'User-Agent': 'pump-scorecard/1.0 (edu use)' };
+      const cikMap: any = await fetchJson('https://www.sec.gov/files/company_tickers.json', headers);
+      const entry = Object.values<any>(cikMap).find((c: any) => c.ticker?.toUpperCase() === tkr);
+
+      if (entry?.cik_str) {
+        const cik10 = entry.cik_str.toString().padStart(10, '0');
+        const subs: any = await fetchJson(`https://data.sec.gov/submissions/CIK${cik10}.json`, headers);
+
+        const forms: string[] = subs?.filings?.recent?.form ?? [];
+        const dates: string[] = subs?.filings?.recent?.filingDate ?? [];
+        const docs: string[] = subs?.filings?.recent?.primaryDocument ?? [];
+        const accs: string[] = subs?.filings?.recent?.accessionNumber ?? [];
+
+        for (let i = 0; i < forms.length; i++) {
+          const form = (forms[i] || '').toUpperCase();
+          const filingDate = dates[i] || '';
+          const acc = (accs[i] || '').replace(/-/g, '');
+          const url = acc ? `https://www.sec.gov/Archives/edgar/data/${entry.cik_str}/${acc}/${docs[i]}` : undefined;
+
+          const reasons: string[] = [];
+          let scoreImpact = 0;
+
+          if (/S-1|S-3|F-1|F-3|424[BH]/.test(form)) {
+            reasons.push('Registration / Shelf (dilution risk)');
+            scoreImpact += 20;
+          }
+          if (form === '4') {
+            reasons.push('Insider transaction (Form 4)');
+            scoreImpact += 10;
+          }
+          if (form === '8-K' && url) {
+            try {
+              const text = await fetchText(url, headers);
+              if (/certifying accountant/i.test(text)) {
+                reasons.push('Auditor change');
+                scoreImpact += 10;
+              }
+              if (/reverse stock split/i.test(text)) {
+                reasons.push('Reverse split');
+                scoreImpact += 20;
+              }
+            } catch {}
+          }
+
+          if (reasons.length > 0) {
+            sec_flags.push({ form, date: filingDate, reasons, url, scoreImpact });
+            secScore += scoreImpact;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('SEC scan error:', e);
     }
 
-    // Base squeeze risk scoring (from float/volume/short)
+    // === Ownership (Finviz) + Squeeze Risk ===
+    let shortFloat = null, insiderOwn = null, instOwn = null;
+    try {
+      const html = await fetchText(`https://finviz.com/quote.ashx?t=${tkr}`, {
+        'User-Agent': 'Mozilla/5.0',
+      });
+      const getValue = (label: string): string | null => {
+        const regex = new RegExp(`<td[^>]*>${label}<\\/td>\\s*<td[^>]*>(.*?)<\\/td>`, 'i');
+        const match = html.match(regex);
+        return match?.[1]?.replace(/<.*?>/g, '').trim() ?? null;
+      };
+      const parsePct = (v: string | null): number | null => {
+        if (!v) return null;
+        const n = parseFloat(v.replace('%', ''));
+        return isNaN(n) ? null : n;
+      };
+      shortFloat = parsePct(getValue('Short Float'));
+      insiderOwn = parsePct(getValue('Insider Own'));
+      instOwn = parsePct(getValue('Inst Own'));
+    } catch (e) {
+      console.error('Finviz error:', e);
+    }
+
     let squeezeRiskScore = 0;
-    if ((quote.shortPercentOfFloat ?? 0) > 20) squeezeRiskScore += 40;
+    if ((shortFloat ?? 0) > 20) squeezeRiskScore += 40;
     if ((quote.floatShares && latest.volume / quote.floatShares > 0.3)) squeezeRiskScore += 30;
     if ((quote.floatShares ?? 0) < 5_000_000 && (quote.marketCap ?? 0) < 200_000_000) squeezeRiskScore += 30;
 
-    // Add SEC scoring
     squeezeRiskScore += secScore;
 
-    let squeezeLabel = 'Low';
-    if (squeezeRiskScore >= 120) squeezeLabel = '🔥 Extreme';
-    else if (squeezeRiskScore >= 80) squeezeLabel = '⚠️ Elevated';
-    else if (squeezeRiskScore >= 50) squeezeLabel = 'Moderate';
+    // ✅ cap at 100
+    const cappedScore = Math.min(squeezeRiskScore, 100);
 
+    let squeezeLabel = 'Low';
+    if (cappedScore >= 80) squeezeLabel = '🔥 Extreme';
+    else if (cappedScore >= 60) squeezeLabel = '⚠️ Elevated';
+    else if (cappedScore >= 40) squeezeLabel = 'Moderate';
+
+    // === Response ===
     return NextResponse.json({
       ticker: tkr,
       sudden_volume_spike,
@@ -180,22 +158,20 @@ export async function GET(
       latest_volume: latest.volume,
       marketCap: quote.marketCap,
       sharesOutstanding: quote.sharesOutstanding,
-      floatShares: quote.floatShares,
-      shortFloat: quote.shortPercentOfFloat,
-      instOwn: quote.institutionPercentHeld,
-      insiderOwn: quote.insiderPercentHeld,
-      history,
-      sec_flags,
-      secScore,
-      squeezeRiskScore,
+      floatShares: quote.floatShares ?? quote.sharesOutstanding ?? null,
+      shortFloat,
+      insiderOwn,
+      instOwn,
+      squeezeRiskScore: cappedScore,
       squeezeLabel,
+      secScore,
+      sec_flags,
+      history,
     });
   } catch (err: any) {
-    return NextResponse.json(
-      { error: err.message || 'scan failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message || 'scan failed' }, { status: 500 });
   }
 }
 
+// keep file a module
 export {};
