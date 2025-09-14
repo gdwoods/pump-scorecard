@@ -15,7 +15,6 @@ import * as htmlToImage from 'html-to-image';
 const groupedSignals = [
   { group: '📈 Market Activity (Auto)', keys: ['sudden_volume_spike', 'sudden_price_spike', 'valuation_fundamentals_mismatch', 'no_fundamental_news'] },
   { group: '📝 SEC Filings (Auto)', keys: ['reverse_split_or_dilution', 'recent_auditor_change', 'insider_or_major_holder_selloff'] },
-  // moved social media to manual
   { group: '🧠 Manual Review (Manual)', keys: [
       'impersonated_advisors',
       'guaranteed_returns',
@@ -140,6 +139,57 @@ export default function Page() {
                 </div>
               </div>
             ))}
+          </CardContent></Card>
+
+          {/* Market Data */}
+          <Card><CardContent className="p-4 grid grid-cols-2 gap-4">
+            <p><strong>Market Cap:</strong> {result.marketCap ? `$${result.marketCap.toLocaleString()}` : 'N/A'}</p>
+            <p><strong>Shares Outstanding:</strong> {result.sharesOutstanding?.toLocaleString() ?? 'N/A'}</p>
+            <p><strong>Float Shares:</strong> {result.floatShares?.toLocaleString() ?? 'N/A'}</p>
+            <p><strong>Float Turnover %:</strong> {result.floatShares ? ((result.latest_volume / result.floatShares) * 100).toFixed(1) + '%' : 'N/A'}</p>
+            <p><strong>Short Float %:</strong> {result.shortFloat != null ? result.shortFloat + '%' : 'N/A'}</p>
+            <p><strong>Institutional Ownership:</strong> {result.instOwn != null ? result.instOwn + '%' : 'N/A'}</p>
+            <p><strong>Insider Ownership:</strong> {result.insiderOwn != null ? result.insiderOwn + '%' : 'N/A'}</p>
+          </CardContent></Card>
+
+          {/* Squeeze Risk */}
+          <Card><CardContent className="p-4">
+            <h3 className="text-lg font-bold">🧨 Squeeze Risk Score</h3>
+            <p className={riskColor(result.squeezeRiskScore)}>
+              {result.squeezeLabel} ({Math.min(result.squeezeRiskScore,100)}/100)
+            </p>
+          </CardContent></Card>
+
+          {/* Historical Chart */}
+          <Card><CardContent className="p-4">
+            <h3 className="text-lg font-bold">📉 Historical Price & Volume</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={result.history}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis yAxisId="left" orientation="left" />
+                <YAxis yAxisId="right" orientation="right" />
+                <Tooltip />
+                <Legend />
+                <Line yAxisId="left" type="monotone" dataKey="close" stroke="#8884d8" name="Close Price" />
+                <Bar yAxisId="right" dataKey="volume" fill="#82ca9d" name="Volume" />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent></Card>
+
+          {/* SEC Filings */}
+          <Card><CardContent className="p-4">
+            <h3 className="text-lg font-bold">📝 SEC Filings</h3>
+            {result.sec_flags?.length ? (
+              <ul className="list-disc pl-6">
+                {result.sec_flags.map((f: any, idx: number) => (
+                  <li key={idx}>
+                    {f.date} — {f.form} — {f.reason}{' '}
+                    {f.url && <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">[link]</a>}
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="text-gray-400">No recent SEC filings flagged.</p>}
           </CardContent></Card>
         </div>
       )}
