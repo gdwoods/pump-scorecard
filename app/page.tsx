@@ -150,6 +150,11 @@ export default function Page() {
             <p className={riskColor(result.squeezeRiskScore)}>
               {result.squeezeLabel} ({result.squeezeRiskScore}/100)
             </p>
+            {result.secScore > 0 && (
+              <p className="mt-2 text-sm text-gray-600">
+                SEC filings contributed <strong>{result.secScore}</strong> points to this score.
+              </p>
+            )}
           </CardContent></Card>
 
           {/* Historical Chart */}
@@ -176,7 +181,7 @@ export default function Page() {
               <ul className="list-disc pl-6">
                 {result.sec_flags.map((f: any, idx: number) => (
                   <li key={idx}>
-                    {f.date} — {f.form} — {f.reason}{' '}
+                    {f.date} — {f.form} — {f.reasons.join(', ')}{' '}
                     {f.url && <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">[link]</a>}
                   </li>
                 ))}
