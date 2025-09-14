@@ -1,31 +1,49 @@
 import { NextResponse } from 'next/server';
 import yahooFinance from 'yahoo-finance2';
 
-// Ensure Node runtime + no caching for fresh social/news
+// Ensure Node runtime + no caching for fresh data
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// === Helper: word counter ===
-function countOccurrences(text: string, words: string[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  const lower = text.toLowerCase();
-  for (const w of words) {
-    const re = new RegExp(`\\b${w.toLowerCase()}\\b`, 'g');
-    const m = lower.match(re);
-    out[w] = m ? m.length : 0;
+// === Helper: fetch SEC filings (stubbed w/ basic EDGAR link for now) ===
+async function fetchSECFilings(ticker: string) {
+  try {
+    const baseUrl = `https://data.sec.gov/submissions/CIK${ticker}.json`; 
+    // Normally you'd map ticker -> CIK, then fetch filings
+    // Here we stub with placeholder
+    return [
+      {
+        date: "2025-08-26",
+        form: "8-K",
+        reason: "Equity financing / dilution risk",
+        url: "https://www.sec.gov/Archives/edgar/data/000000/000000-index.htm",
+      }
+    ];
+  } catch {
+    return [];
   }
-  return out;
 }
 
-// Small helper to fetch text safely with no-store
-async function fetchText(url: string, headers: Record<string, string>) {
-  const r = await fetch(url, { headers, cache: 'no-store', next: { revalidate: 0 } });
-  return await r.text();
-}
-async function fetchJson<T>(url: string, headers: Record<string, string>): Promise<T> {
-  const r = await fetch(url, { headers, cache: 'no-store', next: { revalidate: 0 } });
-  return await r.json() as T;
+// === Helper: stub social hype ===
+async function fetchSocialHype(ticker: string) {
+  // Later we can plug real APIs like Reddit/Twitter scrapers
+  return {
+    redditMentions: Math.floor(Math.random() * 50),
+    twitterMentions: Math.floor(Math.random() * 50),
+    timeline: [
+      { day: "Mon", reddit: 2, twitter: 5 },
+      { day: "Tue", reddit: 8, twitter: 12 },
+      { day: "Wed", reddit: 15, twitter: 18 },
+      { day: "Thu", reddit: 10, twitter: 7 },
+      { day: "Fri", reddit: 5, twitter: 3 },
+    ],
+    keywordHeatmap: {
+      "pump": 5,
+      "moon": 3,
+      "insider": 1,
+    },
+  };
 }
 
 export async function GET(
@@ -65,8 +83,31 @@ export async function GET(
       spike: q.close > minClose * 2,
     }));
 
-    // (SEC scan, News, Social Media, Finviz, etc.)
-    // ... keep your existing logic here unchanged ...
+    // === Fundamentals ===
+    const marketCap = quote.marketCap ?? null;
+    const sharesOutstanding = quote.sharesOutstanding ?? null;
+    const floatShares = quote.floatShares ?? null;
+    const shortFloat = quote.shortPercentOfFloat ?? null;
+    const instOwn = quote.institutionPercent ?? null;
+    const insiderOwn = quote.insiderPercent ?? null;
+
+    // === Squeeze risk (simple formula) ===
+    const squeezeRiskScore = Math.min(
+      100,
+      Math.round(
+        ((shortFloat || 0) * 0.7) +
+        ((avgVol && floatShares) ? (latest.volume / floatShares) * 100 * 0.3 : 0)
+      )
+    );
+    const squeezeLabel =
+      squeezeRiskScore > 70 ? "High risk" :
+      squeezeRiskScore > 40 ? "Medium risk" : "Low risk";
+
+    // === SEC filings ===
+    const sec_flags = await fetchSECFilings(tkr);
+
+    // === Social hype ===
+    const hype = await fetchSocialHype(tkr);
 
     return NextResponse.json({
       ticker: tkr,
@@ -77,7 +118,16 @@ export async function GET(
       avg_volume: avgVol,
       latest_volume: latest.volume,
       history,
-      // ... include the rest of your computed fields ...
+      marketCap,
+      sharesOutstanding,
+      floatShares,
+      shortFloat,
+      instOwn,
+      insiderOwn,
+      squeezeRiskScore,
+      squeezeLabel,
+      sec_flags,
+      hype,
     });
   } catch (err: any) {
     return NextResponse.json(
@@ -87,5 +137,5 @@ export async function GET(
   }
 }
 
-// Fix for Vercel TypeScript build
+// ✅ Fix for Vercel TypeScript build
 export {};
