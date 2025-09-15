@@ -1,127 +1,171 @@
-import { NextResponse } from "next/server";
-import yahooFinance from "yahoo-finance2";
+import { NextResponse } from 'next/server';
+import yahooFinance from 'yahoo-finance2';
 
-// helper: get CIK from SEC master list
-async function fetchCIK(ticker: string): Promise<string | null> {
-  try {
-    const url = "https://www.sec.gov/files/company_tickers.json";
-    const res = await fetch(url, {
-      headers: { "User-Agent": "pump-scorecard (your-email@example.com)" },
-    });
-    if (!res.ok) return null;
+// Node runtime
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-    const data = await res.json();
-    const values = Object.values(data) as any[];
-
-    const entry = values.find((c) => c.ticker.toUpperCase() === ticker.toUpperCase());
-    return entry ? entry.cik_str.toString().padStart(10, "0") : null;
-  } catch (err) {
-    console.error("CIK lookup error:", err);
-    return null;
-  }
+// --- Helpers ---
+async function fetchText(url: string, headers: Record<string, string>) {
+  const r = await fetch(url, { headers, cache: 'no-store' });
+  return await r.text();
+}
+async function fetchJson<T>(url: string, headers: Record<string, string>): Promise<T> {
+  const r = await fetch(url, { headers, cache: 'no-store' });
+  return (await r.json()) as T;
 }
 
-// fetch filings from SEC EDGAR
-async function fetchEdgarFilings(cik: string) {
-  try {
-    const url = `https://data.sec.gov/submissions/CIK${cik}.json`;
-    const res = await fetch(url, {
-      headers: { "User-Agent": "pump-scorecard (your-email@example.com)" },
-    });
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    if (!data.filings?.recent) return [];
-
-    return data.filings.recent.form.map((form: string, i: number) => ({
-      date: data.filings.recent.acceptanceDateTime[i],
-      form,
-      reason: form,
-      url: `https://www.sec.gov/Archives/edgar/data/${parseInt(cik, 10)}/${data.filings.recent.accessionNumber[i].replace(/-/g, "")}/${data.filings.recent.primaryDocument[i]}`,
-    }));
-  } catch (err) {
-    console.error("EDGAR fetch error:", err);
-    return [];
-  }
-}
-
+// --- API Route ---
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { ticker: string } }
 ) {
-  const ticker = params.ticker.toUpperCase();
-
   try {
-    // fundamentals
-    const quote = await yahooFinance.quoteSummary(ticker, {
-      modules: ["price", "summaryDetail", "defaultKeyStatistics", "financialData"],
+    const tkr = params.ticker.toUpperCase();
+
+    // === Price / Volume ===
+    const quote = await yahooFinance.quote(tkr);
+    const chart = await yahooFinance.chart(tkr, {
+      period1: new Date(Date.now() - 30 * 86400 * 1000), // 30 days
+      period2: new Date(),
+      interval: '1d',
     });
 
-    const marketCap = quote.price?.marketCap;
-    const sharesOutstanding = quote.price?.sharesOutstanding;
-    const floatShares = quote.defaultKeyStatistics?.floatShares;
-    const shortFloat = quote.defaultKeyStatistics?.shortPercentOfFloat;
-    const insiderOwn = quote.defaultKeyStatistics?.insiderPercentHeld;
-    const instOwn = quote.defaultKeyStatistics?.institutionPercentHeld;
+    const quotes = chart.quotes || [];
+    if (!quotes.length)
+      return NextResponse.json({ error: 'No price data' }, { status: 404 });
 
-    // history (90 days)
-    const chart = await yahooFinance.chart(ticker, {
-      period1: new Date(Date.now() - 90 * 24 * 3600 * 1000),
-      interval: "1d",
-    });
+    const latest = quotes.at(-1)!;
+    const last5 = quotes.slice(-5);
+    const avgVol5 =
+      last5.reduce((s, q) => s + (q.volume || 0), 0) / (last5.length || 1);
+    const avgPrice5 =
+      last5.reduce((s, q) => s + (q.close || 0), 0) / (last5.length || 1);
+    const minClose30 = Math.min(...quotes.map((q) => q.close));
 
-    const history =
-      chart.quotes?.map((q) => ({
-        date: q.date.toISOString().split("T")[0],
-        close: q.close,
-        volume: q.volume,
-      })) ?? [];
+    // === SEC Filings ===
+    let sec_flags: Array<{ form: string; date: string; reason: string; url?: string }> = [];
+    let recent_auditor_change = false;
+    let reverse_split_or_dilution = false;
+    let insider_or_major_holder_selloff = false;
 
-    // SEC filings
-    const cik = await fetchCIK(ticker);
-    const sec_flags = cik ? await fetchEdgarFilings(cik) : [];
+    try {
+      const headers = { 'User-Agent': 'pump-scorecard/1.0 (edu use)' };
+      const cikMap: any = await fetchJson(
+        'https://www.sec.gov/files/company_tickers.json',
+        headers
+      );
+      const entry = Object.values<any>(cikMap).find(
+        (c: any) => c.ticker?.toUpperCase() === tkr
+      );
 
-    // squeeze risk score
-    const floatTurnover =
-      floatShares && chart.quotes?.length
-        ? (chart.quotes[chart.quotes.length - 1].volume / floatShares) * 100
-        : 0;
+      if (entry?.cik_str) {
+        const cik10 = entry.cik_str.toString().padStart(10, '0');
+        const subs: any = await fetchJson(
+          `https://data.sec.gov/submissions/CIK${cik10}.json`,
+          headers
+        );
+        const forms: string[] = subs?.filings?.recent?.form ?? [];
+        const dates: string[] = subs?.filings?.recent?.filingDate ?? [];
+        const docs: string[] = subs?.filings?.recent?.primaryDocument ?? [];
+        const accs: string[] = subs?.filings?.recent?.accessionNumber ?? [];
 
-    let squeezeRiskScore = Math.round(
-      (shortFloat ?? 0) * 200 +
-        floatTurnover * 3 +
-        (insiderOwn ?? 0) * 200
-    );
+        for (let i = 0; i < forms.length; i++) {
+          const form = (forms[i] || '').toUpperCase();
+          const filingDate = dates[i] || '';
+          const acc = (accs[i] || '').replace(/-/g, '');
+          const url = acc
+            ? `https://www.sec.gov/Archives/edgar/data/${entry.cik_str}/${acc}/${docs[i]}`
+            : undefined;
 
-    squeezeRiskScore = Math.min(100, Math.max(0, squeezeRiskScore));
+          const pushFlag = (reason: string) =>
+            sec_flags.push({ form, date: filingDate, reason, url });
 
-    const squeezeLabel =
-      squeezeRiskScore >= 80
-        ? "Extreme"
-        : squeezeRiskScore >= 60
-        ? "High"
-        : squeezeRiskScore >= 40
-        ? "Elevated"
-        : "Low";
+          if (/S-1|S-3|F-1|F-3|424[BH]/.test(form)) {
+            reverse_split_or_dilution = true;
+            pushFlag('Registration / Shelf (dilution risk)');
+          }
+          if (form === '4') {
+            insider_or_major_holder_selloff = true;
+            pushFlag('Insider transaction (Form 4)');
+          }
+          if (form === '8-K' && url) {
+            try {
+              const text = await fetchText(url, headers);
+              if (/auditor|accountant/i.test(text)) {
+                recent_auditor_change = true;
+                pushFlag('Auditor change (8-K)');
+              }
+              if (/reverse stock split/i.test(text)) {
+                reverse_split_or_dilution = true;
+                pushFlag('Reverse split (8-K)');
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch (e) {
+      console.error('SEC scan error:', e);
+    }
 
+    // === Evaluator: Criteria ===
+    const sudden_volume_spike =
+      !!latest.volume && latest.volume > avgVol5 * 3;
+    const sudden_price_spike =
+      latest.close > avgPrice5 * 1.5 || latest.close > minClose30 * 2;
+    const valuation_fundamentals_mismatch =
+      !quote.trailingPE || quote.trailingPE > 100;
+
+    // === Ownership / squeeze ===
+    let squeezeRiskScore = 0;
+    if ((quote.shortRatio ?? 0) > 10) squeezeRiskScore += 40;
+    if (latest.volume && quote.floatShares && latest.volume / quote.floatShares > 0.3)
+      squeezeRiskScore += 30;
+    if ((quote.floatShares ?? 0) < 5_000_000 && (quote.marketCap ?? 0) < 200_000_000)
+      squeezeRiskScore += 30;
+    if (squeezeRiskScore > 100) squeezeRiskScore = 100;
+
+    let squeezeLabel = 'Low';
+    if (squeezeRiskScore >= 80) squeezeLabel = '🔥 Extreme';
+    else if (squeezeRiskScore >= 60) squeezeLabel = '⚠️ Elevated';
+    else if (squeezeRiskScore >= 40) squeezeLabel = 'Moderate';
+
+    // === History ===
+    const history = quotes.map((q) => ({
+      date: q.date?.toISOString().split('T')[0] || '',
+      close: q.close,
+      volume: q.volume,
+    }));
+
+    // === Response ===
     return NextResponse.json({
-      ticker,
-      last_price: quote.price?.regularMarketPrice,
-      latest_volume: chart.quotes?.[chart.quotes.length - 1]?.volume,
-      marketCap,
-      sharesOutstanding,
-      floatShares,
-      shortFloat: shortFloat ? shortFloat * 100 : null,
-      insiderOwn: insiderOwn ? insiderOwn * 100 : null,
-      instOwn: instOwn ? instOwn * 100 : null,
-      floatTurnover,
-      history,
-      sec_flags,
+      ticker: tkr,
+      last_price: latest.close,
+      latest_volume: latest.volume,
+      marketCap: quote.marketCap ?? null,
+      sharesOutstanding: quote.sharesOutstanding ?? null,
+      floatShares: quote.floatShares ?? null,
       squeezeRiskScore,
       squeezeLabel,
+      history,
+      sec_flags,
+
+      // Criteria (for UI auto-checks)
+      sudden_volume_spike,
+      sudden_price_spike,
+      valuation_fundamentals_mismatch,
+      reverse_split_or_dilution,
+      recent_auditor_change,
+      insider_or_major_holder_selloff,
     });
-  } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err.message || 'scan failed' },
+      { status: 500 }
+    );
   }
 }
+
+// Ensure file is a module
+export {};

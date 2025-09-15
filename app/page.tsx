@@ -11,25 +11,17 @@ import {
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 
-// === Grouped criteria ===
 const groupedSignals = [
-  { group: '📈 Market Activity (Auto)', keys: ['sudden_volume_spike', 'sudden_price_spike', 'valuation_fundamentals_mismatch', 'no_fundamental_news'] },
+  { group: '📈 Market Activity (Auto)', keys: ['sudden_volume_spike', 'sudden_price_spike', 'valuation_fundamentals_mismatch'] },
   { group: '📝 SEC Filings (Auto)', keys: ['reverse_split_or_dilution', 'recent_auditor_change', 'insider_or_major_holder_selloff'] },
-  { group: '🧠 Manual Review (Manual)', keys: [
-      'impersonated_advisors',
-      'guaranteed_returns',
-      'regulatory_alerts_or_investigations',
-      'rapid_social_acceleration',
-      'social_media_promotion',
-      'whatsapp_or_vip_group'
-    ]
-  },
+  { group: '📣 Social Media (Manual)', keys: ['rapid_social_acceleration', 'social_media_promotion', 'whatsapp_or_vip_group'] },
+  { group: '🧠 Manual Review (Manual)', keys: ['impersonated_advisors', 'guaranteed_returns', 'regulatory_alerts_or_investigations'] },
 ];
 
-// === Auto only signals ===
+// which signals are automatic (from API)
 const autoSignals = new Set([
-  'sudden_volume_spike','sudden_price_spike','valuation_fundamentals_mismatch','no_fundamental_news',
-  'reverse_split_or_dilution','recent_auditor_change','insider_or_major_holder_selloff'
+  'sudden_volume_spike','sudden_price_spike','valuation_fundamentals_mismatch',
+  'reverse_split_or_dilution','recent_auditor_change','insider_or_major_holder_selloff',
 ]);
 
 const allSignals = groupedSignals.flatMap(g => g.keys);
@@ -51,7 +43,7 @@ export default function Page() {
     const res = await fetch(`/api/scan/${ticker}`, { cache: 'no-store' });
     const json = await res.json();
     setResult(json);
-    setManualOverrides({});
+    setManualOverrides({}); // reset manual
   };
 
   const exportPDF = async () => {
@@ -73,6 +65,7 @@ export default function Page() {
     pdf.save(`${ticker}_pump_scorecard.pdf`);
   };
 
+  // counts
   const autoTriggered = allSignals.filter(k => autoSignals.has(k) && (result?.[k] ?? false)).length;
   const manualTriggered = allSignals.filter(k => !autoSignals.has(k) && (manualOverrides[k] ?? false)).length;
   const triggeredSignals = autoTriggered + manualTriggered;
@@ -123,7 +116,7 @@ export default function Page() {
                             type="checkbox"
                             checked={checked}
                             onChange={(e) => {
-                              if (isAuto) return;
+                              if (isAuto) return; // cannot toggle auto
                               setManualOverrides({ ...manualOverrides, [sig]: e.target.checked });
                             }}
                             disabled={isAuto}
@@ -147,16 +140,13 @@ export default function Page() {
             <p><strong>Shares Outstanding:</strong> {result.sharesOutstanding?.toLocaleString() ?? 'N/A'}</p>
             <p><strong>Float Shares:</strong> {result.floatShares?.toLocaleString() ?? 'N/A'}</p>
             <p><strong>Float Turnover %:</strong> {result.floatShares ? ((result.latest_volume / result.floatShares) * 100).toFixed(1) + '%' : 'N/A'}</p>
-            <p><strong>Short Float %:</strong> {result.shortFloat != null ? result.shortFloat + '%' : 'N/A'}</p>
-            <p><strong>Institutional Ownership:</strong> {result.instOwn != null ? result.instOwn + '%' : 'N/A'}</p>
-            <p><strong>Insider Ownership:</strong> {result.insiderOwn != null ? result.insiderOwn + '%' : 'N/A'}</p>
           </CardContent></Card>
 
           {/* Squeeze Risk */}
           <Card><CardContent className="p-4">
             <h3 className="text-lg font-bold">🧨 Squeeze Risk Score</h3>
             <p className={riskColor(result.squeezeRiskScore)}>
-              {result.squeezeLabel} ({Math.min(result.squeezeRiskScore,100)}/100)
+              {result.squeezeLabel} ({result.squeezeRiskScore}/100)
             </p>
           </CardContent></Card>
 
