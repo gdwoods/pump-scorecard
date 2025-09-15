@@ -1,108 +1,74 @@
 import { NextResponse } from "next/server";
 import yahooFinance from "yahoo-finance2";
 
-function pctChange(newVal: number, oldVal: number): number {
-  if (!oldVal || oldVal === 0) return 0;
+// --- helper: percentage change
+function pctChange(oldVal: number, newVal: number): number {
   return ((newVal - oldVal) / oldVal) * 100;
 }
 
-export async function GET(
-  req: Request,
-  { params }: { params: { ticker: string } }
-) {
-  const { ticker } = params;
+// --- Main handler
+export async function GET(req: Request, { params }: { params: { ticker: string } }) {
+  const ticker = params.ticker.toUpperCase();
 
   try {
-    // --- Fundamentals ---
-    const quote: any = await yahooFinance.quote(ticker).catch(() => ({}));
-    const chart: any = await yahooFinance
-      .chart(ticker, { range: "1mo", interval: "1d" })
-      .catch(() => ({ quotes: [] }));
+    // 1. Fetch quote summary (market cap, shares, etc.)
+    const summary = await yahooFinance.quoteSummary(ticker, {
+      modules: ["price", "defaultKeyStatistics", "financialData"],
+    });
 
-    const marketCap = quote.marketCap ?? null;
-    const sharesOut = quote.sharesOutstanding ?? null;
-    const floatShares = quote.floatShares ?? null;
-    const shortFloat = quote.shortPercentOfFloat ?? null;
-    const insiderOwn = quote.heldPercentInsiders ?? null;
-    const instOwn = quote.heldPercentInstitutions ?? null;
+    const marketCap = summary.price?.marketCap;
+    const sharesOutstanding = summary.defaultKeyStatistics?.sharesOutstanding;
+    const floatShares = summary.defaultKeyStatistics?.floatShares;
+    const shortPercent = summary.defaultKeyStatistics?.shortPercentOfFloat;
+    const insiderOwn = summary.defaultKeyStatistics?.heldPercentInsiders;
+    const instOwn = summary.defaultKeyStatistics?.heldPercentInstitutions;
 
-    const prices =
-      chart.quotes?.map((q: any) => ({
-        date: q.date,
-        close: q.close,
-        volume: q.volume,
-      })) ?? [];
+    // 2. Fetch recent historical data (30 days)
+    const history = await yahooFinance.historical(ticker, {
+      period1: "2024-08-01", // go back a month or so
+      interval: "1d",
+    });
 
-    // --- Criteria ---
-    const criteria: Record<string, { triggered: boolean; reason?: string }> = {};
+    const closes = history.map((h) => h.close).filter(Boolean);
+    const volumes = history.map((h) => h.volume).filter(Boolean);
 
-    // Volume spike (last vs avg 10d)
-    if (prices.length > 10) {
-      const last = prices.at(-1)!;
-      const avgVol =
-        prices.slice(-11, -1).reduce((a, b) => a + (b.volume || 0), 0) / 10;
-      const spike = avgVol ? last.volume / avgVol : 0;
-      criteria["suddenVolumeSpike"] = {
-        triggered: spike > 3,
-        reason: `Vol ${spike.toFixed(1)}x 10d avg`,
-      };
-    } else {
-      criteria["suddenVolumeSpike"] = { triggered: false };
-    }
+    const latestClose = closes[closes.length - 1];
+    const prevClose = closes[closes.length - 2];
+    const latestVolume = volumes[volumes.length - 1];
+    const avgClose5 = closes.slice(-6, -1).reduce((a, b) => a + b, 0) / 5;
+    const avgVol10 = volumes.slice(-11, -1).reduce((a, b) => a + b, 0) / 10;
 
-    // Price spike (last vs avg 10d)
-    if (prices.length > 10) {
-      const last = prices.at(-1)!;
-      const avgClose =
-        prices.slice(-11, -1).reduce((a, b) => a + (b.close || 0), 0) / 10;
-      const move = pctChange(last.close, avgClose);
-      criteria["suddenPriceSpike"] = {
-        triggered: Math.abs(move) > 30,
-        reason: `Move ${move.toFixed(1)}% vs 10d avg`,
-      };
-    } else {
-      criteria["suddenPriceSpike"] = { triggered: false };
-    }
-
-    // Valuation mismatch
-    criteria["valuationMismatch"] = {
-      triggered: !!(marketCap && marketCap > 1e9 && !quote.revenue),
+    // --- 3. Criteria checks (quick rules)
+    const criteria = {
+      suddenPriceSpike: latestClose > avgClose5 * 2, // 100%+ jump
+      suddenVolumeSpike: latestVolume > avgVol10 * 3, // 3x volume
+      valuationMismatch: (summary.financialData?.forwardPE || 0) > 80,
+      noFundamentalNews: false, // placeholder until we add news API
+      recentAuditorChange: false, // placeholder for SEC filings
+      reverseSplitOrDilution: false, // placeholder for SEC filings
+      insiderSelloff: false, // placeholder
     };
 
-    // SEC placeholders
-    criteria["recentAuditorChange"] = { triggered: false };
-    criteria["dilutionOrSplit"] = { triggered: false };
-    criteria["insiderSelloff"] = { triggered: false };
+    // --- 4. Score: % of criteria triggered
+    const triggered = Object.values(criteria).filter(Boolean).length;
+    const total = Object.keys(criteria).length;
+    const score = Math.min(100, Math.round((triggered / total) * 100));
 
-    // Manual/social placeholders
-    [
-      "socialMediaPromotion",
-      "regulatoryAlerts",
-      "guaranteedReturns",
-      "whatsappVip",
-      "impersonatedAdvisors",
-    ].forEach((k) => (criteria[k] = { triggered: false }));
-
-    // --- Score ---
-    const triggeredCount = Object.values(criteria).filter((c) => c.triggered)
-      .length;
-    const score = Math.min(100, triggeredCount * 10);
-
+    // --- 5. Response JSON
     return NextResponse.json({
       ticker,
-      fundamentals: {
-        marketCap,
-        sharesOut,
-        floatShares,
-        shortFloat,
-        insiderOwn,
-        instOwn,
-      },
-      prices,
+      marketCap,
+      sharesOutstanding,
+      floatShares,
+      shortPercent,
+      insiderOwn,
+      instOwn,
+      history,
       criteria,
       score,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message, ticker }, { status: 500 });
+    console.error("Error fetching data:", err.message);
+    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
   }
 }
