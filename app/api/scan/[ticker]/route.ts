@@ -1,171 +1,108 @@
-import { NextResponse } from 'next/server';
-import yahooFinance from 'yahoo-finance2';
+import { NextResponse } from "next/server";
+import yahooFinance from "yahoo-finance2";
 
-// Node runtime
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-// --- Helpers ---
-async function fetchText(url: string, headers: Record<string, string>) {
-  const r = await fetch(url, { headers, cache: 'no-store' });
-  return await r.text();
-}
-async function fetchJson<T>(url: string, headers: Record<string, string>): Promise<T> {
-  const r = await fetch(url, { headers, cache: 'no-store' });
-  return (await r.json()) as T;
+// ✅ Helper: check percentage change
+function pctChange(newVal: number, oldVal: number): number {
+  return ((newVal - oldVal) / oldVal) * 100;
 }
 
-// --- API Route ---
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { ticker: string } }
 ) {
-  try {
-    const tkr = params.ticker.toUpperCase();
+  const { ticker } = params;
 
-    // === Price / Volume ===
-    const quote = await yahooFinance.quote(tkr);
-    const chart = await yahooFinance.chart(tkr, {
-      period1: new Date(Date.now() - 30 * 86400 * 1000), // 30 days
-      period2: new Date(),
-      interval: '1d',
+  try {
+    // --- Fetch Yahoo Finance data ---
+    const quote = await yahooFinance.quote(ticker);
+    const chart = await yahooFinance.chart(ticker, {
+      range: "1mo",
+      interval: "1d",
     });
 
-    const quotes = chart.quotes || [];
-    if (!quotes.length)
-      return NextResponse.json({ error: 'No price data' }, { status: 404 });
+    const marketCap = quote.marketCap || null;
+    const sharesOut = quote.sharesOutstanding || null;
+    const floatShares = quote.floatShares || null;
+    const shortFloat = quote.shortPercentOfFloat || null;
+    const insiderOwn = quote.heldPercentInsiders || null;
+    const instOwn = quote.heldPercentInstitutions || null;
 
-    const latest = quotes.at(-1)!;
-    const last5 = quotes.slice(-5);
-    const avgVol5 =
-      last5.reduce((s, q) => s + (q.volume || 0), 0) / (last5.length || 1);
-    const avgPrice5 =
-      last5.reduce((s, q) => s + (q.close || 0), 0) / (last5.length || 1);
-    const minClose30 = Math.min(...quotes.map((q) => q.close));
-
-    // === SEC Filings ===
-    let sec_flags: Array<{ form: string; date: string; reason: string; url?: string }> = [];
-    let recent_auditor_change = false;
-    let reverse_split_or_dilution = false;
-    let insider_or_major_holder_selloff = false;
-
-    try {
-      const headers = { 'User-Agent': 'pump-scorecard/1.0 (edu use)' };
-      const cikMap: any = await fetchJson(
-        'https://www.sec.gov/files/company_tickers.json',
-        headers
-      );
-      const entry = Object.values<any>(cikMap).find(
-        (c: any) => c.ticker?.toUpperCase() === tkr
-      );
-
-      if (entry?.cik_str) {
-        const cik10 = entry.cik_str.toString().padStart(10, '0');
-        const subs: any = await fetchJson(
-          `https://data.sec.gov/submissions/CIK${cik10}.json`,
-          headers
-        );
-        const forms: string[] = subs?.filings?.recent?.form ?? [];
-        const dates: string[] = subs?.filings?.recent?.filingDate ?? [];
-        const docs: string[] = subs?.filings?.recent?.primaryDocument ?? [];
-        const accs: string[] = subs?.filings?.recent?.accessionNumber ?? [];
-
-        for (let i = 0; i < forms.length; i++) {
-          const form = (forms[i] || '').toUpperCase();
-          const filingDate = dates[i] || '';
-          const acc = (accs[i] || '').replace(/-/g, '');
-          const url = acc
-            ? `https://www.sec.gov/Archives/edgar/data/${entry.cik_str}/${acc}/${docs[i]}`
-            : undefined;
-
-          const pushFlag = (reason: string) =>
-            sec_flags.push({ form, date: filingDate, reason, url });
-
-          if (/S-1|S-3|F-1|F-3|424[BH]/.test(form)) {
-            reverse_split_or_dilution = true;
-            pushFlag('Registration / Shelf (dilution risk)');
-          }
-          if (form === '4') {
-            insider_or_major_holder_selloff = true;
-            pushFlag('Insider transaction (Form 4)');
-          }
-          if (form === '8-K' && url) {
-            try {
-              const text = await fetchText(url, headers);
-              if (/auditor|accountant/i.test(text)) {
-                recent_auditor_change = true;
-                pushFlag('Auditor change (8-K)');
-              }
-              if (/reverse stock split/i.test(text)) {
-                reverse_split_or_dilution = true;
-                pushFlag('Reverse split (8-K)');
-              }
-            } catch {}
-          }
-        }
-      }
-    } catch (e) {
-      console.error('SEC scan error:', e);
-    }
-
-    // === Evaluator: Criteria ===
-    const sudden_volume_spike =
-      !!latest.volume && latest.volume > avgVol5 * 3;
-    const sudden_price_spike =
-      latest.close > avgPrice5 * 1.5 || latest.close > minClose30 * 2;
-    const valuation_fundamentals_mismatch =
-      !quote.trailingPE || quote.trailingPE > 100;
-
-    // === Ownership / squeeze ===
-    let squeezeRiskScore = 0;
-    if ((quote.shortRatio ?? 0) > 10) squeezeRiskScore += 40;
-    if (latest.volume && quote.floatShares && latest.volume / quote.floatShares > 0.3)
-      squeezeRiskScore += 30;
-    if ((quote.floatShares ?? 0) < 5_000_000 && (quote.marketCap ?? 0) < 200_000_000)
-      squeezeRiskScore += 30;
-    if (squeezeRiskScore > 100) squeezeRiskScore = 100;
-
-    let squeezeLabel = 'Low';
-    if (squeezeRiskScore >= 80) squeezeLabel = '🔥 Extreme';
-    else if (squeezeRiskScore >= 60) squeezeLabel = '⚠️ Elevated';
-    else if (squeezeRiskScore >= 40) squeezeLabel = 'Moderate';
-
-    // === History ===
-    const history = quotes.map((q) => ({
-      date: q.date?.toISOString().split('T')[0] || '',
+    const prices = chart.quotes.map((q: any) => ({
+      date: q.date,
       close: q.close,
       volume: q.volume,
     }));
 
-    // === Response ===
-    return NextResponse.json({
-      ticker: tkr,
-      last_price: latest.close,
-      latest_volume: latest.volume,
-      marketCap: quote.marketCap ?? null,
-      sharesOutstanding: quote.sharesOutstanding ?? null,
-      floatShares: quote.floatShares ?? null,
-      squeezeRiskScore,
-      squeezeLabel,
-      history,
-      sec_flags,
+    // --- Criteria checks ---
+    const criteria: Record<string, { triggered: boolean; reason?: string }> = {};
 
-      // Criteria (for UI auto-checks)
-      sudden_volume_spike,
-      sudden_price_spike,
-      valuation_fundamentals_mismatch,
-      reverse_split_or_dilution,
-      recent_auditor_change,
-      insider_or_major_holder_selloff,
+    // Sudden volume spike (vs 10-day average)
+    if (prices.length > 10) {
+      const last = prices[prices.length - 1];
+      const avgVol =
+        prices.slice(-11, -1).reduce((a: number, b: any) => a + b.volume, 0) /
+        10;
+      const spike = last.volume / avgVol;
+      criteria["suddenVolumeSpike"] = {
+        triggered: spike > 3,
+        reason: `Volume ${spike.toFixed(1)}x 10d avg`,
+      };
+    }
+
+    // Sudden price spike (vs 10-day average)
+    if (prices.length > 10) {
+      const last = prices[prices.length - 1];
+      const avgClose =
+        prices.slice(-11, -1).reduce((a: number, b: any) => a + b.close, 0) /
+        10;
+      const move = pctChange(last.close, avgClose);
+      criteria["suddenPriceSpike"] = {
+        triggered: Math.abs(move) > 30,
+        reason: `Price move ${move.toFixed(1)}% vs 10d avg`,
+      };
+    }
+
+    // Valuation fundamentals mismatch
+    criteria["valuationMismatch"] = {
+      triggered: marketCap && marketCap > 1e9 && !quote.revenue,
+      reason: "Large cap but missing revenue",
+    };
+
+    // SEC filings – placeholder (not scraping yet)
+    criteria["recentAuditorChange"] = { triggered: false };
+    criteria["dilutionOrSplit"] = { triggered: false };
+    criteria["insiderSelloff"] = { triggered: false };
+
+    // Manual/social criteria – always false in backend
+    criteria["socialMediaPromotion"] = { triggered: false };
+    criteria["regulatoryAlerts"] = { triggered: false };
+    criteria["guaranteedReturns"] = { triggered: false };
+    criteria["whatsappVip"] = { triggered: false };
+    criteria["impersonatedAdvisors"] = { triggered: false };
+
+    // --- Score calculation ---
+    const triggeredCount = Object.values(criteria).filter((c) => c.triggered)
+      .length;
+    const score = Math.min(100, triggeredCount * 10);
+
+    return NextResponse.json({
+      ticker,
+      fundamentals: {
+        marketCap,
+        sharesOut,
+        floatShares,
+        shortFloat,
+        insiderOwn,
+        instOwn,
+      },
+      prices,
+      criteria,
+      score,
     });
   } catch (err: any) {
     return NextResponse.json(
-      { error: err.message || 'scan failed' },
+      { error: err.message, ticker },
       { status: 500 }
     );
   }
 }
-
-// Ensure file is a module
-export {};
