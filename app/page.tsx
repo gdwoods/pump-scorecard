@@ -1,120 +1,98 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Chart from "@/components/Chart";
 import Criteria from "@/components/Criteria";
+import Fundamentals from "@/components/Fundamentals";
 import Promotions from "@/components/Promotions";
 import SecFilings from "@/components/SecFilings";
-import Fundamentals from "@/components/Fundamentals";
-import RiskPill from "@/components/RiskPill";
 import CountrySection from "@/components/CountrySection";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const scan = async () => {
+  async function scan() {
+    if (!ticker) return;
     setLoading(true);
-    setError(null);
-    setResult(null);
     try {
-      const res = await fetch(`/api/scan/${ticker}`);
-      if (!res.ok) throw new Error(`Scan failed (${res.status})`);
+      const res = await fetch(`/api/scan/${ticker}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Scan failed");
       const json = await res.json();
       setResult(json);
-    } catch (e: any) {
-      setError(e.message || "Scan failed");
+    } catch (err) {
+      console.error("❌ Scan error:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const exportPDF = async () => {
-    if (!result) return;
+  async function exportPDF() {
+    if (!ticker) return;
     try {
       const res = await fetch("/api/export-pdf", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: result.ticker }),
+        body: JSON.stringify({ ticker }),
       });
-      if (!res.ok) throw new Error("Export failed");
+      if (!res.ok) throw new Error("PDF export failed");
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${result.ticker}_scorecard.pdf`;
+      a.download = `${ticker}_scorecard.pdf`;
       a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("PDF export error:", e);
+    } catch (err) {
+      console.error("❌ PDF export error:", err);
     }
-  };
+  }
 
   return (
-    <main className="w-full px-6 py-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
-        <Image src="/logo.png" alt="logo" width={28} height={28} />
+    <div className="w-full p-6 space-y-6">
+      {/* App Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <img src="/logo.png" alt="logo" className="w-8 h-8" />
         <h1 className="text-2xl font-bold text-blue-700">
           Booker Mastermind — Pump Scorecard
         </h1>
       </div>
 
-      {/* Scan form */}
-      <div className="flex items-center gap-2 mb-6">
+      {/* Input Controls */}
+      <div className="flex gap-2">
         <input
-          className="border rounded px-3 py-2 w-40"
-          placeholder="Ticker"
           value={ticker}
           onChange={(e) => setTicker(e.target.value.toUpperCase())}
+          placeholder="Enter ticker..."
+          className="border rounded px-2 py-1"
         />
         <button
           onClick={scan}
           disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2"
+          className="bg-blue-600 text-white px-4 py-1 rounded"
         >
           {loading ? "Scanning..." : "Scan"}
         </button>
-        {result && (
-          <button
-            onClick={exportPDF}
-            className="border border-gray-300 rounded px-3 py-2 hover:bg-gray-50"
-          >
-            📥 Export PDF
-          </button>
-        )}
+        <button
+          onClick={exportPDF}
+          className="bg-gray-600 text-white px-4 py-1 rounded"
+        >
+          Export PDF
+        </button>
       </div>
 
-      {error && <div className="text-red-600">{error}</div>}
-
-      {result ? (
-        <div className="space-y-6">
-          {/* Final Verdict at top */}
-          <div
-            className={`border rounded-lg p-4 ${
-              result.summaryVerdict === "High risk"
-                ? "bg-red-50 border-red-200"
-                : result.summaryVerdict === "Moderate risk"
-                ? "bg-yellow-50 border-yellow-200"
-                : "bg-green-50 border-green-200"
-            }`}
-          >
-            <div className="text-lg font-bold mb-2">Final Verdict</div>
-            <RiskPill risk={result.summaryVerdict} />
-            <p className="mt-2 text-gray-700">{result.summaryText}</p>
-          </div>
-
-          {/* Score + pill row */}
-          <div className="flex items-center gap-4">
-            <div className="text-lg font-semibold">
-              Score: <span>{result.weightedRiskScore ?? 0}%</span>
+      {/* Results */}
+      {result && (
+        <>
+          {/* Final Verdict */}
+          <div className="bg-green-50 p-4 rounded-lg">
+            <h2 className="text-lg font-semibold mb-2">Final Verdict</h2>
+            <p className="text-gray-800">{result.summaryText}</p>
+            <div className="mt-2 text-sm text-gray-500">
+              Risk Level:{" "}
+              <span className="font-semibold">{result.summaryVerdict}</span>
             </div>
-            <RiskPill risk={result.summaryVerdict} />
-            <div className="text-gray-600">
-              {result.companyName} ({result.ticker})
+            <div className="mt-1 text-sm text-gray-500">
+              Score: {result.weightedRiskScore}%
             </div>
           </div>
 
@@ -126,61 +104,56 @@ export default function Page() {
           )}
 
           {/* Country */}
-          {result.country && result.country !== "Unknown" && (
-            <CountrySection
-              country={result.country}
-              countrySource={result.countrySource}
-              showCard={true}
-            />
-          )}
+          <CountrySection
+            country={result.country}
+            source={result.countrySource}
+          />
 
           {/* Criteria */}
           <Criteria result={result} />
 
           {/* Fundamentals */}
-          <Fundamentals result={result} hideCountryRow />
+          <Fundamentals result={result} />
 
           {/* Promotions */}
           <Promotions promotions={result.promotions} />
 
           {/* SEC Filings */}
           <SecFilings
-            filings={result.filings ?? []}
-            allFilings={result.allFilings ?? []}
+            filings={result.filings}
+            allFilings={result.allFilings || []}
             float={result.floatShares}
             goingConcernDetected={result.goingConcernDetected}
           />
 
           {/* Fraud Evidence */}
-          <div className="border rounded-lg p-4">
-            <div className="font-semibold mb-2">⚠️ Fraud Evidence</div>
+          <div className="p-4 border rounded">
+            <h2 className="text-lg font-semibold mb-2">⚠️ Fraud Evidence</h2>
             {result.fraudImages && result.fraudImages.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {result.fraudImages.map((img: any, i: number) => (
-                  <a
-                    key={i}
-                    href={img.full}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <img
-                      src={img.thumb || img.full}
-                      alt="Fraud evidence"
-                      className="rounded shadow"
-                    />
-                  </a>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {result.fraudImages.map((img: any, idx: number) => (
+                  <div key={idx} className="flex flex-col items-center">
+                    <a href={img.full} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={img.thumb || img.full}
+                        alt="fraud evidence"
+                        className="rounded shadow"
+                      />
+                    </a>
+                    {img.approvedAt && (
+                      <span className="text-xs text-gray-500 mt-1">
+                        {new Date(img.approvedAt).toISOString().split("T")[0]}
+                      </span>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (
-              <div className="text-gray-500">No fraud images found.</div>
+              <div className="text-gray-600">No fraud images found.</div>
             )}
           </div>
-        </div>
-      ) : (
-        <div className="text-gray-500 italic">
-          ⏳ Enter a ticker and click Scan to see results.
-        </div>
+        </>
       )}
-    </main>
+    </div>
   );
 }
