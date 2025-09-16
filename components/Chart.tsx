@@ -1,56 +1,57 @@
 "use client";
 
-import React from "react";
 import {
   LineChart,
   Line,
-  Bar,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
   CartesianGrid,
+  Tooltip,
   Legend,
+  Bar,
+  BarChart,
+  ResponsiveContainer,
 } from "recharts";
-import { Card, CardContent } from "@/components/ui/Card";
 
-type ChartProps = {
-  history: Array<{
-    date: string;
-    close: number;
-    volume: number;
-  }>;
+type Point = {
+  date: string;
+  close: number;
+  volume: number;
 };
 
-export default function Chart({ history }: ChartProps) {
+type Props = {
+  data: Point[];
+};
+
+export default function Chart({ data }: Props) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="text-gray-400 text-sm">
+        📈 No chart data available.
+      </div>
+    );
+  }
+
   return (
-    <Card>
-      <CardContent>
-        <h3 className="text-lg font-bold">📉 Price & Volume (6 months)</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={history}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis yAxisId="left" />
-            <YAxis yAxisId="right" orientation="right" />
-            <Tooltip />
-            <Legend />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="close"
-              stroke="#8884d8"
-              name="Close"
-            />
-            <Bar
-              yAxisId="right"
-              dataKey="volume"
-              fill="#82ca9d"
-              name="Volume"
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+    <div className="w-full h-80">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="date" hide />
+          <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
+          <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
+          <Tooltip />
+          <Legend />
+          <Line
+            yAxisId="left"
+            type="monotone"
+            dataKey="close"
+            stroke="#8884d8"
+            dot={false}
+          />
+          <Bar yAxisId="right" dataKey="volume" fill="#82ca9d" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
