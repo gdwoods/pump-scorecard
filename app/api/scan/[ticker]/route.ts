@@ -66,20 +66,48 @@ export async function GET(req: Request) {
     } catch (err) {
       console.error("⚠️ Polygon meta failed:", err);
     }
-
-    // ---------- Promotions ----------
-    let promotions: any[] = [];
-    try {
-      const promoRes = await fetch(
-        `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${ticker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`
-      );
-      if (promoRes.ok) {
-        const promoJson = await promoRes.json();
-        promotions = promoJson.results || [];
-      }
-    } catch (err) {
-      console.error("⚠️ Promotions fetch failed:", err);
+// ---------- Promotions ----------
+let promotions: any[] = [];
+try {
+  const promoRes = await fetch(
+    `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${ticker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`,
+    {
+      headers: { "User-Agent": "pump-scorecard" }, // required by some APIs
     }
+  );
+
+  if (promoRes.ok) {
+    const promoJson = await promoRes.json();
+    console.log("📢 Raw promotions response:", promoJson);
+
+    const rawPromos = promoJson.results || promoJson.data || [];
+
+    promotions = rawPromos.map((p: any) => {
+      const id = p.id ?? p.promotion_id ?? p.promo_id;
+      const url =
+        p.url ??
+        p.link ??
+        (id ? `https://www.stockpromotiontracker.com/promotion/${id}` : undefined);
+
+      const type = (p.type ?? p.promotion_type ?? p.category ?? "Unknown")
+        .toString()
+        .toLowerCase()
+        .replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+      let date: string | undefined;
+      if (p.promotion_date) date = p.promotion_date.slice(0, 10);
+      else if (p.date) date = p.date.slice(0, 10);
+      else if (p.created_at) date = p.created_at.slice(0, 10);
+
+      return { type, date: date ?? "Unknown", url };
+    });
+  } else {
+    console.error("⚠️ Promotions fetch failed with status:", promoRes.status);
+  }
+} catch (err) {
+  console.error("⚠️ Promotions fetch error:", err);
+}
+
 
     // ---------- SEC Filings ----------
     let filings: { title: string; date: string; url: string; description: string }[] = [];

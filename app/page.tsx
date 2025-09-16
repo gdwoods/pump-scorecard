@@ -113,18 +113,25 @@ export default function Page() {
       {/* Results */}
       {result && (
         <>
-          {/* Final Verdict */}
-          <div className="bg-green-50 p-4 rounded-lg">
-            <h2 className="text-lg font-semibold mb-2">Final Verdict</h2>
-            <p className="text-gray-800">{result.summaryText}</p>
-            <div className="mt-2 text-sm text-gray-600">
-              Risk Level:{" "}
-              <span className="font-semibold">{result.summaryVerdict}</span>
-            </div>
-            <div className="mt-1 text-sm text-gray-600">
-              Score: {computeScore(result, manualFlags)}%
-            </div>
-          </div>
+{/* Final Verdict */}
+<div className="bg-green-50 p-4 rounded-lg">
+  <h2 className="text-lg font-semibold mb-2">Final Verdict</h2>
+  <p className="text-gray-800">{result.summaryText}</p>
+
+  <div className="mt-2 text-sm text-gray-600">
+    Risk Level:{" "}
+    <span className="font-semibold">{result.summaryVerdict}</span>
+  </div>
+
+  <div className="mt-1 text-sm text-gray-600">
+    Base Score: {result.flatRiskScore ?? computeScore(result, manualFlags)}%
+  </div>
+
+  <div className="mt-1 text-sm text-gray-600">
+    Adjusted Score: {result.weightedRiskScore ?? result.flatRiskScore}%
+  </div>
+</div>
+
 
           {/* Chart */}
           {result.history && result.history.length > 0 ? (
