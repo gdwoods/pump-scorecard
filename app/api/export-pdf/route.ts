@@ -107,20 +107,87 @@ export async function POST(req: Request) {
       doc.text("No promotions detected.");
     }
 
-    // ---------- SEC Filings ----------
-    sectionHeader("📑 SEC Filings");
-    if (result.filings && result.filings.length > 0) {
-      result.filings.forEach((f: any, idx: number) => {
-        doc.text(`${idx + 1}. ${f.form || "Unknown Form"} — ${f.filingDate || "Unknown Date"}`);
-        if (f.url) {
-          doc.fillColor("blue").text(`Link: ${f.url}`, { link: f.url, underline: true });
-          doc.fillColor("black");
-        }
-        doc.moveDown(0.5);
+// ---------- SEC Filings ----------
+let filings: { title: string; date: string; url: string; description?: string }[] = [];
+let allFilings: typeof filings = [];
+let babyShelfRisk = false;
+let goingConcernDetected = false;
+
+function formatDescription(name: string): string {
+  return name
+    ?.replace(/\.htm$/, "")
+    .replace(/[_\-]/g, " ")
+    .replace(/\b([a-z])/g, (c) => c.toUpperCase());
+}
+
+try {
+  const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
+    headers: {
+      "User-Agent": "pump-scorecard (https://yourdomain.com)",
+      "Accept": "application/json",
+    },
+  });
+
+  if (cikRes.ok) {
+    const cikJson = await cikRes.json();
+    const entry = Object.values(cikJson).find(
+      (c: any) => c.ticker.toUpperCase() === ticker
+    );
+
+    if (entry) {
+      const cik = entry.cik_str.toString().padStart(10, "0");
+
+      const secRes = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, {
+        headers: {
+          "User-Agent": "pump-scorecard (https://pump-scorecard.vercel.app)",
+          "Accept": "application/json",
+        },
       });
-    } else {
-      doc.text("No recent SEC filings.");
+
+      if (secRes.ok) {
+        const secJson = await secRes.json();
+        const recent = secJson?.filings?.recent;
+
+        if (recent?.form && Array.isArray(recent.form)) {
+          allFilings = recent.form.map((form: string, idx: number) => ({
+            title: form,
+            date: recent.filingDate[idx],
+            url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[idx].replace(/-/g, "")}/${recent.primaryDocument[idx]}`,
+            description: formatDescription(recent.primaryDocument[idx] || ""),
+          }));
+
+          const dilutionForms = ["S-1", "424B", "F-1", "F-3", "F-4", "S-3"];
+          filings = allFilings.filter((f) =>
+            dilutionForms.some((d) => f.title.toUpperCase().includes(d))
+          );
+
+          // Baby Shelf logic
+          const float = quote?.floatShares ?? quote?.sharesOutstanding ?? null;
+          babyShelfRisk = filings.some(f => f.title.toUpperCase().includes("S-1")) && float < 75000000;
+
+          // Going Concern heuristic
+          goingConcernDetected = allFilings.some(
+            f =>
+              (f.title === "10-Q" || f.title === "10-K") &&
+              f.description?.toLowerCase().includes("going")
+          );
+
+          // Sort & limit
+          filings = filings
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 8);
+
+          allFilings = allFilings
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 8);
+        }
+      }
     }
+  }
+} catch (err) {
+  console.error("⚠️ SEC fetch failed:", err);
+}
+
 
     // ---------- Fraud Evidence ----------
     sectionHeader("⚠️ Fraud Evidence");
