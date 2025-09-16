@@ -8,6 +8,13 @@ const MANUAL_CRITERIA = {
   regulatory_alerts: false,
 };
 
+// ✅ SEC headers for cloud deployments (required on Vercel)
+const SEC_HEADERS = {
+  "User-Agent": "pump-scorecard (contact: your@email.com)",
+  Accept: "application/json",
+  "Accept-Encoding": "gzip, deflate",
+};
+
 export async function GET(req: Request) {
   try {
     const { pathname } = new URL(req.url);
@@ -41,71 +48,6 @@ export async function GET(req: Request) {
         (history.length || 1) || 0;
     const minClose = history.length ? Math.min(...history.map((q) => q.close)) : 0;
 
-// ---------- Promotions ----------
-type Promotion = { date: string | null; title: string; type: string; url: string };
-let promotions: Promotion[] = [];
-
-try {
-  const promoRes = await fetch(
-    `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${ticker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`
-  );
-  if (promoRes.ok) {
-    const promoJson = await promoRes.json();
-
-    // Many versions return different keys; handle them all.
-    const items =
-      promoJson.results ??
-      promoJson.data ??
-      promoJson.items ??
-      promoJson.promotions ??
-      [];
-
-    const norm = (v: any) => (v == null ? "" : String(v).trim());
-    const titleCase = (s: string) =>
-      s
-        .replace(/[_\-]/g, " ")
-        .replace(/\s+/g, " ")
-        .toLowerCase()
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-
-    promotions = items.map((p: any) => {
-      const rawType =
-        norm(p.promotion_type) ||
-        norm(p.disclosure_type) ||
-        norm(p.type) ||
-        norm(p.category);
-
-      const type = rawType ? titleCase(rawType) : "Unknown";
-
-      const date =
-        norm(p.promotion_date) ||
-        norm(p.date) ||
-        norm(p.published_at) ||
-        norm(p.created_at) ||
-        null;
-
-      const title =
-        norm(p.title) ||
-        norm(p.promotion_name) ||
-        norm(p.headline) ||
-        `${ticker} Promotion`;
-
-      const url =
-        norm(p.url) ||
-        norm(p.link) ||
-        norm(p.source_url) ||
-        (p.slug
-          ? `https://www.stockpromotiontracker.com/promotions/${p.slug}`
-          : `https://www.stockpromotiontracker.com/stock/${ticker}`);
-
-      return { date, title, type, url };
-    });
-  }
-} catch (err) {
-  console.error("⚠️ Promotions fetch failed:", err);
-}
-
-
     // ---------- SEC Filings ----------
     let filings: { title: string; date: string; url: string; description?: string }[] = [];
     let allFilings: typeof filings = [];
@@ -120,22 +62,14 @@ try {
         .replace(/\b([a-z])/g, (c) => c.toUpperCase());
     }
 
-    const US_STATES = new Set([
-      "Delaware", "Nevada", "California", "New York", "Texas", "Florida", "Arizona", "Washington",
-      "Massachusetts", "Maryland", "Utah", "Colorado", "Pennsylvania", "Illinois", "Georgia",
-      "Virginia", "New Jersey", "North Carolina", "Ohio", "Oregon", "Tennessee", "Minnesota",
-      "Michigan", "Wisconsin", "Missouri", "Connecticut", "Alabama", "Indiana", "Iowa",
-      "Kentucky", "Louisiana", "Oklahoma", "South Carolina", "Idaho", "Kansas", "Maine",
-      "Mississippi", "Montana", "Nebraska", "New Hampshire", "New Mexico", "North Dakota",
-      "Rhode Island", "South Dakota", "Vermont", "West Virginia", "Wyoming", "District Of Columbia"
-    ]);
-
     try {
       const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
-        headers: { "User-Agent": "pump-scorecard" },
+        headers: SEC_HEADERS,
       });
 
-      if (cikRes.ok) {
+      if (!cikRes.ok) {
+        console.error("⚠️ SEC ticker lookup failed:", cikRes.status);
+      } else {
         const cikJson = await cikRes.json();
         const entry = Object.values(cikJson).find(
           (c: any) => c.ticker.toUpperCase() === ticker
@@ -144,18 +78,17 @@ try {
         if (entry) {
           const cik = entry.cik_str.toString().padStart(10, "0");
           const secRes = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, {
-            headers: { "User-Agent": "pump-scorecard" },
+            headers: SEC_HEADERS,
           });
 
-          if (secRes.ok) {
+          if (!secRes.ok) {
+            console.error("⚠️ SEC submissions fetch failed:", secRes.status, await secRes.text());
+          } else {
             const secJson = await secRes.json();
 
-            // Incorporation country from SEC
-            const incorpDesc: string | undefined = secJson?.stateOfIncorporationDescription;
-            if (incorpDesc) {
-              secIncorporationCountry = US_STATES.has(incorpDesc)
-                ? "United States"
-                : incorpDesc;
+            // Incorporation country
+            if (secJson?.stateOfIncorporationDescription) {
+              secIncorporationCountry = secJson.stateOfIncorporationDescription;
             }
 
             // Recent filings
@@ -333,7 +266,7 @@ try {
       promotions,
       filings,
       allFilings,
-      fraudImages,   // ✅ back in response
+      fraudImages,
 
       // scores
       flatRiskScore,
