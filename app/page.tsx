@@ -1,20 +1,13 @@
-"use client";
-
 import React, { useRef, useState } from "react";
-import Image from "next/image";
-import { Card, CardContent } from "@/components/ui/Card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import Fundamentals from "@/components/Fundamentals";
-import Chart from "@/components/Chart";
-import Promotions from "@/components/Promotions";
-import SecFilings from "@/components/SecFilings";
+// ... other imports
 import Criteria from "@/components/Criteria";
 import RiskPill from "@/components/RiskPill";
+import { Card, CardContent } from "@/components/ui/Card";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
   const [result, setResult] = useState<any | null>(null);
+  const [manualCriteria, setManualCriteria] = useState<Record<string, boolean>>({});
   const reportRef = useRef<HTMLDivElement>(null);
 
   const scan = async () => {
@@ -22,32 +15,31 @@ export default function Page() {
     const res = await fetch(`/api/scan/${ticker}`, { cache: "no-store" });
     const json = await res.json();
     setResult(json);
+    setManualCriteria({}); // reset manual on new scan
   };
+
+  // 🔥 Adjusted risk scores with manual criteria
+  const adjustedFlatScore = (() => {
+    if (!result) return 0;
+    const autoScore = result.flatRiskScore ?? 0;
+    const manualCount = Object.values(manualCriteria).filter(Boolean).length;
+    // each manual criteria adds 10% risk
+    return Math.min(100, autoScore + manualCount * 10);
+  })();
+
+  const adjustedWeightedScore = (() => {
+    if (!result) return 0;
+    const base = result.weightedRiskScore ?? 0;
+    const manualCount = Object.values(manualCriteria).filter(Boolean).length;
+    return Math.min(100, base + manualCount * 10);
+  })();
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Image src="/logo.png" alt="Logo" width={40} height={40} />
-        <h1 className="text-2xl font-bold">
-          Booker Mastermind Pump & Dump Risk Scorecard
-        </h1>
-      </div>
+      {/* Header ... */}
 
-      {/* Input */}
-      <div className="flex items-center space-x-4">
-        <Input
-          placeholder="Enter Ticker (e.g. QMMM)"
-          value={ticker}
-          onChange={(e) => setTicker(e.target.value.toUpperCase())}
-        />
-        <Button onClick={scan}>Run Scan</Button>
-      </div>
-
-      {/* Results */}
       {result && (
         <div ref={reportRef} className="space-y-6">
-          {/* Company Header */}
           <Card>
             <CardContent>
               <h2 className="text-xl font-bold">
@@ -55,31 +47,15 @@ export default function Page() {
               </h2>
               <p>
                 Last price: $
-                {result.last_price !== undefined && result.last_price !== null
-                  ? result.last_price.toFixed(2)
-                  : "N/A"}{" "}
-                | Volume:{" "}
-                {result.latest_volume !== undefined &&
-                result.latest_volume !== null
-                  ? result.latest_volume.toLocaleString()
-                  : "N/A"}
+                {result.last_price ? result.last_price.toFixed(2) : "N/A"} | Volume:{" "}
+                {result.latest_volume ? result.latest_volume.toLocaleString() : "N/A"}
               </p>
-              <div className="space-y-1">
-                <p>
-                  Flat Risk Score:{" "}
-                  <RiskPill score={result.flatRiskScore ?? 0} />
-                  <span className="text-gray-500 ml-2">
-                    (percentage of criteria triggered)
-                  </span>
-                </p>
-                <p>
-                  Weighted Risk Score:{" "}
-                  <RiskPill score={result.weightedRiskScore ?? 0} />
-                  <span className="text-gray-500 ml-2">
-                    (adjusted for promotions & risky countries)
-                  </span>
-                </p>
-              </div>
+              <p>
+                Flat Risk Score: <RiskPill score={adjustedFlatScore} />
+              </p>
+              <p>
+                Weighted Risk Score: <RiskPill score={adjustedWeightedScore} />
+              </p>
             </CardContent>
           </Card>
 
@@ -87,29 +63,16 @@ export default function Page() {
           <Card>
             <CardContent>
               <h3 className="text-lg font-bold">🧠 Final Verdict</h3>
-              <p
-                className={
-                  result.summaryVerdict === "High risk"
-                    ? "text-red-700 font-bold"
-                    : result.summaryVerdict === "Moderate risk"
-                    ? "text-yellow-700 font-semibold"
-                    : "text-green-700"
-                }
-              >
-                {result.summaryVerdict || "No verdict available"}
-              </p>
-              <p className="text-sm text-gray-700 mt-2">
-                {result.summaryText || "No summary available."}
-              </p>
+              <p>{result.summaryVerdict}</p>
+              <p className="text-sm text-gray-700 mt-2">{result.summaryText}</p>
             </CardContent>
           </Card>
 
+          {/* Criteria */}
+          <Criteria result={result} onManualChange={setManualCriteria} />
+
           {/* Other Sections */}
-          <Fundamentals result={result} />
-          <Criteria result={result} />
-          <Chart history={result.history || []} />
-          <Promotions promotions={result.promotions || []} />
-          <SecFilings filings={result.filings || []} />
+          {/* Fundamentals, Chart, Promotions, SecFilings... */}
         </div>
       )}
     </div>

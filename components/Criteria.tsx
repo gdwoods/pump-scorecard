@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/Card";
 
 type CriteriaProps = {
   result: any;
+  onManualChange: (manual: Record<string, boolean>) => void;
 };
 
 const autoCriteriaList = [
@@ -24,7 +25,26 @@ const manualCriteriaList = [
   { key: "regulatory_alerts", label: "regulatory alerts" },
 ];
 
-export default function Criteria({ result }: CriteriaProps) {
+export default function Criteria({ result, onManualChange }: CriteriaProps) {
+  const [manualCriteria, setManualCriteria] = useState<Record<string, boolean>>({});
+
+  // Initialize from backend
+  useEffect(() => {
+    const init: Record<string, boolean> = {};
+    manualCriteriaList.forEach(({ key }) => {
+      init[key] = !!result[key];
+    });
+    setManualCriteria(init);
+  }, [result]);
+
+  const toggleManual = (key: string) => {
+    setManualCriteria((prev) => {
+      const updated = { ...prev, [key]: !prev[key] };
+      onManualChange(updated); // notify parent
+      return updated;
+    });
+  };
+
   return (
     <Card>
       <CardContent>
@@ -41,7 +61,12 @@ export default function Criteria({ result }: CriteriaProps) {
         <div className="grid grid-cols-2 gap-2">
           {manualCriteriaList.map(({ key, label }) => (
             <label key={key}>
-              <input type="checkbox" checked={!!result[key]} readOnly /> {label}
+              <input
+                type="checkbox"
+                checked={manualCriteria[key] || false}
+                onChange={() => toggleManual(key)}
+              />{" "}
+              {label}
             </label>
           ))}
         </div>
