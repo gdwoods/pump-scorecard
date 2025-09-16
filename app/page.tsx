@@ -10,23 +10,59 @@ import Chart from "@/components/Chart";
 import Promotions from "@/components/Promotions";
 import SecFilings from "@/components/SecFilings";
 import Criteria from "@/components/Criteria";
-import RiskPill from "@/components/RiskPill";
 import Verdict from "@/components/Verdict";
+import RiskPill from "@/components/RiskPill";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
   const [result, setResult] = useState<any | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
+  // Scan handler
   const scan = async () => {
     if (!ticker.trim()) return;
     try {
       const res = await fetch(`/api/scan/${ticker}`, { cache: "no-store" });
       const json = await res.json();
-      console.log("Scan result:", json); // debug log
+      console.log("Scan result:", json);
       setResult(json);
     } catch (err) {
       console.error("Scan failed:", err);
+    }
+  };
+
+  // Export PDF handler
+  const exportPDF = async () => {
+    if (!result) return;
+
+    // Capture chart canvas (if present)
+    let chartImage = null;
+    const chartCanvas = document.querySelector("canvas");
+    if (chartCanvas) {
+      chartImage = (chartCanvas as HTMLCanvasElement).toDataURL("image/png");
+    }
+
+    try {
+      const res = await fetch("/api/export-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker, result, chartImage }),
+      });
+
+      if (!res.ok) {
+        throw new Error("PDF export failed");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${ticker}-report.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      console.error("Export failed:", err);
     }
   };
 
@@ -40,7 +76,7 @@ export default function Page() {
         </h1>
       </div>
 
-      {/* Input */}
+      {/* Input + Buttons */}
       <div className="flex items-center space-x-4">
         <Input
           placeholder="Enter Ticker (e.g. QMMM)"
@@ -48,6 +84,11 @@ export default function Page() {
           onChange={(e) => setTicker(e.target.value.toUpperCase())}
         />
         <Button onClick={scan}>Run Scan</Button>
+        {result && (
+          <Button onClick={exportPDF} variant="outline">
+            📄 Export Full Report (PDF)
+          </Button>
+        )}
       </div>
 
       {/* Results */}
@@ -59,26 +100,24 @@ export default function Page() {
             summary={result.summaryText}
           />
 
-          {/* Scorecard */}
+          {/* Risk Scores */}
           <Card>
             <CardContent>
               <h3 className="text-lg font-bold">📊 Risk Scores</h3>
-              <div className="space-y-1">
-                <p>
-                  Flat Risk Score:{" "}
-                  <RiskPill score={result.flatRiskScore} />{" "}
-                  <span className="text-gray-500 ml-2">
-                    (percentage of criteria triggered)
-                  </span>
-                </p>
-                <p>
-                  Weighted Risk Score:{" "}
-                  <RiskPill score={result.weightedRiskScore} />{" "}
-                  <span className="text-gray-500 ml-2">
-                    (adjusted for promotions, fraud evidence & risky countries)
-                  </span>
-                </p>
-              </div>
+              <p>
+                Flat Risk Score:{" "}
+                <RiskPill score={result.flatRiskScore} />{" "}
+                <span className="text-gray-500 ml-2">
+                  (percentage of criteria triggered)
+                </span>
+              </p>
+              <p>
+                Weighted Risk Score:{" "}
+                <RiskPill score={result.weightedRiskScore} />{" "}
+                <span className="text-gray-500 ml-2">
+                  (adjusted for promotions, fraud evidence & risky countries)
+                </span>
+              </p>
             </CardContent>
           </Card>
 
@@ -105,7 +144,7 @@ export default function Page() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {result.fraudImages.map(
                     (
-                      img: { full: string; thumb: string; approvedAt: string; label: string },
+                      img: { full: string; thumb: string; approvedAt: string },
                       idx: number
                     ) => (
                       <div key={idx}>
@@ -116,7 +155,7 @@ export default function Page() {
                         >
                           <img
                             src={img.thumb}
-                            alt={img.label}
+                            alt={`Fraud screenshot ${idx + 1} for ${result.ticker}`}
                             className="w-full h-32 object-cover rounded-lg shadow hover:opacity-80 transition"
                           />
                         </a>
