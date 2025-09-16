@@ -1,76 +1,33 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/Card";
-
 type CriteriaProps = {
   result: any;
-  onManualChange: (manual: Record<string, boolean>) => void;
 };
 
-const autoCriteriaList = [
-  { key: "sudden_volume_spike", label: "sudden volume spike" },
-  { key: "sudden_price_spike", label: "sudden price spike" },
-  { key: "valuation_fundamentals_mismatch", label: "valuation fundamentals mismatch" },
-  { key: "reverse_split", label: "reverse split" },
-  { key: "dividend_announced", label: "dividend announced" },
-  { key: "promoted_stock", label: "promoted stock" },
-  { key: "dilution_or_offering", label: "dilution/offering filing" },
-  { key: "riskyCountry", label: "risky country (China/HK/Malaysia)" },
-];
-
-const manualCriteriaList = [
-  { key: "impersonated_advisors", label: "impersonated advisors" },
-  { key: "guaranteed_returns", label: "guaranteed returns" },
-  { key: "regulatory_alerts", label: "regulatory alerts" },
-];
-
-export default function Criteria({ result, onManualChange }: CriteriaProps) {
-  const [manualCriteria, setManualCriteria] = useState<Record<string, boolean>>({});
-
-  // Initialize from backend
-  useEffect(() => {
-    const init: Record<string, boolean> = {};
-    manualCriteriaList.forEach(({ key }) => {
-      init[key] = !!result[key];
-    });
-    setManualCriteria(init);
-  }, [result]);
-
-  const toggleManual = (key: string) => {
-    setManualCriteria((prev) => {
-      const updated = { ...prev, [key]: !prev[key] };
-      onManualChange(updated); // notify parent
-      return updated;
-    });
-  };
+export default function Criteria({ result }: CriteriaProps) {
+  const criteria = [
+    { label: "Sudden volume spike", value: result.sudden_volume_spike },
+    { label: "Sudden price spike", value: result.sudden_price_spike },
+    { label: "Valuation fundamentals mismatch", value: result.valuation_fundamentals_mismatch },
+    { label: "Reverse split", value: result.reverse_split },
+    { label: "Dividend announced", value: result.dividend_announced },
+    { label: "Promoted stock", value: result.promoted_stock },
+    { label: "Dilution/offering filing", value: result.dilution_or_offering },
+    { label: "Risky country (China/HK/Malaysia)", value: result.riskyCountry },
+    { label: "Fraud evidence posted online", value: result.fraudEvidence }, // ✅ new
+  ];
 
   return (
-    <Card>
-      <CardContent>
-        <h3 className="text-lg font-bold">✅ Auto Criteria</h3>
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          {autoCriteriaList.map(({ key, label }) => (
-            <label key={key}>
-              <input type="checkbox" checked={!!result[key]} readOnly /> {label}
-            </label>
-          ))}
-        </div>
-
-        <h3 className="text-lg font-bold">✍️ Manual Criteria</h3>
-        <div className="grid grid-cols-2 gap-2">
-          {manualCriteriaList.map(({ key, label }) => (
-            <label key={key}>
-              <input
-                type="checkbox"
-                checked={manualCriteria[key] || false}
-                onChange={() => toggleManual(key)}
-              />{" "}
-              {label}
-            </label>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="p-4 border rounded-lg shadow-sm bg-white">
+      <h3 className="text-lg font-bold mb-2">✅ Criteria</h3>
+      <div className="grid grid-cols-2 gap-2">
+        {criteria.map((c, idx) => (
+          <label key={idx} className="flex items-center space-x-2 text-sm">
+            <input type="checkbox" checked={!!c.value} readOnly />
+            <span>{c.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }

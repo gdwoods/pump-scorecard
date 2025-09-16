@@ -1,70 +1,13 @@
-export const runtime = "nodejs";
-
 import { NextResponse } from "next/server";
 import yahooFinance from "yahoo-finance2";
 
 // Risky countries list
 const RISKY_COUNTRIES = ["China", "Hong Kong", "Malaysia"];
-
-// Manual criteria placeholders (user-driven, always default false in backend)
 const MANUAL_CRITERIA = {
   impersonated_advisors: false,
   guaranteed_returns: false,
   regulatory_alerts: false,
 };
-
-// Country normalization map
-const COUNTRY_MAP: Record<string, string> = {
-  US: "United States",
-  USA: "United States",
-  CN: "China",
-  CHN: "China",
-  HK: "Hong Kong",
-  HKG: "Hong Kong",
-  MY: "Malaysia",
-  MYS: "Malaysia",
-  IE: "Ireland",
-  IRL: "Ireland",
-};
-
-function normalizeCountry(value: string | undefined): string {
-  if (!value) return "Unknown";
-  const key = value.trim().toUpperCase();
-  return COUNTRY_MAP[key] || value;
-}
-
-// Manual overrides for ADRs / misreported tickers
-const COUNTRY_OVERRIDES: Record<string, string> = {
-  QMMM: "Hong Kong",
-  BREA: "Ireland",
-};
-
-function detectCountry(ticker: string, polyMeta: any, quote: any): { country: string; source: string } {
-  if (COUNTRY_OVERRIDES[ticker]) {
-    return { country: COUNTRY_OVERRIDES[ticker], source: "override" };
-  }
-
-  const rawPoly = polyMeta?.results?.locale;
-  if (rawPoly) {
-    return { country: normalizeCountry(rawPoly), source: "polygon" };
-  }
-
-  const rawQuoteRegion = quote?.region;
-  if (rawQuoteRegion) {
-    return { country: normalizeCountry(rawQuoteRegion), source: "yahoo-region" };
-  }
-
-  const rawQuoteCountry = quote?.country;
-  if (rawQuoteCountry) {
-    return { country: normalizeCountry(rawQuoteCountry), source: "yahoo-country" };
-  }
-
-  return { country: "Unknown", source: "none" };
-}
-
-// Fraud storage base
-const SUPABASE_BASE_URL =
-  "https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public";
 
 export async function GET(req: Request) {
   try {
@@ -82,24 +25,19 @@ export async function GET(req: Request) {
         period2: new Date(),
         interval: "1d",
       });
-      history =
-        chart.quotes?.map((q: any) => ({
-          date: q.date?.toISOString().split("T")[0] || "",
-          close: q.close,
-          volume: q.volume,
-        })) || [];
+      history = chart.quotes?.map((q: any) => ({
+        date: q.date?.toISOString().split("T")[0] || "",
+        close: q.close,
+        volume: q.volume,
+      })) || [];
     } catch (err) {
       console.error("⚠️ Yahoo fetch failed:", err);
     }
 
     const latest = history.at(-1) || {};
     const prev = history.at(-2) || latest;
-    const avgVol =
-      history.reduce((s, q) => s + (q.volume || 0), 0) /
-        (history.length || 1) || 0;
-    const minClose = history.length
-      ? Math.min(...history.map((q) => q.close))
-      : 0;
+    const avgVol = history.reduce((s, q) => s + (q.volume || 0), 0) / (history.length || 1) || 0;
+    const minClose = history.length ? Math.min(...history.map((q) => q.close)) : 0;
 
     // ---------- Polygon Meta ----------
     let polyMeta: any = {};
@@ -127,21 +65,68 @@ export async function GET(req: Request) {
     }
 
     // ---------- SEC Filings ----------
-    let filings: any[] = [];
+    let filings: { title: string; date: string; url: string }[] = [];
+    let allFilings: typeof filings = [];
+    let babyShelfRisk = false;
+    let goingConcernDetected = false;
+
     try {
-      const secRes = await fetch(
-        `https://data.sec.gov/submissions/CIK${ticker}.json`,
-        { headers: { "User-Agent": "pump-scorecard" } }
-      );
-      if (secRes.ok) {
-        const secJson = await secRes.json();
-        filings = secJson?.filings?.recent || [];
+      const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
+        headers: { "User-Agent": "pump-scorecard" },
+      });
+
+      if (cikRes.ok) {
+        const cikJson = await cikRes.json();
+        const entry = Object.values(cikJson).find(
+          (c: any) => c.ticker.toUpperCase() === ticker
+        );
+
+        if (entry) {
+          const cik = entry.cik_str.toString().padStart(10, "0");
+
+          const secRes = await fetch(
+            `https://data.sec.gov/submissions/CIK${cik}.json`,
+            { headers: { "User-Agent": "pump-scorecard" } }
+          );
+
+          if (secRes.ok) {
+            const secJson = await secRes.json();
+            const recent = secJson?.filings?.recent;
+
+            if (recent?.form && Array.isArray(recent.form)) {
+              allFilings = recent.form.map((form: string, idx: number) => ({
+                title: form,
+                date: recent.filingDate[idx],
+                url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[idx].replace(/-/g, "")}/${recent.primaryDocument[idx]}`,
+              }));
+
+              const dilutionForms = ["S-1", "424B", "F-1", "F-3", "F-4", "S-3"];
+              filings = allFilings.filter((f) =>
+                dilutionForms.some((d) => f.title.toUpperCase().includes(d))
+              );
+
+              // Baby Shelf Logic
+              const float = quote?.floatShares ?? quote?.sharesOutstanding ?? null;
+              babyShelfRisk = filings.some(f => f.title.toUpperCase().includes("S-1")) && float < 75000000;
+
+              // Going Concern Check
+              goingConcernDetected = allFilings.some(
+                f => (f.title === "10-Q" || f.title === "10-K") &&
+                f.url.toLowerCase().includes("going") // Simplified heuristic
+              );
+
+              // Sort & trim
+              filings = filings.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8);
+              allFilings = allFilings.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8);
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("⚠️ SEC fetch failed:", err);
     }
 
-    // ---------- Fraud Evidence ----------
+    // ---------- Fraud Images ----------
     let fraudImages: any[] = [];
     try {
       const fraudRes = await fetch(
@@ -149,56 +134,41 @@ export async function GET(req: Request) {
       );
       if (fraudRes.ok) {
         const fraudJson = await fraudRes.json();
-        fraudImages = (fraudJson.results || [])
-          .filter((f: any) => {
-            // strict match
-            const tickers = (f.tickers || []).map((t: string) => t.toUpperCase());
-            if (tickers.includes(ticker)) return true;
-
-            // fallback: check companyName or imagePath
-            if (f.companyName?.toUpperCase().includes(ticker)) return true;
-            if (f.imagePath?.toUpperCase().includes(ticker)) return true;
-
-            return false;
-          })
-          .map((f: any, idx: number) => ({
-            full: `${SUPABASE_BASE_URL}/${f.imagePath}`,
-            thumb: `${SUPABASE_BASE_URL}/${f.thumbnailPath}`,
-            approvedAt: f.approvedAt,
-            id: f.id,
-            label: `Fraud screenshot ${idx + 1} for ${ticker}`,
-          }));
+        fraudImages = (fraudJson.results || []).map((img: any) => ({
+          full: `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}`,
+          thumb: `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`,
+          approvedAt: img.approvedAt,
+        }));
       }
     } catch (err) {
-      console.error("⚠️ Fraud API fetch failed:", err);
+      console.error("⚠️ Fraud fetch failed:", err);
     }
     const fraudEvidence = fraudImages.length > 0;
 
     // ---------- Auto Criteria ----------
-    const sudden_volume_spike =
-      !!latest.volume && avgVol > 0 && latest.volume > avgVol * 3;
+    const sudden_volume_spike = !!latest.volume && avgVol > 0 && latest.volume > avgVol * 3;
     const sudden_price_spike =
       latest.close > (prev.close || latest.close) * 1.25 ||
       latest.close > (minClose || latest.close) * 2;
-    const valuation_fundamentals_mismatch =
-      !quote.trailingPE || quote.trailingPE > 100;
+    const valuation_fundamentals_mismatch = !quote.trailingPE || quote.trailingPE > 100;
     const reverse_split = filings.some((f: any) =>
-      (f.form || "").toLowerCase().includes("split")
+      (f.title || "").toLowerCase().includes("split")
     );
     const dividend_announced = filings.some((f: any) =>
-      (f.form || "").toLowerCase().includes("dividend")
+      (f.title || "").toLowerCase().includes("dividend")
     );
     const promoted_stock = promotions.length > 0;
-    const dilution_or_offering = filings.some((f: any) =>
-      (f.form || "").includes("S-1") ||
-      (f.form || "").includes("424B")
-    );
+    const dilution_or_offering = filings.length > 0;
 
-    // ---------- Country ----------
-    const { country, source: countrySource } = detectCountry(ticker, polyMeta, quote);
+    const country =
+      polyMeta?.results?.locale || quote?.country || "Unknown";
+    const countrySource = polyMeta?.results?.locale
+      ? "Polygon"
+      : quote?.country
+      ? "Yahoo"
+      : "Unknown";
     const riskyCountry = RISKY_COUNTRIES.includes(country);
 
-    // ---------- Scores ----------
     const flatCriteria = [
       sudden_volume_spike,
       sudden_price_spike,
@@ -211,16 +181,15 @@ export async function GET(req: Request) {
       fraudEvidence,
     ].filter(Boolean).length;
 
-    const flatRiskScore = Math.round((flatCriteria / 10) * 100);
+    const flatRiskScore = Math.round((flatCriteria / 9) * 100);
 
     let weightedScore = flatRiskScore;
     if (promoted_stock) weightedScore += 20;
     if (riskyCountry) weightedScore += 20;
     if (dilution_or_offering) weightedScore += 10;
-    if (fraudEvidence) weightedScore += 15;
+    if (fraudEvidence) weightedScore += 20;
     if (weightedScore > 100) weightedScore = 100;
 
-    // ---------- Summary ----------
     let summaryVerdict = "Low risk";
     if (weightedScore >= 70) summaryVerdict = "High risk";
     else if (weightedScore >= 40) summaryVerdict = "Moderate risk";
@@ -230,7 +199,7 @@ export async function GET(req: Request) {
     if (promoted_stock) reasons.push("active stock promotions");
     if (dilution_or_offering) reasons.push("a recent dilution filing");
     if (riskyCountry) reasons.push(`incorporation in ${country}`);
-    if (fraudEvidence) reasons.push("fraud evidence screenshots");
+    if (fraudEvidence) reasons.push("fraud evidence posted online");
 
     let summaryText = "";
     if (summaryVerdict === "Low risk") {
@@ -246,12 +215,9 @@ export async function GET(req: Request) {
       )} make it look like a prime pump-and-dump candidate.`;
     }
 
-    // ---------- Always Respond ----------
     return NextResponse.json({
       ticker,
       companyName: quote.longName || quote.shortName || ticker,
-
-      // auto criteria
       sudden_volume_spike,
       sudden_price_spike,
       valuation_fundamentals_mismatch,
@@ -261,11 +227,7 @@ export async function GET(req: Request) {
       dilution_or_offering,
       riskyCountry,
       fraudEvidence,
-
-      // manual criteria placeholders
       ...MANUAL_CRITERIA,
-
-      // fundamentals
       last_price: latest.close || null,
       avg_volume: avgVol || null,
       latest_volume: latest.volume || null,
@@ -275,25 +237,23 @@ export async function GET(req: Request) {
       shortFloat: (quote as any)?.shortRatio || null,
       insiderOwn: (quote as any)?.insiderHoldPercent || null,
       instOwn: (quote as any)?.institutionalHoldPercent || null,
-
-      // meta
-      exchange: polyMeta?.results?.primary_exchange || quote.fullExchangeName || "Unknown",
+      exchange:
+        polyMeta?.results?.primary_exchange ||
+        quote.fullExchangeName ||
+        "Unknown",
       country,
-      countrySource, // ✅ show where it came from
-
-      // history + external data
+      countrySource,
       history,
       promotions,
       filings,
+      allFilings,
       fraudImages,
-
-      // scores
       flatRiskScore,
       weightedRiskScore: weightedScore,
-
-      // summary
       summaryVerdict,
       summaryText,
+      babyShelfRisk,
+      goingConcernDetected,
     });
   } catch (err: any) {
     console.error("❌ Fatal route error:", err);

@@ -10,43 +10,50 @@ import Chart from "@/components/Chart";
 import Promotions from "@/components/Promotions";
 import SecFilings from "@/components/SecFilings";
 import Criteria from "@/components/Criteria";
-import Verdict from "@/components/Verdict";
 import RiskPill from "@/components/RiskPill";
+import Summary from "@/components/Summary";
+import Verdict from "@/components/Verdict";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
   const [result, setResult] = useState<any | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  // Scan handler
   const scan = async () => {
     if (!ticker.trim()) return;
     try {
       const res = await fetch(`/api/scan/${ticker}`, { cache: "no-store" });
       const json = await res.json();
-      console.log("Scan result:", json);
+      console.log("Scan result:", json); // Debug log
       setResult(json);
     } catch (err) {
       console.error("Scan failed:", err);
     }
   };
 
-  // Export PDF handler
   const exportPDF = async () => {
     if (!result) return;
 
-    // Capture chart canvas (if present)
-    let chartImage = null;
-    const chartCanvas = document.querySelector("canvas");
-    if (chartCanvas) {
-      chartImage = (chartCanvas as HTMLCanvasElement).toDataURL("image/png");
-    }
-
     try {
+      // Capture chart image (if needed, you can implement canvas toDataURL here)
+      const chartElement = document.querySelector("#chart-capture") as HTMLElement | null;
+      let chartImage = null;
+      if (chartElement) {
+        const canvas = chartElement.querySelector("canvas") as HTMLCanvasElement | null;
+        if (canvas) {
+          chartImage = canvas.toDataURL("image/png");
+        }
+      }
+
       const res = await fetch("/api/export-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker, result, chartImage }),
+        body: JSON.stringify({
+          ticker,
+          result,
+          chartImage,
+          fraudImages: result.fraudImages || [], // ✅ send fraud images to backend
+        }),
       });
 
       if (!res.ok) {
@@ -58,11 +65,10 @@ export default function Page() {
       const a = document.createElement("a");
       a.href = url;
       a.download = `${ticker}-report.pdf`;
-      document.body.appendChild(a);
       a.click();
-      a.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("Export failed:", err);
+      console.error("PDF export failed", err);
     }
   };
 
@@ -76,7 +82,7 @@ export default function Page() {
         </h1>
       </div>
 
-      {/* Input + Buttons */}
+      {/* Input */}
       <div className="flex items-center space-x-4">
         <Input
           placeholder="Enter Ticker (e.g. QMMM)"
@@ -85,8 +91,8 @@ export default function Page() {
         />
         <Button onClick={scan}>Run Scan</Button>
         {result && (
-          <Button onClick={exportPDF} variant="outline">
-            📄 Export Full Report (PDF)
+          <Button variant="secondary" onClick={exportPDF}>
+            Export PDF
           </Button>
         )}
       </div>
@@ -100,27 +106,6 @@ export default function Page() {
             summary={result.summaryText}
           />
 
-          {/* Risk Scores */}
-          <Card>
-            <CardContent>
-              <h3 className="text-lg font-bold">📊 Risk Scores</h3>
-              <p>
-                Flat Risk Score:{" "}
-                <RiskPill score={result.flatRiskScore} />{" "}
-                <span className="text-gray-500 ml-2">
-                  (percentage of criteria triggered)
-                </span>
-              </p>
-              <p>
-                Weighted Risk Score:{" "}
-                <RiskPill score={result.weightedRiskScore} />{" "}
-                <span className="text-gray-500 ml-2">
-                  (adjusted for promotions, fraud evidence & risky countries)
-                </span>
-              </p>
-            </CardContent>
-          </Card>
-
           {/* Fundamentals */}
           <Fundamentals result={result} />
 
@@ -128,13 +113,21 @@ export default function Page() {
           <Criteria result={result} />
 
           {/* Price & Volume Chart */}
-          <Chart history={result.history} />
+          <div id="chart-capture">
+            <Chart history={result.history} />
+          </div>
 
           {/* Promotions */}
           <Promotions promotions={result.promotions} />
 
-          {/* SEC Filings */}
-          <SecFilings filings={result.filings} />
+        {/* SEC Filings */}
+<SecFilings
+  filings={result.filings}
+  allFilings={result.allFilings}
+  float={result.floatShares}
+  goingConcernDetected={result.goingConcernDetected}
+/>
+
 
           {/* Fraud Evidence */}
           {result.fraudImages && result.fraudImages.length > 0 ? (
