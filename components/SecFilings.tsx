@@ -1,110 +1,103 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { FileText } from "lucide-react";
 
 type Filing = {
-  title: string;
-  date: string;
-  url: string;
+  title?: string;
+  date?: string;
+  url?: string;
+  description?: string;
 };
 
-type Props = {
-  filings: Filing[];
-  allFilings: Filing[];
-  float?: number | null;
-  goingConcernDetected?: boolean;
-};
+function formatDate(date?: string) {
+  if (!date) return "Unknown";
+  const d = new Date(date);
+  return isNaN(d.getTime()) ? date : d.toISOString().split("T")[0];
+}
+
+function typeBadgeClass(title?: string) {
+  const t = (title || "").toUpperCase();
+  if (t.includes("S-1")) return "bg-red-100 text-red-700";
+  if (t.includes("424B")) return "bg-yellow-100 text-yellow-800";
+  if (t.includes("10-K")) return "bg-blue-100 text-blue-700";
+  if (t.includes("10-Q")) return "bg-green-100 text-green-700";
+  return "bg-gray-100 text-gray-600";
+}
+
+function filingType(title?: string) {
+  if (!title) return "Unknown";
+  const t = title.toUpperCase();
+  if (t.includes("S-1")) return "Registration (S-1)";
+  if (t.includes("424B")) return "Prospectus (424B)";
+  if (t.includes("10-K")) return "Annual (10-K)";
+  if (t.includes("10-Q")) return "Quarterly (10-Q)";
+  return title;
+}
 
 export default function SecFilings({
-  filings,
-  allFilings,
+  filings = [],
+  allFilings = [],
   float,
   goingConcernDetected,
-}: Props) {
-  const [showAll, setShowAll] = useState(false);
-  const shown = showAll ? allFilings : filings;
-
-  const isDilution = (title: string) =>
-    ["S-1", "424B", "F-1", "F-3", "F-4", "S-3"].some((f) =>
-      title.toUpperCase().includes(f)
-    );
-
-  const isBabyShelfRisk = (title: string) =>
-    title.toUpperCase().includes("S-1") && (float ?? Infinity) < 75000000;
-
-  const isGoingConcernFlag = (title: string) =>
-    goingConcernDetected &&
-    (title.toUpperCase().includes("10-Q") || title.toUpperCase().includes("10-K"));
-
+}: {
+  filings: Filing[];
+  allFilings?: Filing[];
+  float?: number | null;
+  goingConcernDetected?: boolean;
+}) {
   return (
     <Card>
-      <CardContent className="space-y-3 p-4">
-        <div className="flex items-center gap-2 font-semibold text-lg">
-          <FileText className="h-5 w-5" />
-          SEC Filings
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 text-xl font-semibold mb-3">
+          <FileText size={20} />
+          <span>SEC Filings</span>
         </div>
 
-        <div className="flex gap-4 text-sm">
-          <button
-            onClick={() => setShowAll(false)}
-            className={`px-2 py-1 rounded ${
-              !showAll
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            Dilution-Only
-          </button>
-          <button
-            onClick={() => setShowAll(true)}
-            className={`px-2 py-1 rounded ${
-              showAll
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            All Filings
-          </button>
-        </div>
+        {(!filings || filings.length === 0) && (
+          <div className="text-gray-600">No recent dilution filings found.</div>
+        )}
 
-        {shown.length === 0 ? (
-          <p className="text-muted-foreground">No filings found.</p>
-        ) : (
-          <ul className="list-disc list-inside space-y-1">
-            {shown.map((f, idx) => {
-              const dilution = isDilution(f.title);
-              const babyShelf = isBabyShelfRisk(f.title);
-              const goingConcern = isGoingConcernFlag(f.title);
-
-              return (
-                <li key={idx}>
-                  <a
-                    href={f.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`hover:underline ${
-                      dilution ? "text-red-600 font-semibold" : "text-blue-600"
-                    }`}
+        {filings && filings.length > 0 && (
+          <ul className="space-y-2">
+            {filings.map((f, i) => (
+              <li key={i} className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs ${typeBadgeClass(
+                      f.title
+                    )}`}
                   >
-                    {f.title} ({f.date})
-                  </a>
-                  {babyShelf && (
-                    <span className="ml-2 text-xs bg-red-200 text-red-800 px-1 py-0.5 rounded">
-                      Baby Shelf Risk
-                    </span>
-                  )}
-                  {goingConcern && (
-                    <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-1 py-0.5 rounded">
-                      Going Concern
-                    </span>
-                  )}
-                </li>
-              );
-            })}
+                    {filingType(f.title)}
+                  </span>
+                  <span className="text-sm text-gray-500">
+                    {formatDate(f.date)}
+                  </span>
+                </div>
+                <a
+                  href={f.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  {f.description || f.title || "Untitled Filing"}
+                </a>
+              </li>
+            ))}
           </ul>
         )}
+
+        {/* Extra info */}
+        <div className="mt-4 space-y-1 text-sm text-gray-700">
+          {typeof float === "number" && float < 75_000_000 && (
+            <div>
+              ⚠️ Baby Shelf Risk: Float is under $75M (approx {float.toLocaleString()} shares).
+            </div>
+          )}
+          {goingConcernDetected && (
+            <div>⚠️ Going concern language detected in filings.</div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
