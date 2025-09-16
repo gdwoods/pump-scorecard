@@ -1,78 +1,144 @@
+"use client";
+
 import React, { useRef, useState } from "react";
-// ... other imports
+import Image from "next/image";
+import { Card, CardContent } from "@/components/ui/Card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import Fundamentals from "@/components/Fundamentals";
+import Chart from "@/components/Chart";
+import Promotions from "@/components/Promotions";
+import SecFilings from "@/components/SecFilings";
 import Criteria from "@/components/Criteria";
 import RiskPill from "@/components/RiskPill";
-import { Card, CardContent } from "@/components/ui/Card";
+import Verdict from "@/components/Verdict";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
   const [result, setResult] = useState<any | null>(null);
-  const [manualCriteria, setManualCriteria] = useState<Record<string, boolean>>({});
   const reportRef = useRef<HTMLDivElement>(null);
 
   const scan = async () => {
     if (!ticker.trim()) return;
-    const res = await fetch(`/api/scan/${ticker}`, { cache: "no-store" });
-    const json = await res.json();
-    setResult(json);
-    setManualCriteria({}); // reset manual on new scan
+    try {
+      const res = await fetch(`/api/scan/${ticker}`, { cache: "no-store" });
+      const json = await res.json();
+      console.log("Scan result:", json); // debug log
+      setResult(json);
+    } catch (err) {
+      console.error("Scan failed:", err);
+    }
   };
-
-  // 🔥 Adjusted risk scores with manual criteria
-  const adjustedFlatScore = (() => {
-    if (!result) return 0;
-    const autoScore = result.flatRiskScore ?? 0;
-    const manualCount = Object.values(manualCriteria).filter(Boolean).length;
-    // each manual criteria adds 10% risk
-    return Math.min(100, autoScore + manualCount * 10);
-  })();
-
-  const adjustedWeightedScore = (() => {
-    if (!result) return 0;
-    const base = result.weightedRiskScore ?? 0;
-    const manualCount = Object.values(manualCriteria).filter(Boolean).length;
-    return Math.min(100, base + manualCount * 10);
-  })();
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header ... */}
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Image src="/logo.png" alt="Logo" width={40} height={40} />
+        <h1 className="text-2xl font-bold">
+          Booker Mastermind Pump & Dump Risk Scorecard
+        </h1>
+      </div>
 
+      {/* Input */}
+      <div className="flex items-center space-x-4">
+        <Input
+          placeholder="Enter Ticker (e.g. QMMM)"
+          value={ticker}
+          onChange={(e) => setTicker(e.target.value.toUpperCase())}
+        />
+        <Button onClick={scan}>Run Scan</Button>
+      </div>
+
+      {/* Results */}
       {result && (
         <div ref={reportRef} className="space-y-6">
+          {/* Final Verdict */}
+          <Verdict
+            verdict={result.summaryVerdict}
+            summary={result.summaryText}
+          />
+
+          {/* Scorecard */}
           <Card>
             <CardContent>
-              <h2 className="text-xl font-bold">
-                {result.companyName || "Unknown"} ({result.ticker})
-              </h2>
-              <p>
-                Last price: $
-                {result.last_price ? result.last_price.toFixed(2) : "N/A"} | Volume:{" "}
-                {result.latest_volume ? result.latest_volume.toLocaleString() : "N/A"}
-              </p>
-              <p>
-                Flat Risk Score: <RiskPill score={adjustedFlatScore} />
-              </p>
-              <p>
-                Weighted Risk Score: <RiskPill score={adjustedWeightedScore} />
-              </p>
+              <h3 className="text-lg font-bold">📊 Risk Scores</h3>
+              <div className="space-y-1">
+                <p>
+                  Flat Risk Score:{" "}
+                  <RiskPill score={result.flatRiskScore} />{" "}
+                  <span className="text-gray-500 ml-2">
+                    (percentage of criteria triggered)
+                  </span>
+                </p>
+                <p>
+                  Weighted Risk Score:{" "}
+                  <RiskPill score={result.weightedRiskScore} />{" "}
+                  <span className="text-gray-500 ml-2">
+                    (adjusted for promotions, fraud evidence & risky countries)
+                  </span>
+                </p>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Combined Verdict + Summary */}
-          <Card>
-            <CardContent>
-              <h3 className="text-lg font-bold">🧠 Final Verdict</h3>
-              <p>{result.summaryVerdict}</p>
-              <p className="text-sm text-gray-700 mt-2">{result.summaryText}</p>
-            </CardContent>
-          </Card>
+          {/* Fundamentals */}
+          <Fundamentals result={result} />
 
           {/* Criteria */}
-          <Criteria result={result} onManualChange={setManualCriteria} />
+          <Criteria result={result} />
 
-          {/* Other Sections */}
-          {/* Fundamentals, Chart, Promotions, SecFilings... */}
+          {/* Price & Volume Chart */}
+          <Chart history={result.history} />
+
+          {/* Promotions */}
+          <Promotions promotions={result.promotions} />
+
+          {/* SEC Filings */}
+          <SecFilings filings={result.filings} />
+
+          {/* Fraud Evidence */}
+          {result.fraudImages && result.fraudImages.length > 0 ? (
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold">⚠️ Fraud Evidence</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {result.fraudImages.map(
+                    (
+                      img: { full: string; thumb: string; approvedAt: string; label: string },
+                      idx: number
+                    ) => (
+                      <div key={idx}>
+                        <a
+                          href={img.full}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <img
+                            src={img.thumb}
+                            alt={img.label}
+                            className="w-full h-32 object-cover rounded-lg shadow hover:opacity-80 transition"
+                          />
+                        </a>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {new Date(img.approvedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    )
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent>
+                <h3 className="text-lg font-bold">⚠️ Fraud Evidence</h3>
+                <p className="text-sm text-gray-500">
+                  No fraud images found for this ticker.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>
