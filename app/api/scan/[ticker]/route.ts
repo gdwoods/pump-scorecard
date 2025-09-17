@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
 import yahooFinance from "yahoo-finance2";
+import * as cheerio from "cheerio";
 
+// Risky countries list
 const RISKY_COUNTRIES = ["China", "Hong Kong", "Malaysia"];
+
+// Manual criteria placeholders
 const MANUAL_CRITERIA = {
   impersonated_advisors: false,
   guaranteed_returns: false,
   regulatory_alerts: false,
-};
-
-const SEC_HEADERS = {
-  "User-Agent": "pump-scorecard (contact: youremail@example.com)",
-  Accept: "application/json",
-  "Accept-Encoding": "gzip, deflate",
 };
 
 export async function GET(req: Request) {
@@ -21,7 +19,7 @@ export async function GET(req: Request) {
 
     // ---------- Yahoo Finance ----------
     let quote: any = {};
-    let history: { date: string; close: number; volume: number }[] = [];
+    let history: any[] = [];
     try {
       quote = await yahooFinance.quote(ticker);
       const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 180;
@@ -45,125 +43,94 @@ export async function GET(req: Request) {
     const avgVol =
       history.reduce((s, q) => s + (q.volume || 0), 0) /
         (history.length || 1) || 0;
-    const minClose = history.length ? Math.min(...history.map((q) => q.close)) : 0;
+    const minClose = history.length
+      ? Math.min(...history.map((q) => q.close))
+      : 0;
 
     // ---------- Polygon Meta ----------
     let polyMeta: any = {};
     try {
-      const key = process.env.POLYGON_KEY;
-      if (!key) {
-        console.error("⚠️ Missing POLYGON_KEY in environment");
-      } else {
-        const polyRes = await fetch(
-          `https://api.polygon.io/v3/reference/tickers/${ticker}?apiKey=${key}`
-        );
-        if (polyRes.ok) {
-          polyMeta = await polyRes.json();
-        } else {
-          console.error("⚠️ Polygon fetch failed:", polyRes.status, await polyRes.text());
-        }
-      }
+      const polyRes = await fetch(
+        `https://api.polygon.io/v3/reference/tickers/${ticker}?apiKey=${process.env.POLYGON_KEY}`
+      );
+      if (polyRes.ok) polyMeta = await polyRes.json();
     } catch (err) {
       console.error("⚠️ Polygon meta failed:", err);
     }
+
 // ---------- Promotions ----------
 let promotions: any[] = [];
 try {
+  // Step 1: Try API
   const promoRes = await fetch(
     `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${ticker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`,
-    {
-      headers: { "User-Agent": "pump-scorecard" }, // required by some APIs
-    }
+    { headers: { "User-Agent": "pump-scorecard" } }
   );
 
   if (promoRes.ok) {
     const promoJson = await promoRes.json();
-    console.log("📢 Raw promotions response:", promoJson);
-
     const rawPromos = promoJson.results || promoJson.data || [];
 
-    promotions = rawPromos.map((p: any) => {
-      const id = p.id ?? p.promotion_id ?? p.promo_id;
-      const url =
-        p.url ??
-        p.link ??
-        (id ? `https://www.stockpromotiontracker.com/promotion/${id}` : undefined);
+    promotions = rawPromos.map((p: any) => ({
+      type: p.type ?? p.promotion_type ?? "Unknown",
+      date: p.promotion_date?.slice(0, 10) ?? "Unknown",
+      url: p.url ?? "https://www.stockpromotiontracker.com/",
+    }));
+  }
 
-      const type = (p.type ?? p.promotion_type ?? p.category ?? "Unknown")
-        .toString()
-        .toLowerCase()
-        .replace(/\b\w/g, (c: string) => c.toUpperCase());
-
-      let date: string | undefined;
-      if (p.promotion_date) date = p.promotion_date.slice(0, 10);
-      else if (p.date) date = p.date.slice(0, 10);
-      else if (p.created_at) date = p.created_at.slice(0, 10);
-
-      return { type, date: date ?? "Unknown", url };
-    });
-  } else {
-    console.error("⚠️ Promotions fetch failed with status:", promoRes.status);
+  // Step 2: Final fallback (always valid link)
+  if (!promotions || promotions.length === 0) {
+    promotions = [
+      {
+        type: "Manual Check",
+        date: "",
+        url: "https://www.stockpromotiontracker.com/",
+      },
+    ];
   }
 } catch (err) {
-  console.error("⚠️ Promotions fetch error:", err);
+  console.error("⚠️ Promotions fetch failed:", err);
+  promotions = [
+    {
+      type: "Manual Check",
+      date: "",
+      url: "https://www.stockpromotiontracker.com/",
+    },
+  ];
 }
 
 
     // ---------- SEC Filings ----------
-    let filings: { title: string; date: string; url: string; description: string }[] = [];
-    let allFilings: typeof filings = [];
-    let goingConcernDetected = false;
-    let secCountry: string | null = null;
-
+    let filings: { title: string; date: string; url: string }[] = [];
     try {
       const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
-        headers: SEC_HEADERS,
+        headers: { "User-Agent": "pump-scorecard" },
       });
+
       if (cikRes.ok) {
         const cikJson = await cikRes.json();
         const entry = Object.values(cikJson).find(
           (c: any) => c.ticker.toUpperCase() === ticker
         );
+
         if (entry) {
           const cik = entry.cik_str.toString().padStart(10, "0");
-          const secRes = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, {
-            headers: SEC_HEADERS,
-          });
+
+          const secRes = await fetch(
+            `https://data.sec.gov/submissions/CIK${cik}.json`,
+            { headers: { "User-Agent": "pump-scorecard" } }
+          );
+
           if (secRes.ok) {
             const secJson = await secRes.json();
-
-            if (secJson?.stateOfIncorporationDescription) {
-              secCountry = secJson.stateOfIncorporationDescription;
-            }
-
             const recent = secJson?.filings?.recent;
+
             if (recent?.form && Array.isArray(recent.form)) {
-              allFilings = recent.form.map((form: string, idx: number) => ({
-                title: form || "Unknown",
-                date: recent.filingDate[idx] || "Unknown",
-                url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[idx]?.replace(/-/g, "")}/${recent.primaryDocument[idx]}`,
-                description: recent.primaryDocument[idx] || "Untitled Filing",
+              filings = recent.form.map((form: string, idx: number) => ({
+                title: form,
+                date: recent.filingDate[idx],
+                url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[idx].replace(/-/g, "")}/${recent.primaryDocument[idx]}`,
               }));
-
-              filings = allFilings.filter((f) =>
-                ["S-1", "424B", "F-1", "F-3", "F-4", "S-3"].some((d) =>
-                  f.title.toUpperCase().includes(d)
-                )
-              );
-
-              filings = filings
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .slice(0, 8);
-
-              allFilings = allFilings
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .slice(0, 8);
-
-              goingConcernDetected = allFilings.some(
-                (f) =>
-                  (f.title === "10-Q" || f.title === "10-K") &&
-                  f.description?.toLowerCase().includes("going")
-              );
             }
           }
         }
@@ -182,32 +149,14 @@ try {
         const fraudJson = await fraudRes.json();
         fraudImages = (fraudJson.results || []).map((img: any) => ({
           full: `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}`,
-          thumb: img.thumbnailPath
-            ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
-            : null,
-          approvedAt: img.approvedAt || null,
+          thumb: `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`,
+          approvedAt: img.approvedAt,
         }));
       }
     } catch (err) {
       console.error("⚠️ Fraud fetch failed:", err);
     }
     const fraudEvidence = fraudImages.length > 0;
-
-    // ---------- Country ----------
-    let country = "Unknown";
-    let countrySource = "Unknown";
-    if (secCountry) {
-      country = secCountry;
-      countrySource = "SEC";
-    } else if (polyMeta?.results?.locale) {
-      country = polyMeta.results.locale;
-      countrySource = "Polygon";
-    } else if (quote?.country) {
-      country = quote.country;
-      countrySource = "Yahoo";
-    }
-
-    const riskyCountry = RISKY_COUNTRIES.includes(country);
 
     // ---------- Auto Criteria ----------
     const sudden_volume_spike =
@@ -217,14 +166,23 @@ try {
       latest.close > (minClose || latest.close) * 2;
     const valuation_fundamentals_mismatch =
       !quote.trailingPE || quote.trailingPE > 100;
-    const reverse_split = filings.some((f) =>
+    const reverse_split = filings.some((f: any) =>
       (f.title || "").toLowerCase().includes("split")
     );
-    const dividend_announced = filings.some((f) =>
+    const dividend_announced = filings.some((f: any) =>
       (f.title || "").toLowerCase().includes("dividend")
     );
-    const promoted_stock = promotions.length > 0;
-    const dilution_or_offering = filings.length > 0;
+    const promoted_stock =
+      promotions.length > 0 && promotions[0].type !== "Manual Check";
+    const dilution_or_offering = filings.some((f: any) =>
+      (f.title || "").includes("S-1") || (f.title || "").includes("424B")
+    );
+
+    const country =
+      polyMeta?.results?.locale ||
+      quote?.country ||
+      "Unknown";
+    const riskyCountry = RISKY_COUNTRIES.includes(country);
 
     // ---------- Scores ----------
     const flatCriteria = [
@@ -248,6 +206,7 @@ try {
     if (fraudEvidence) weightedScore += 20;
     if (weightedScore > 100) weightedScore = 100;
 
+    // ---------- Summary ----------
     let summaryVerdict = "Low risk";
     if (weightedScore >= 70) summaryVerdict = "High risk";
     else if (weightedScore >= 40) summaryVerdict = "Moderate risk";
@@ -268,12 +227,11 @@ try {
       summaryText = `This stock is lighting up the board — ${reasons.join(", ")} make it look like a prime pump-and-dump candidate.`;
     }
 
-    // ---------- Respond ----------
     return NextResponse.json({
       ticker,
       companyName: quote.longName || quote.shortName || ticker,
 
-      // criteria
+      // auto criteria
       sudden_volume_spike,
       sudden_price_spike,
       valuation_fundamentals_mismatch,
@@ -283,6 +241,8 @@ try {
       dilution_or_offering,
       riskyCountry,
       fraudEvidence,
+
+      // manual criteria
       ...MANUAL_CRITERIA,
 
       // fundamentals
@@ -292,17 +252,21 @@ try {
       marketCap: quote.marketCap || null,
       sharesOutstanding: quote.sharesOutstanding || null,
       floatShares: quote.floatShares ?? quote.sharesOutstanding ?? null,
+      shortFloat: (quote as any)?.shortRatio || null,
+      insiderOwn: (quote as any)?.insiderHoldPercent || null,
+      instOwn: (quote as any)?.institutionalHoldPercent || null,
 
       // meta
-      exchange: polyMeta?.results?.primary_exchange || quote.fullExchangeName || "Unknown",
+      exchange:
+        polyMeta?.results?.primary_exchange ||
+        quote.fullExchangeName ||
+        "Unknown",
       country,
-      countrySource,
 
       // data
       history,
       promotions,
       filings,
-      allFilings,
       fraudImages,
 
       // scores
@@ -312,7 +276,6 @@ try {
       // summary
       summaryVerdict,
       summaryText,
-      goingConcernDetected,
     });
   } catch (err: any) {
     console.error("❌ Fatal route error:", err);
