@@ -34,7 +34,7 @@ export default function FraudEvidence({ fraudImages }: Props) {
           rel="noopener noreferrer"
           className="inline-block px-4 py-2 bg-red-600 text-white rounded hover:bg-red-500"
         >
-          Open Stop Nasdaq China Fraud
+          🔎 Open Stop Nasdaq China Fraud
         </a>
       </div>
     );
@@ -61,7 +61,7 @@ export default function FraudEvidence({ fraudImages }: Props) {
               />
             ) : (
               <div className="w-full h-24 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs text-gray-500">
-                No preview
+                No preview available
               </div>
             )}
             <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 mt-1">
