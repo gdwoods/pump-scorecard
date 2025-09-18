@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import yahooFinance from "yahoo-finance2";
 
+export const runtime = "nodejs"; // ✅ Force Node runtime on Vercel
+
 export async function GET(
   req: Request,
   context: { params: Promise<{ ticker: string }> }
@@ -55,7 +57,10 @@ export async function GET(
     let secCountry: string | null = null;
     try {
       const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
-        headers: { "User-Agent": "pump-scorecard" },
+        headers: {
+          "User-Agent": "pump-scorecard (garthwoods@gmail.com)", // ✅ recommended by SEC
+          Accept: "application/json",
+        },
       });
       if (cikRes.ok) {
         const cikJson = await cikRes.json();
@@ -66,10 +71,16 @@ export async function GET(
           const cik = entry.cik_str.toString().padStart(10, "0");
           const secRes = await fetch(
             `https://data.sec.gov/submissions/CIK${cik}.json`,
-            { headers: { "User-Agent": "pump-scorecard" } }
+            {
+              headers: {
+                "User-Agent": "pump-scorecard (garthwoods@gmail.com)",
+                Accept: "application/json",
+              },
+            }
           );
           if (secRes.ok) {
             const secJson = await secRes.json();
+            console.log("📢 SEC company info:", secJson?.addresses?.business);
 
             // Enhanced SEC country extraction
             try {
@@ -122,8 +133,6 @@ export async function GET(
       );
       if (fraudRes.ok) {
         const fraudJson = await fraudRes.json();
-        console.log("📢 Fraud raw response:", fraudJson); // Debug
-
         const rawResults = fraudJson?.results || [];
         fraudImages = rawResults
           .map((img: any) => ({
@@ -136,8 +145,6 @@ export async function GET(
             approvedAt: img.approvedAt || null,
           }))
           .filter((img: any) => img.full && img.thumb);
-      } else {
-        console.error("⚠️ Fraud API returned non-200:", fraudRes.status);
       }
     } catch (err) {
       console.error("⚠️ Fraud fetch failed:", err);
@@ -197,8 +204,6 @@ export async function GET(
     return NextResponse.json({
       ticker: upperTicker,
       companyName: quote.longName || quote.shortName || upperTicker,
-
-      // fundamentals
       marketCap: quote.marketCap || null,
       sharesOutstanding: quote.sharesOutstanding || null,
       floatShares: quote.floatShares ?? quote.sharesOutstanding ?? null,
@@ -208,13 +213,9 @@ export async function GET(
       exchange: quote.fullExchangeName || "Unknown",
       country,
       countrySource,
-
-      // data
       history,
       filings,
       fraudImages,
-
-      // scores
       weightedRiskScore: weightedScore,
       summaryVerdict,
       summaryText,
