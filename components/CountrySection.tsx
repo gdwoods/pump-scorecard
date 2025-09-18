@@ -22,15 +22,23 @@ interface Props {
   showCard?: boolean;
 }
 
-export default function CountrySection({ country, countrySource, showCard = true }: Props) {
+export default function CountrySection({
+  country,
+  countrySource,
+  showCard = true,
+}: Props) {
   const emoji = COUNTRY_FLAGS[country] || "🌐";
   const isRisky = RISKY_COUNTRIES.includes(country);
 
   const content = (
     <div className="flex items-center gap-3">
       <span className="text-xl">{emoji}</span>
-      <span className={`text-sm font-medium ${isRisky ? "text-red-600" : "text-gray-800"}`}>
-        {country}
+      <span
+        className={`text-sm font-medium ${
+          isRisky ? "text-red-600" : "text-gray-800"
+        }`}
+      >
+        {country || "Unknown"}
         {isRisky && (
           <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">
             Risky
@@ -38,7 +46,9 @@ export default function CountrySection({ country, countrySource, showCard = true
         )}
       </span>
       {countrySource && (
-        <span className="text-xs text-gray-500 italic ml-2">(Source: {countrySource})</span>
+        <span className="text-xs text-gray-500 italic ml-2">
+          (Source: {countrySource})
+        </span>
       )}
     </div>
   );

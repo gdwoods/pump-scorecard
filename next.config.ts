@@ -1,16 +1,16 @@
 // next.config.ts
-
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   eslint: {
-    // ✅ Allow Vercel build to pass even if ESLint finds issues
     ignoreDuringBuilds: true,
   },
   typescript: {
-    // ✅ Allow build even if TypeScript finds type errors
     ignoreBuildErrors: true,
   },
+  // 👇 Move this out of experimental
+  outputFileTracingRoot: path.join(__dirname),
 };
 
 export default nextConfig;

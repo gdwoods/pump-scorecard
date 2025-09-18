@@ -1,84 +1,58 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/Card";
-
-export default function Criteria({
-  result,
-  onManualChange,
-}: {
+interface Props {
   result: any;
-  onManualChange: (manual: any) => void;
-}) {
-  const [manual, setManual] = useState({
-    impersonated_advisors: result.impersonated_advisors || false,
-    guaranteed_returns: result.guaranteed_returns || false,
-    regulatory_alerts: result.regulatory_alerts || false,
-  });
+  manualFlags: Record<string, boolean>;
+  toggleManualFlag: (key: string) => void;
+}
 
-  // Notify parent whenever manual flags change
-  useEffect(() => {
-    onManualChange(manual);
-  }, [manual]);
-
+export default function Criteria({ result, manualFlags, toggleManualFlag }: Props) {
+  // Auto-detected criteria from backend
   const autoCriteria = [
-    { label: "Sudden volume spike", key: "sudden_volume_spike" },
-    { label: "Sudden price spike", key: "sudden_price_spike" },
-    { label: "Valuation fundamentals mismatch", key: "valuation_fundamentals_mismatch" },
-    { label: "Reverse split", key: "reverse_split" },
-    { label: "Dividend announced", key: "dividend_announced" },
-    { label: "Promoted stock", key: "promoted_stock" },
-    { label: "Dilution/offering filing", key: "dilution_or_offering" },
-    { label: "Risky country (China/HK/Malaysia)", key: "riskyCountry" },
-    { label: "Fraud evidence posted online", key: "fraudEvidence" },
+    ["Sudden volume spike", result?.sudden_volume_spike],
+    ["Sudden price spike", result?.sudden_price_spike],
+    ["Valuation mismatch", result?.valuation_fundamentals_mismatch],
+    ["Reverse split", result?.reverse_split],
+    ["Dilution/offering filing", result?.dilution_offering],
+    ["Promoted stock", result?.promoted_stock],
+    ["Fraud evidence posted online", result?.fraud_evidence],
+    ["Risky country (China/HK/Malaysia)", result?.risky_country],
   ];
 
+  // Manual user-selected criteria
   const manualCriteria = [
-    { label: "Impersonated advisors", key: "impersonated_advisors" },
-    { label: "Guaranteed returns", key: "guaranteed_returns" },
-    { label: "Regulatory alerts", key: "regulatory_alerts" },
+    ["Pump suspicion", "pumpSuspicion"],
+    ["Thin float risk", "thinFloat"],
+    ["Shady insiders", "insiders"],
+    ["Other red flag", "other"],
   ];
-
-  function toggleManual(key: keyof typeof manual) {
-    setManual((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
 
   return (
-    <Card>
-      <CardContent>
-        <h2 className="text-lg font-semibold mb-3">✅ Criteria</h2>
+    <div className="p-4 border rounded-lg bg-gray-50">
+      <h2 className="text-lg font-semibold mb-3">✅ Criteria</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {autoCriteria.map(([label, val], idx) => (
+          <label key={idx} className="flex items-center space-x-2">
+            <input type="checkbox" checked={!!val} readOnly disabled />
+            <span>{label}</span>
+          </label>
+        ))}
+      </div>
 
-        {/* Auto criteria */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-6">
-          {autoCriteria.map((c) => (
-            <label key={c.key} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={!!result[c.key]}
-                readOnly
-                className="w-4 h-4"
-              />
-              {c.label}
-            </label>
-          ))}
-        </div>
+      <h3 className="text-md font-semibold mt-4 mb-2">📝 Manual Checks</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {manualCriteria.map(([label, key]) => (
+          <label key={key} className="flex items-center space-x-2">
+      <input
+  type="checkbox"
+  checked={!!manualFlags[key]}   // 👈 force boolean
+  onChange={() => toggleManualFlag(key)}
+/>
 
-        {/* Manual flags */}
-        <h3 className="text-md font-semibold mb-2">✍️ Manual Flags</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          {manualCriteria.map((c) => (
-            <label key={c.key} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={manual[c.key as keyof typeof manual]}
-                onChange={() => toggleManual(c.key as keyof typeof manual)}
-                className="w-4 h-4"
-              />
-              {c.label}
-            </label>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+            <span>{label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
