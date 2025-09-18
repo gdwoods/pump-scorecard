@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import yahooFinance from "yahoo-finance2";
 
-export const runtime = "nodejs"; // ✅ Force Node runtime on Vercel
+export const runtime = "nodejs";
 
 export async function GET(
   req: Request,
@@ -10,9 +10,6 @@ export async function GET(
 ) {
   const { ticker } = await context.params;
   const upperTicker = ticker.toUpperCase();
-
-  console.log("🔎 Ticker:", upperTicker);
-  console.log("🔑 POLYGON_API_KEY:", process.env.POLYGON_API_KEY);
 
   try {
     // ---------- Yahoo Finance ----------
@@ -44,21 +41,19 @@ export async function GET(
         const polyRes = await fetch(
           `https://api.polygon.io/v3/reference/tickers/${upperTicker}?apiKey=${polygonKey}`
         );
-        if (polyRes.ok) {
-          polyMeta = await polyRes.json();
-        }
+        if (polyRes.ok) polyMeta = await polyRes.json();
       }
     } catch (err) {
       console.error("⚠️ Polygon meta failed:", err);
     }
 
-    // ---------- SEC Filings ----------
+    // ---------- SEC Filings & Country ----------
     let filings: { title: string; date: string; url: string }[] = [];
     let secCountry: string | null = null;
     try {
       const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
         headers: {
-          "User-Agent": "pump-scorecard (garthwoods@gmail.com)", // ✅ recommended by SEC
+          "User-Agent": "pump-scorecard (garthwoods@gmail.com)",
           Accept: "application/json",
         },
       });
@@ -80,26 +75,22 @@ export async function GET(
           );
           if (secRes.ok) {
             const secJson = await secRes.json();
-            console.log("📢 SEC company info:", secJson?.addresses?.business);
+            const biz = secJson?.addresses?.business;
 
-            // Enhanced SEC country extraction
-            try {
-              if (secJson?.addresses?.business) {
-                const biz = secJson.addresses.business;
-                if (biz.country && biz.country !== "US") {
-                  secCountry = biz.country;
-                } else if (
-                  (biz.city &&
-                    biz.city.toLowerCase().includes("hong kong")) ||
-                  (biz.state &&
-                    biz.state.toLowerCase().includes("hong kong"))
-                ) {
-                  secCountry = "Hong Kong";
-                }
-              }
-            } catch {}
+            console.log("📢 SEC business address:", biz);
 
-            // Collect filings
+            if (biz?.stateOrCountryDescription) {
+              secCountry = biz.stateOrCountryDescription;
+            } else if (biz?.country && biz.country !== "US") {
+              secCountry = biz.country;
+            } else if (biz) {
+              const lowerAddr = `${biz.city || ""} ${biz.state || ""} ${biz.street1 || ""} ${biz.street2 || ""}`.toLowerCase();
+              if (lowerAddr.includes("hong kong")) secCountry = "Hong Kong";
+              else if (lowerAddr.includes("israel")) secCountry = "Israel";
+              else if (lowerAddr.includes("china")) secCountry = "China";
+              else if (lowerAddr.includes("singapore")) secCountry = "Singapore";
+            }
+
             const recent = secJson?.filings?.recent;
             if (recent?.form && Array.isArray(recent.form)) {
               filings = recent.form.map((form: string, idx: number) => ({
@@ -124,7 +115,37 @@ export async function GET(
       console.error("⚠️ SEC fetch failed:", err);
     }
 
-    // ---------- Fraud Images ----------
+    // ---------- Promotions (fixed) ----------
+    let promotions: { type: string; date: string; url: string }[] = [];
+    try {
+      const promoRes = await fetch(
+        `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${upperTicker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`
+      );
+      if (promoRes.ok) {
+        const promoJson = await promoRes.json();
+        const rawPromos = promoJson?.results || [];
+        promotions = rawPromos.map((p: any) => ({
+          type: p.type || "Promotion",
+          date: p.promotion_date || "",
+          // ✅ Always safe homepage link
+          url: "https://www.stockpromotiontracker.com/",
+        }));
+      }
+    } catch (err) {
+      console.error("⚠️ Promotions fetch failed:", err);
+    }
+
+    if (!promotions || promotions.length === 0) {
+      promotions = [
+        {
+          type: "Manual Check",
+          date: "",
+          url: "https://www.stockpromotiontracker.com/",
+        },
+      ];
+    }
+
+    // ---------- Fraud Images (fixed) ----------
     let fraudImages: any[] = [];
     try {
       const fraudRes = await fetch(
@@ -150,6 +171,18 @@ export async function GET(
       console.error("⚠️ Fraud fetch failed:", err);
     }
 
+    if (!fraudImages || fraudImages.length === 0) {
+      fraudImages = [
+        {
+          full: null,
+          thumb: null,
+          approvedAt: null,
+          type: "Manual Check",
+          url: "https://www.stopnasdaqchinafraud.com/",
+        },
+      ];
+    }
+
     // ---------- Scores ----------
     const latest = history.at(-1) || {};
     const prev = history.at(-2) || latest;
@@ -166,7 +199,7 @@ export async function GET(
     if (sudden_price_spike) weightedScore += 20;
     if (filings.some((f) => f.title.includes("S-1") || f.title.includes("424B")))
       weightedScore += 20;
-    if (fraudImages.length > 0) weightedScore += 20;
+    if (fraudImages.length > 0 && !fraudImages[0].type) weightedScore += 20;
 
     let summaryVerdict = "Low risk";
     if (weightedScore >= 70) summaryVerdict = "High risk";
@@ -179,7 +212,7 @@ export async function GET(
         ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
         : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
 
-    // ---------- Country fix (SEC > Polygon > Yahoo) ----------
+    // ---------- Country selection ----------
     let country = "Unknown";
     let countrySource = "Unknown";
 
@@ -200,7 +233,6 @@ export async function GET(
       countrySource = "Yahoo";
     }
 
-    // ---------- Respond ----------
     return NextResponse.json({
       ticker: upperTicker,
       companyName: quote.longName || quote.shortName || upperTicker,
@@ -215,6 +247,7 @@ export async function GET(
       countrySource,
       history,
       filings,
+      promotions,
       fraudImages,
       weightedRiskScore: weightedScore,
       summaryVerdict,
