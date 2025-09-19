@@ -178,79 +178,55 @@ export async function GET(
       ];
     }
 
-    // ---------- Droppiness ----------
+    // ---------- Droppiness (manual pagination) ----------
     let droppinessScore: number = 0;
     let droppinessDetail: any[] = [];
     let intraday: any[] = [];
     try {
-      const TWENTYFOUR_MONTHS_MS = 1000 * 60 * 60 * 24 * 730; // ~24 months
-      const startDate = new Date(Date.now() - TWENTYFOUR_MONTHS_MS);
+      const TWO_YEARS_MS = 1000 * 60 * 60 * 24 * 730;
+      const startDate = new Date(Date.now() - TWO_YEARS_MS);
       const endDate = new Date();
       const startDateStr = startDate.toISOString().slice(0, 10);
       const endDateStr = endDate.toISOString().slice(0, 10);
 
+      const polygonKey = process.env.POLYGON_API_KEY;
       let oneMinBars: any[] = [];
 
-      // ✅ Paginate Polygon 1m data
-      try {
-        const polygonKey = process.env.POLYGON_API_KEY;
-        if (polygonKey) {
-          let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
-
-          while (url) {
-            const res = await fetch(url);
-            if (!res.ok) {
-              console.error("⚠️ Polygon fetch failed:", await res.text());
-              break;
-            }
-            const json = await res.json();
-
-            if (json.results?.length) {
-              oneMinBars.push(
-                ...json.results.map((c: any) => ({
-                  date: new Date(c.t),
-                  open: c.o,
-                  high: c.h,
-                  low: c.l,
-                  close: c.c,
-                  volume: c.v,
-                }))
-              );
-            }
-
-            // 👇 ensure API key persists on next_url
-            if (json.next_url) {
-              const next = new URL(json.next_url);
-              if (!next.searchParams.has("apiKey")) {
-                next.searchParams.set("apiKey", polygonKey);
-              }
-              url = next.toString();
-            } else {
-              url = null;
-            }
+      if (polygonKey) {
+        let cursor: number | null = startDate.getTime();
+        while (cursor && cursor < endDate.getTime()) {
+          const url = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&timestamp.gte=${cursor}&apiKey=${polygonKey}`;
+          const res = await fetch(url);
+          if (!res.ok) {
+            console.error("⚠️ Polygon fetch failed:", await res.text());
+            break;
           }
-
-          if (oneMinBars.length > 0) {
-            console.log(
-              `📊 Polygon returned ${oneMinBars.length} 1m candles, range ${oneMinBars[0]?.date} → ${oneMinBars.at(-1)?.date}`
+          const json = await res.json();
+          if (json.results?.length) {
+            oneMinBars.push(
+              ...json.results.map((c: any) => ({
+                date: new Date(c.t),
+                open: c.o,
+                high: c.h,
+                low: c.l,
+                close: c.c,
+                volume: c.v,
+              }))
             );
+            cursor = json.results.at(-1).t + 1;
+          } else {
+            break;
           }
-        } else {
-          console.error("⚠️ POLYGON_API_KEY not set in environment");
         }
-      } catch (err) {
-        console.error("⚠️ Polygon 1m fetch failed:", err);
       }
 
-      // ✅ Aggregate 1m → 4h candles
+      // aggregate → 4h
       let candles: any[] = [];
       if (oneMinBars.length > 0) {
-        const bucketMs = 1000 * 60 * 60 * 4; // 4h
+        const bucketMs = 1000 * 60 * 60 * 4;
         let bucket: any = null;
-
         for (const bar of oneMinBars) {
           const bucketTime = Math.floor(bar.date.getTime() / bucketMs) * bucketMs;
-
           if (!bucket || bucket.bucketTime !== bucketTime) {
             if (bucket) candles.push(bucket);
             bucket = {
@@ -270,56 +246,32 @@ export async function GET(
           }
         }
         if (bucket) candles.push(bucket);
-        console.log(`🕒 Aggregated into ${candles.length} 4h candles`);
       }
 
       intraday = candles;
 
-      // ✅ Detect spikes & retraces
       let spikeCount = 0;
       let retraceCount = 0;
-
       for (let i = 1; i < candles.length; i++) {
         const prev = candles[i - 1];
         const cur = candles[i];
         if (!prev.close || !cur.close || !cur.high) continue;
-
         const spikePct = (cur.high - prev.close) / prev.close;
-        if (spikePct > 0.20) {
+        if (spikePct > 0.2) {
           spikeCount++;
-          let retraced = false;
-
-          if ((cur.high - cur.close) / cur.high > 0.10) retraced = true;
-
-          if (
-            !retraced &&
-            candles[i + 1] &&
-            candles[i + 1].close < cur.close * 0.90
-          ) {
-            retraced = true;
-          }
-
+          let retraced =
+            (cur.high - cur.close) / cur.high > 0.1 ||
+            (candles[i + 1] && candles[i + 1].close < cur.close * 0.9);
           if (retraced) retraceCount++;
-
           droppinessDetail.push({
-            date: cur.date?.toISOString() || "",
+            date: cur.date.toISOString(),
             spikePct: +(spikePct * 100).toFixed(1),
             retraced,
           });
-
-          console.log(
-            `⚡ Spike detected: ${cur.date} | ${(spikePct * 100).toFixed(
-              1
-            )}% | retraced=${retraced}`
-          );
         }
       }
-
       droppinessScore =
         spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
-      if (spikeCount === 0) {
-        console.log("ℹ️ No qualifying spikes found (>20%) in 24 months");
-      }
     } catch (err) {
       console.error("⚠️ Droppiness calc failed:", err);
     }
@@ -342,10 +294,8 @@ export async function GET(
       weightedScore += 20;
     if (fraudImages.length > 0 && !fraudImages[0].type) weightedScore += 20;
 
-    if (droppinessScore !== null) {
-      if (droppinessScore >= 70) weightedScore -= 15;
-      else if (droppinessScore < 40) weightedScore += 15;
-    }
+    if (droppinessScore >= 70) weightedScore -= 15;
+    else if (droppinessScore < 40) weightedScore += 15;
 
     if (weightedScore < 0) weightedScore = 0;
 
@@ -363,7 +313,6 @@ export async function GET(
     // ---------- Country selection ----------
     let country = "Unknown";
     let countrySource = "Unknown";
-
     if (secCountry) {
       country = secCountry.trim();
       countrySource = "SEC";
@@ -393,8 +342,8 @@ export async function GET(
       exchange: quote.fullExchangeName || "Unknown",
       country,
       countrySource,
-      history, // daily
-      intraday, // 4h
+      history,
+      intraday,
       filings,
       promotions,
       fraudImages,
