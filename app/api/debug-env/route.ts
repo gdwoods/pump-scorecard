@@ -2,26 +2,37 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic"; // don't cache
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
-  const key = process.env.POLYGON_API_KEY;
+  const env = process.env;
 
-  // Don't log the key; just safe diagnostics.
-  const diagnostics = {
-    hasPolygonKey: Boolean(key),
-    polygonKeyLength: key?.length ?? 0,
-    vercelEnv: process.env.VERCEL_ENV || null,     // "production" / "preview" / "development"
-    vercelRegion: process.env.VERCEL_REGION || null,
+  const candidates = [
+    "POLYGON_API_KEY",
+    "NEXT_PUBLIC_POLYGON_API_KEY",
+    "POLYGON_KEY",
+    "POLYGON",
+  ];
+
+  const foundNames = candidates.filter((k) => !!env[k]);
+  const selected =
+    env.POLYGON_API_KEY ||
+    env.NEXT_PUBLIC_POLYGON_API_KEY ||
+    env.POLYGON_KEY ||
+    env.POLYGON ||
+    "";
+
+  return NextResponse.json({
+    hasPolygonKey: !!selected,
+    polygonKeyLength: selected ? selected.length : 0,
+    keyNameDetected: foundNames[0] ?? null,
+    polygonishEnvNamesPresent: Object.keys(env).filter((k) =>
+      /POLYGON|NEXT_PUBLIC_POLYGON/i.test(k)
+    ),
+    vercelEnv: env.VERCEL_ENV || env.NODE_ENV,
+    vercelRegion: env.VERCEL_REGION || null,
     nodeVersion: process.version,
     runtime: "nodejs",
-  };
-
-  // Also print to function logs
-  console.log("[debug-env]", diagnostics);
-
-  return NextResponse.json(diagnostics, {
-    headers: { "Cache-Control": "no-store" },
   });
 }
