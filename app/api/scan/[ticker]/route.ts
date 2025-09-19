@@ -49,7 +49,7 @@ export async function GET(
     }
 
     // ---------- SEC Filings ----------
-    let filings: { title: string; date: string; url: string }[] = [];
+    let filings: any[] = [];
     let secCountry: string | null = null;
     try {
       const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
@@ -81,7 +81,6 @@ export async function GET(
 
             console.log("📢 SEC business address (normalized):", biz);
 
-            // Normalized country
             if (biz?.country && biz.country !== "Unknown") {
               secCountry = biz.country;
             }
@@ -179,6 +178,147 @@ export async function GET(
       ];
     }
 
+    // ---------- Droppiness (Polygon 1m → 4h aggregation, 20% threshold, 24 months) ----------
+    let droppinessScore: number = 0;
+    let droppinessDetail: any[] = [];
+    let intraday: any[] = [];
+    try {
+      const TWENTYFOUR_MONTHS_MS = 1000 * 60 * 60 * 24 * 730; // ~24 months
+      const startDate = new Date(Date.now() - TWENTYFOUR_MONTHS_MS);
+      const endDate = new Date();
+      const startDateStr = startDate.toISOString().slice(0, 10);
+      const endDateStr = endDate.toISOString().slice(0, 10);
+
+      let oneMinBars: any[] = [];
+
+      // ✅ Paginate Polygon 1m data
+      try {
+        const polygonKey = process.env.POLYGON_API_KEY;
+        if (polygonKey) {
+          let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
+
+          while (url) {
+            const res = await fetch(url);
+            if (!res.ok) {
+              console.error("⚠️ Polygon fetch failed:", await res.text());
+              break;
+            }
+            const json = await res.json();
+
+            if (json.results?.length) {
+              oneMinBars.push(
+                ...json.results.map((c: any) => ({
+                  date: new Date(c.t),
+                  open: c.o,
+                  high: c.h,
+                  low: c.l,
+                  close: c.c,
+                  volume: c.v,
+                }))
+              );
+            }
+
+            // 👇 continue if Polygon returns more pages
+            url = json.next_url || null;
+          }
+
+          if (oneMinBars.length > 0) {
+            console.log(
+              `📊 Polygon returned ${oneMinBars.length} 1m candles, range ${oneMinBars[0]?.date} → ${oneMinBars.at(-1)?.date}`
+            );
+          }
+        } else {
+          console.error("⚠️ POLYGON_API_KEY not set in environment");
+        }
+      } catch (err) {
+        console.error("⚠️ Polygon 1m fetch failed:", err);
+      }
+
+      // ✅ Aggregate 1m → 4h candles
+      let candles: any[] = [];
+      if (oneMinBars.length > 0) {
+        const bucketMs = 1000 * 60 * 60 * 4; // 4h
+        let bucket: any = null;
+
+        for (const bar of oneMinBars) {
+          const bucketTime = Math.floor(bar.date.getTime() / bucketMs) * bucketMs;
+
+          if (!bucket || bucket.bucketTime !== bucketTime) {
+            if (bucket) candles.push(bucket);
+            bucket = {
+              bucketTime,
+              date: new Date(bucketTime),
+              open: bar.open,
+              high: bar.high,
+              low: bar.low,
+              close: bar.close,
+              volume: bar.volume,
+            };
+          } else {
+            bucket.high = Math.max(bucket.high, bar.high);
+            bucket.low = Math.min(bucket.low, bar.low);
+            bucket.close = bar.close;
+            bucket.volume += bar.volume;
+          }
+        }
+        if (bucket) candles.push(bucket);
+        console.log(`🕒 Aggregated into ${candles.length} 4h candles`);
+      }
+
+      intraday = candles;
+
+      // ✅ Detect spikes & retraces
+      let spikeCount = 0;
+      let retraceCount = 0;
+
+      for (let i = 1; i < candles.length; i++) {
+        const prev = candles[i - 1];
+        const cur = candles[i];
+        if (!prev.close || !cur.close || !cur.high) continue;
+
+        // Spike definition: HIGH vs prev close
+        const spikePct = (cur.high - prev.close) / prev.close;
+        if (spikePct > 0.20) {
+          spikeCount++;
+          let retraced = false;
+
+          // Same candle retrace (wick fade)
+          if ((cur.high - cur.close) / cur.high > 0.10) retraced = true;
+
+          // Next candle retrace
+          if (
+            !retraced &&
+            candles[i + 1] &&
+            candles[i + 1].close < cur.close * 0.90
+          ) {
+            retraced = true;
+          }
+
+          if (retraced) retraceCount++;
+
+          droppinessDetail.push({
+            date: cur.date?.toISOString() || "",
+            spikePct: +(spikePct * 100).toFixed(1),
+            retraced,
+          });
+
+          console.log(
+            `⚡ Spike detected: ${cur.date} | ${(spikePct * 100).toFixed(
+              1
+            )}% | retraced=${retraced}`
+          );
+        }
+      }
+
+      droppinessScore =
+        spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
+      if (spikeCount === 0) {
+        console.log("ℹ️ No qualifying spikes found (>20%) in 24 months");
+      }
+    } catch (err) {
+      console.error("⚠️ Droppiness calc failed:", err);
+    }
+
     // ---------- Scores ----------
     const latest = history.at(-1) || {};
     const prev = history.at(-2) || latest;
@@ -196,6 +336,14 @@ export async function GET(
     if (filings.some((f) => f.title.includes("S-1") || f.title.includes("424B")))
       weightedScore += 20;
     if (fraudImages.length > 0 && !fraudImages[0].type) weightedScore += 20;
+
+    // Factor in droppiness
+    if (droppinessScore !== null) {
+      if (droppinessScore >= 70) weightedScore -= 15; // spikes usually fade
+      else if (droppinessScore < 40) weightedScore += 15; // spikes tend to hold
+    }
+
+    if (weightedScore < 0) weightedScore = 0;
 
     let summaryVerdict = "Low risk";
     if (weightedScore >= 70) summaryVerdict = "High risk";
@@ -241,10 +389,13 @@ export async function GET(
       exchange: quote.fullExchangeName || "Unknown",
       country,
       countrySource,
-      history,
+      history, // daily
+      intraday, // 4h
       filings,
       promotions,
       fraudImages,
+      droppinessScore,
+      droppinessDetail,
       weightedRiskScore: weightedScore,
       summaryVerdict,
       summaryText,

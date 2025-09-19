@@ -9,6 +9,8 @@ import Fundamentals from "@/components/Fundamentals";
 import Promotions from "@/components/Promotions";
 import SecFilings from "@/components/SecFilings";
 import FraudEvidence from "@/components/FraudEvidence";
+import DroppinessCard from "@/components/DroppinessCard";
+import DroppinessScatter from "@/components/DroppinessScatter";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
@@ -21,8 +23,33 @@ export default function Page() {
       const res = await fetch(`/api/scan/${ticker}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`Scan failed: ${res.status}`);
       const json = await res.json();
+
+      // ✅ Enhance summary with last spike info
+      if (json.droppinessDetail && json.droppinessDetail.length > 0) {
+        const lastSpike = json.droppinessDetail.at(-1);
+        if (lastSpike) {
+          json.summaryText += lastSpike.retraced
+            ? " The most recent spike faded quickly."
+            : " The most recent spike held up.";
+        }
+      }
+
+      // ✅ Add droppiness verdict
+      if (
+        json.droppinessScore === 0 &&
+        (!json.droppinessDetail || json.droppinessDetail.length === 0)
+      ) {
+        json.droppinessVerdict = "No qualifying spikes in the last 24 months";
+      } else if (json.droppinessScore >= 70) {
+        json.droppinessVerdict = "Spikes usually fade quickly";
+      } else if (json.droppinessScore < 40) {
+        json.droppinessVerdict = "Spikes often hold";
+      } else {
+        json.droppinessVerdict = "Mixed behavior";
+      }
+
       setResult(json);
-      setManualFlags({}); // reset manual flags when scanning new ticker
+      setManualFlags({}); // reset flags for new ticker
     } catch (err) {
       console.error("❌ Scan error:", err);
     }
@@ -57,14 +84,10 @@ export default function Page() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-       <h1 className="text-2xl font-bold flex items-center gap-2 text-blue-600">
-  <img
-    src="/logo.png"
-    alt="Pump Scorecard Logo"
-    className="h-8 w-8"
-  />
-  Booker Mastermind — Pump Scorecard
-</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-2 text-blue-600">
+          <img src="/logo.png" alt="Pump Scorecard Logo" className="h-8 w-8" />
+          Booker Mastermind — Pump Scorecard
+        </h1>
 
         <button
           onClick={exportPDF}
@@ -92,30 +115,50 @@ export default function Page() {
 
       {result && (
         <div className="space-y-6">
+          {/* Final verdict */}
           <FinalVerdict
             verdict={result.summaryVerdict}
             summary={result.summaryText}
             score={result.weightedRiskScore}
             manualFlags={manualFlags}
+            droppinessVerdict={result.droppinessVerdict}
           />
 
+          {/* Main chart */}
           <Chart result={result} />
 
-          <CountrySection country={result.country} source={result.countrySource} />
+          {/* Country */}
+          <CountrySection
+            country={result.country}
+            source={result.countrySource}
+          />
 
+          {/* Criteria */}
           <Criteria
             result={result}
             manualFlags={manualFlags}
             toggleManualFlag={toggleManualFlag}
           />
 
+          {/* Fundamentals */}
           <Fundamentals result={result} />
 
+          {/* Promotions */}
           <Promotions promotions={result.promotions} />
 
+          {/* Filings */}
           <SecFilings filings={result.filings} />
 
+          {/* Fraud */}
           <FraudEvidence fraudImages={result.fraudImages} />
+
+          {/* Droppiness score + scatter */}
+          <DroppinessCard
+            score={result.droppinessScore}
+            detail={result.droppinessDetail || []}
+          />
+
+          <DroppinessScatter detail={result.droppinessDetail || []} />
         </div>
       )}
     </div>
