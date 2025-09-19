@@ -129,13 +129,18 @@ export async function GET(
     } catch (err) {
       console.error("⚠️ Promotions fetch failed:", err);
     }
+
     if (!promotions || promotions.length === 0) {
       promotions = [
-        { type: "Manual Check", date: "", url: "https://www.stockpromotiontracker.com/" },
+        {
+          type: "Manual Check",
+          date: "",
+          url: "https://www.stockpromotiontracker.com/",
+        },
       ];
     }
 
-    // ---------- Fraud Images ----------
+    // ---------- Fraud Images (strict filter) ----------
     let fraudImages: any[] = [];
     try {
       const fraudRes = await fetch(
@@ -154,20 +159,37 @@ export async function GET(
               ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
               : null,
             approvedAt: img.approvedAt || null,
+            ticker: img.ticker || null,
           }))
-          .filter((img: any) => img.full && img.thumb);
+          .filter(
+            (img: any) =>
+              img.full &&
+              img.thumb &&
+              (
+                (img.ticker && img.ticker.toUpperCase() === upperTicker) ||
+                img.full.toUpperCase().includes(upperTicker) ||
+                img.thumb.toUpperCase().includes(upperTicker)
+              )
+          );
       }
     } catch (err) {
       console.error("⚠️ Fraud fetch failed:", err);
     }
+
     if (!fraudImages || fraudImages.length === 0) {
       fraudImages = [
-        { full: null, thumb: null, approvedAt: null, type: "Manual Check", url: "https://www.stopnasdaqchinafraud.com/" },
+        {
+          full: null,
+          thumb: null,
+          approvedAt: null,
+          type: "Manual Check",
+          url: "https://www.stopnasdaqchinafraud.com/",
+        },
       ];
     }
 
-    // ---------- Droppiness ----------
-    let droppinessScore = 0;
+    // ---------- Droppiness (Polygon 1m → 4h aggregation, 20% threshold, 24 months) ----------
+    let droppinessScore: number = 0;
     let droppinessDetail: any[] = [];
     let intraday: any[] = [];
     try {
@@ -177,51 +199,54 @@ export async function GET(
       const startDateStr = startDate.toISOString().slice(0, 10);
       const endDateStr = endDate.toISOString().slice(0, 10);
 
-      const polygonKey = process.env.POLYGON_API_KEY;
       let oneMinBars: any[] = [];
+      try {
+        const polygonKey = process.env.POLYGON_API_KEY;
+        if (polygonKey) {
+          let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
 
-      if (polygonKey) {
-        let url: string | null =
-          `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
-        let page = 1;
+          while (url) {
+            const res = await fetch(url);
+            if (!res.ok) {
+              console.error("⚠️ Polygon fetch failed:", await res.text());
+              break;
+            }
+            const json = await res.json();
 
-        while (url) {
-          console.log(`➡️ Fetching Polygon page ${page}: ${url}`);
-          const res = await fetch(url);
-          if (!res.ok) {
-            console.error("⚠️ Polygon fetch failed:", await res.text());
-            break;
+            if (json.results?.length) {
+              oneMinBars.push(
+                ...json.results.map((c: any) => ({
+                  date: new Date(c.t),
+                  open: c.o,
+                  high: c.h,
+                  low: c.l,
+                  close: c.c,
+                  volume: c.v,
+                }))
+              );
+            }
+
+            if (json.next_url) {
+              const next = new URL(json.next_url);
+              if (!next.searchParams.has("apiKey")) {
+                next.searchParams.set("apiKey", polygonKey);
+              }
+              url = next.toString();
+            } else {
+              url = null;
+            }
           }
-          const json = await res.json();
-          console.log(`📦 Page ${page} returned ${json.results?.length || 0} rows`);
 
-          if (json.results?.length) {
-            oneMinBars.push(
-              ...json.results.map((c: any) => ({
-                date: new Date(c.t),
-                open: c.o,
-                high: c.h,
-                low: c.l,
-                close: c.c,
-                volume: c.v,
-              }))
+          if (oneMinBars.length > 0) {
+            console.log(
+              `📊 Polygon returned ${oneMinBars.length} 1m candles, range ${oneMinBars[0]?.date} → ${oneMinBars.at(-1)?.date}`
             );
           }
-
-          if (json.next_url) {
-            const next = new URL(json.next_url);
-            if (!next.searchParams.has("apiKey")) {
-              next.searchParams.set("apiKey", polygonKey);
-            }
-            url = next.toString();
-            page++;
-          } else {
-            url = null;
-          }
+        } else {
+          console.error("⚠️ POLYGON_API_KEY not set in environment");
         }
-        console.log(`📊 Polygon returned total ${oneMinBars.length} rows`);
-      } else {
-        console.error("⚠️ POLYGON_API_KEY not set in environment");
+      } catch (err) {
+        console.error("⚠️ Polygon 1m fetch failed:", err);
       }
 
       // Aggregate 1m → 4h
@@ -229,11 +254,21 @@ export async function GET(
       if (oneMinBars.length > 0) {
         const bucketMs = 1000 * 60 * 60 * 4;
         let bucket: any = null;
+
         for (const bar of oneMinBars) {
           const bucketTime = Math.floor(bar.date.getTime() / bucketMs) * bucketMs;
+
           if (!bucket || bucket.bucketTime !== bucketTime) {
             if (bucket) candles.push(bucket);
-            bucket = { bucketTime, date: new Date(bucketTime), open: bar.open, high: bar.high, low: bar.low, close: bar.close, volume: bar.volume };
+            bucket = {
+              bucketTime,
+              date: new Date(bucketTime),
+              open: bar.open,
+              high: bar.high,
+              low: bar.low,
+              close: bar.close,
+              volume: bar.volume,
+            };
           } else {
             bucket.high = Math.max(bucket.high, bar.high);
             bucket.low = Math.min(bucket.low, bar.low);
@@ -244,22 +279,28 @@ export async function GET(
         if (bucket) candles.push(bucket);
         console.log(`🕒 Aggregated into ${candles.length} 4h candles`);
       }
+
       intraday = candles;
 
       // Detect spikes
       let spikeCount = 0;
       let retraceCount = 0;
+
       for (let i = 1; i < candles.length; i++) {
         const prev = candles[i - 1];
         const cur = candles[i];
         if (!prev.close || !cur.close || !cur.high) continue;
 
         const spikePct = (cur.high - prev.close) / prev.close;
-        if (spikePct > 0.2) {
+        if (spikePct > 0.20) {
           spikeCount++;
           let retraced = false;
-          if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
-          if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) retraced = true;
+
+          if ((cur.high - cur.close) / cur.high > 0.10) retraced = true;
+          if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.90) {
+            retraced = true;
+          }
+
           if (retraced) retraceCount++;
 
           droppinessDetail.push({
@@ -267,10 +308,17 @@ export async function GET(
             spikePct: +(spikePct * 100).toFixed(1),
             retraced,
           });
-          console.log(`⚡ Spike detected: ${cur.date} | ${(spikePct * 100).toFixed(1)}% | retraced=${retraced}`);
+
+          console.log(
+            `⚡ Spike detected: ${cur.date} | ${(spikePct * 100).toFixed(1)}% | retraced=${retraced}`
+          );
         }
       }
+
       droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
+      if (spikeCount === 0) {
+        console.log("ℹ️ No qualifying spikes found (>20%) in 24 months");
+      }
     } catch (err) {
       console.error("⚠️ Droppiness calc failed:", err);
     }
@@ -278,22 +326,32 @@ export async function GET(
     // ---------- Scores ----------
     const latest = history.at(-1) || {};
     const prev = history.at(-2) || latest;
-    const avgVol = history.reduce((s, q) => s + (q.volume || 0), 0) / (history.length || 1) || 0;
-    const sudden_volume_spike = !!latest.volume && avgVol > 0 && latest.volume > avgVol * 3;
-    const sudden_price_spike = latest.close > (prev.close || latest.close) * 1.25;
+    const avgVol =
+      history.reduce((s, q) => s + (q.volume || 0), 0) /
+        (history.length || 1) || 0;
+    const sudden_volume_spike =
+      !!latest.volume && avgVol > 0 && latest.volume > avgVol * 3;
+    const sudden_price_spike =
+      latest.close > (prev.close || latest.close) * 1.25;
 
     let weightedScore = 0;
     if (sudden_volume_spike) weightedScore += 20;
     if (sudden_price_spike) weightedScore += 20;
-    if (filings.some((f) => f.title.includes("S-1") || f.title.includes("424B"))) weightedScore += 20;
+    if (filings.some((f) => f.title.includes("S-1") || f.title.includes("424B")))
+      weightedScore += 20;
     if (fraudImages.length > 0 && !fraudImages[0].type) weightedScore += 20;
-    if (droppinessScore >= 70) weightedScore -= 15;
-    else if (droppinessScore < 40) weightedScore += 15;
+
+    if (droppinessScore !== null) {
+      if (droppinessScore >= 70) weightedScore -= 15;
+      else if (droppinessScore < 40) weightedScore += 15;
+    }
+
     if (weightedScore < 0) weightedScore = 0;
 
     let summaryVerdict = "Low risk";
     if (weightedScore >= 70) summaryVerdict = "High risk";
     else if (weightedScore >= 40) summaryVerdict = "Moderate risk";
+
     const summaryText =
       summaryVerdict === "Low risk"
         ? "This one looks pretty clean — no major pump-and-dump signals right now."
@@ -301,18 +359,25 @@ export async function GET(
         ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
         : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
 
-    // Country selection
+    // ---------- Country selection ----------
     let country = "Unknown";
     let countrySource = "Unknown";
+
     if (secCountry) {
-      country = secCountry.trim(); countrySource = "SEC";
+      country = secCountry.trim();
+      countrySource = "SEC";
     } else if (polyMeta?.results?.country) {
-      country = polyMeta.results.country.trim(); countrySource = "Polygon";
+      country = polyMeta.results.country.trim();
+      countrySource = "Polygon";
     } else if (polyMeta?.results?.locale) {
-      country = polyMeta.results.locale.toUpperCase() === "US" ? "United States" : polyMeta.results.locale.trim();
+      country =
+        polyMeta.results.locale.toUpperCase() === "US"
+          ? "United States"
+          : polyMeta.results.locale.trim();
       countrySource = "Polygon";
     } else if (quote.country) {
-      country = quote.country.trim(); countrySource = "Yahoo";
+      country = quote.country.trim();
+      countrySource = "Yahoo";
     }
 
     return NextResponse.json({
@@ -340,6 +405,9 @@ export async function GET(
     });
   } catch (err: any) {
     console.error("❌ Fatal route error:", err);
-    return NextResponse.json({ error: err.message || "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
