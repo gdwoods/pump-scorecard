@@ -178,7 +178,7 @@ export async function GET(
       ];
     }
 
-    // ---------- Droppiness (Polygon 1m → 4h aggregation, 20% threshold, 24 months) ----------
+    // ---------- Droppiness ----------
     let droppinessScore: number = 0;
     let droppinessDetail: any[] = [];
     let intraday: any[] = [];
@@ -218,8 +218,16 @@ export async function GET(
               );
             }
 
-            // 👇 continue if Polygon returns more pages
-            url = json.next_url || null;
+            // 👇 ensure API key persists on next_url
+            if (json.next_url) {
+              const next = new URL(json.next_url);
+              if (!next.searchParams.has("apiKey")) {
+                next.searchParams.set("apiKey", polygonKey);
+              }
+              url = next.toString();
+            } else {
+              url = null;
+            }
           }
 
           if (oneMinBars.length > 0) {
@@ -276,16 +284,13 @@ export async function GET(
         const cur = candles[i];
         if (!prev.close || !cur.close || !cur.high) continue;
 
-        // Spike definition: HIGH vs prev close
         const spikePct = (cur.high - prev.close) / prev.close;
         if (spikePct > 0.20) {
           spikeCount++;
           let retraced = false;
 
-          // Same candle retrace (wick fade)
           if ((cur.high - cur.close) / cur.high > 0.10) retraced = true;
 
-          // Next candle retrace
           if (
             !retraced &&
             candles[i + 1] &&
@@ -337,10 +342,9 @@ export async function GET(
       weightedScore += 20;
     if (fraudImages.length > 0 && !fraudImages[0].type) weightedScore += 20;
 
-    // Factor in droppiness
     if (droppinessScore !== null) {
-      if (droppinessScore >= 70) weightedScore -= 15; // spikes usually fade
-      else if (droppinessScore < 40) weightedScore += 15; // spikes tend to hold
+      if (droppinessScore >= 70) weightedScore -= 15;
+      else if (droppinessScore < 40) weightedScore += 15;
     }
 
     if (weightedScore < 0) weightedScore = 0;
