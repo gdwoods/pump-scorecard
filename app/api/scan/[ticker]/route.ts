@@ -1,6 +1,7 @@
 // app/api/scan/[ticker]/route.ts
 import { NextResponse } from "next/server";
 import yahooFinance from "yahoo-finance2";
+import { parseSecAddress } from "@/utils/normalizeCountry";
 
 export const runtime = "nodejs";
 
@@ -47,7 +48,7 @@ export async function GET(
       console.error("⚠️ Polygon meta failed:", err);
     }
 
-    // ---------- SEC Filings & Country ----------
+    // ---------- SEC Filings ----------
     let filings: { title: string; date: string; url: string }[] = [];
     let secCountry: string | null = null;
     try {
@@ -75,20 +76,14 @@ export async function GET(
           );
           if (secRes.ok) {
             const secJson = await secRes.json();
-            const biz = secJson?.addresses?.business;
+            const biz = parseSecAddress(secJson?.addresses?.business);
+            const mail = parseSecAddress(secJson?.addresses?.mailing);
 
-            console.log("📢 SEC business address:", biz);
+            console.log("📢 SEC business address (normalized):", biz);
 
-            if (biz?.stateOrCountryDescription) {
-              secCountry = biz.stateOrCountryDescription;
-            } else if (biz?.country && biz.country !== "US") {
+            // Normalized country
+            if (biz?.country && biz.country !== "Unknown") {
               secCountry = biz.country;
-            } else if (biz) {
-              const lowerAddr = `${biz.city || ""} ${biz.state || ""} ${biz.street1 || ""} ${biz.street2 || ""}`.toLowerCase();
-              if (lowerAddr.includes("hong kong")) secCountry = "Hong Kong";
-              else if (lowerAddr.includes("israel")) secCountry = "Israel";
-              else if (lowerAddr.includes("china")) secCountry = "China";
-              else if (lowerAddr.includes("singapore")) secCountry = "Singapore";
             }
 
             const recent = secJson?.filings?.recent;
@@ -100,6 +95,8 @@ export async function GET(
                   /-/g,
                   ""
                 )}/${recent.primaryDocument[idx]}`,
+                businessAddress: biz,
+                mailingAddress: mail,
               }));
               filings = filings
                 .sort(
@@ -115,7 +112,7 @@ export async function GET(
       console.error("⚠️ SEC fetch failed:", err);
     }
 
-    // ---------- Promotions (fixed) ----------
+    // ---------- Promotions ----------
     let promotions: { type: string; date: string; url: string }[] = [];
     try {
       const promoRes = await fetch(
@@ -127,7 +124,6 @@ export async function GET(
         promotions = rawPromos.map((p: any) => ({
           type: p.type || "Promotion",
           date: p.promotion_date || "",
-          // ✅ Always safe homepage link
           url: "https://www.stockpromotiontracker.com/",
         }));
       }
@@ -145,7 +141,7 @@ export async function GET(
       ];
     }
 
-    // ---------- Fraud Images (fixed) ----------
+    // ---------- Fraud Images ----------
     let fraudImages: any[] = [];
     try {
       const fraudRes = await fetch(
