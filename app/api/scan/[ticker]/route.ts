@@ -79,8 +79,6 @@ export async function GET(
             const biz = parseSecAddress(secJson?.addresses?.business);
             const mail = parseSecAddress(secJson?.addresses?.mailing);
 
-            console.log("📢 SEC business address (normalized):", biz);
-
             if (biz?.country && biz.country !== "Unknown") {
               secCountry = biz.country;
             }
@@ -140,55 +138,97 @@ export async function GET(
       ];
     }
 
-    // ---------- Fraud Images (strict filter) ----------
-    let fraudImages: any[] = [];
-    try {
-      const fraudRes = await fetch(
-        `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
-        { headers: { "User-Agent": "pump-scorecard" } }
-      );
-      if (fraudRes.ok) {
-        const fraudJson = await fraudRes.json();
-        const rawResults = fraudJson?.results || [];
-        fraudImages = rawResults
-          .map((img: any) => ({
-            full: img.imagePath
-              ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}`
-              : null,
-            thumb: img.thumbnailPath
-              ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
-              : null,
-            approvedAt: img.approvedAt || null,
-            ticker: img.ticker || null,
-          }))
-          .filter(
-            (img: any) =>
-              img.full &&
-              img.thumb &&
-              (
-                (img.ticker && img.ticker.toUpperCase() === upperTicker) ||
-                img.full.toUpperCase().includes(upperTicker) ||
-                img.thumb.toUpperCase().includes(upperTicker)
-              )
-          );
-      }
-    } catch (err) {
-      console.error("⚠️ Fraud fetch failed:", err);
-    }
+// ---------- Fraud Images (robust ticker-aware filter across fields) ----------
+let fraudImages: any[] = [];
+try {
+  const fraudRes = await fetch(
+    `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
+    { headers: { "User-Agent": "pump-scorecard" } }
+  );
 
-    if (!fraudImages || fraudImages.length === 0) {
-      fraudImages = [
-        {
-          full: null,
-          thumb: null,
-          approvedAt: null,
-          type: "Manual Check",
-          url: "https://www.stopnasdaqchinafraud.com/",
-        },
-      ];
-    }
+  if (fraudRes.ok) {
+    const fraudJson = await fraudRes.json();
+    const rawResults = Array.isArray(fraudJson?.results) ? fraudJson.results : [];
 
-    // ---------- Droppiness (Polygon 1m → 4h aggregation, 20% threshold, 24 months) ----------
+    const U = upperTicker.toUpperCase();
+
+    // Normalize text: uppercase, strip common punctuation/noise around tickers
+    const normalize = (s: unknown) =>
+      String(s ?? "")
+        .toUpperCase()
+        .replace(/[$#@()[\]{}.,;:!?'"\-]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    // Token-aware regex so we don't match inside other words (DREAMM vs QMMM)
+    const hasTickerToken = (s: string) => {
+      // Allow start/end or non-alphanumeric boundaries
+      const re = new RegExp(`(^|[^A-Z0-9])${U}([^A-Z0-9]|$)`);
+      return re.test(s);
+    };
+
+    // First, find strong matches across many fields
+    const strongMatches = rawResults.filter((r: any) => {
+      const fields: string[] = [
+        r.caption,
+        r.text,
+        r.title,
+        r.postTitle,
+        Array.isArray(r.symbols) ? r.symbols.join(" ") : "",
+        Array.isArray(r.tickers) ? r.tickers.join(" ") : "",
+        r.imagePath,       // sometimes paths include the ticker
+        r.thumbnailPath,
+      ].map(normalize);
+
+      const haystack = fields.join(" | ");
+      return hasTickerToken(haystack);
+    });
+
+    const picked = strongMatches; // no blank/generic fallback to avoid unrelated images
+
+    fraudImages = picked
+      .map((img: any) => ({
+        full: img.imagePath
+          ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}`
+          : null,
+        thumb: img.thumbnailPath
+          ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
+          : null,
+        approvedAt: img.approvedAt || null,
+        caption: img.caption ?? img.text ?? img.title ?? img.postTitle ?? "",
+        // helpful to have a source click-through if the API returns one
+        sourceUrl: img.link ?? img.url ?? img.postUrl ?? null,
+      }))
+      .filter((img: any) => img.full && img.thumb);
+
+    // Optional: small debug to understand filtering in Vercel logs
+    console.log(
+      `🧪 Fraud filter: total=${rawResults.length}, strong=${fraudImages.length} for ${upperTicker}`
+    );
+  } else {
+    console.error("⚠️ Fraud API not ok:", fraudRes.status, await fraudRes.text());
+  }
+} catch (err) {
+  console.error("⚠️ Fraud fetch failed:", err);
+}
+
+// ✅ Clean fallback that your FraudEvidence component recognizes
+if (!fraudImages || fraudImages.length === 0) {
+  fraudImages = [
+    {
+      full: null,
+      thumb: null,
+      approvedAt: null,
+      type: "Manual Check", // <-- required by your component
+      url: `https://www.stopnasdaqchinafraud.com/?q=${encodeURIComponent(upperTicker)}`,
+      caption: "Manual Check",
+    },
+  ];
+}
+
+
+
+    // ---------- Droppiness (Polygon intraday) ----------
     let droppinessScore: number = 0;
     let droppinessDetail: any[] = [];
     let intraday: any[] = [];
@@ -200,64 +240,45 @@ export async function GET(
       const endDateStr = endDate.toISOString().slice(0, 10);
 
       let oneMinBars: any[] = [];
-      try {
-        const polygonKey = process.env.POLYGON_API_KEY;
-        if (polygonKey) {
-          let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
+      const polygonKey = process.env.POLYGON_API_KEY;
 
-          while (url) {
-            const res = await fetch(url);
-            if (!res.ok) {
-              console.error("⚠️ Polygon fetch failed:", await res.text());
-              break;
-            }
-            const json = await res.json();
-
-            if (json.results?.length) {
-              oneMinBars.push(
-                ...json.results.map((c: any) => ({
-                  date: new Date(c.t),
-                  open: c.o,
-                  high: c.h,
-                  low: c.l,
-                  close: c.c,
-                  volume: c.v,
-                }))
-              );
-            }
-
-            if (json.next_url) {
-              const next = new URL(json.next_url);
-              if (!next.searchParams.has("apiKey")) {
-                next.searchParams.set("apiKey", polygonKey);
-              }
-              url = next.toString();
-            } else {
-              url = null;
-            }
-          }
-
-          if (oneMinBars.length > 0) {
-            console.log(
-              `📊 Polygon returned ${oneMinBars.length} 1m candles, range ${oneMinBars[0]?.date} → ${oneMinBars.at(-1)?.date}`
+      if (polygonKey) {
+        let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
+        while (url) {
+          const res = await fetch(url);
+          if (!res.ok) break;
+          const json = await res.json();
+          if (json.results?.length) {
+            oneMinBars.push(
+              ...json.results.map((c: any) => ({
+                date: new Date(c.t),
+                open: c.o,
+                high: c.h,
+                low: c.l,
+                close: c.c,
+                volume: c.v,
+              }))
             );
           }
-        } else {
-          console.error("⚠️ POLYGON_API_KEY not set in environment");
+          if (json.next_url) {
+            const next = new URL(json.next_url);
+            if (!next.searchParams.has("apiKey")) {
+              next.searchParams.set("apiKey", polygonKey);
+            }
+            url = next.toString();
+          } else {
+            url = null;
+          }
         }
-      } catch (err) {
-        console.error("⚠️ Polygon 1m fetch failed:", err);
       }
 
-      // Aggregate 1m → 4h
+      // Aggregate to 4h
       let candles: any[] = [];
       if (oneMinBars.length > 0) {
         const bucketMs = 1000 * 60 * 60 * 4;
         let bucket: any = null;
-
         for (const bar of oneMinBars) {
           const bucketTime = Math.floor(bar.date.getTime() / bucketMs) * bucketMs;
-
           if (!bucket || bucket.bucketTime !== bucketTime) {
             if (bucket) candles.push(bucket);
             bucket = {
@@ -277,48 +298,34 @@ export async function GET(
           }
         }
         if (bucket) candles.push(bucket);
-        console.log(`🕒 Aggregated into ${candles.length} 4h candles`);
       }
 
       intraday = candles;
 
-      // Detect spikes
       let spikeCount = 0;
       let retraceCount = 0;
-
       for (let i = 1; i < candles.length; i++) {
         const prev = candles[i - 1];
         const cur = candles[i];
         if (!prev.close || !cur.close || !cur.high) continue;
-
         const spikePct = (cur.high - prev.close) / prev.close;
-        if (spikePct > 0.20) {
+        if (spikePct > 0.2) {
           spikeCount++;
           let retraced = false;
-
-          if ((cur.high - cur.close) / cur.high > 0.10) retraced = true;
-          if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.90) {
+          if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
+          if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) {
             retraced = true;
           }
-
           if (retraced) retraceCount++;
-
           droppinessDetail.push({
             date: cur.date?.toISOString() || "",
             spikePct: +(spikePct * 100).toFixed(1),
             retraced,
           });
-
-          console.log(
-            `⚡ Spike detected: ${cur.date} | ${(spikePct * 100).toFixed(1)}% | retraced=${retraced}`
-          );
         }
       }
-
-      droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
-      if (spikeCount === 0) {
-        console.log("ℹ️ No qualifying spikes found (>20%) in 24 months");
-      }
+      droppinessScore =
+        spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
     } catch (err) {
       console.error("⚠️ Droppiness calc failed:", err);
     }
@@ -339,13 +346,11 @@ export async function GET(
     if (sudden_price_spike) weightedScore += 20;
     if (filings.some((f) => f.title.includes("S-1") || f.title.includes("424B")))
       weightedScore += 20;
-    if (fraudImages.length > 0 && !fraudImages[0].type) weightedScore += 20;
+    if (fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"))
+      weightedScore += 20;
 
-    if (droppinessScore !== null) {
-      if (droppinessScore >= 70) weightedScore -= 15;
-      else if (droppinessScore < 40) weightedScore += 15;
-    }
-
+    if (droppinessScore >= 70) weightedScore -= 15;
+    else if (droppinessScore < 40) weightedScore += 15;
     if (weightedScore < 0) weightedScore = 0;
 
     let summaryVerdict = "Low risk";
@@ -362,7 +367,6 @@ export async function GET(
     // ---------- Country selection ----------
     let country = "Unknown";
     let countrySource = "Unknown";
-
     if (secCountry) {
       country = secCountry.trim();
       countrySource = "SEC";

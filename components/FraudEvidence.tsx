@@ -1,75 +1,73 @@
 // components/FraudEvidence.tsx
 "use client";
 
-import React from "react";
-
-type FraudImage = {
+interface FraudImage {
   full: string | null;
   thumb: string | null;
   approvedAt: string | null;
+  caption?: string | null;
   type?: string;
   url?: string;
-};
-
-interface Props {
-  fraudImages: FraudImage[];
 }
 
-export default function FraudEvidence({ fraudImages }: Props) {
-  if (!fraudImages || fraudImages.length === 0) {
-    return null;
-  }
+export default function FraudEvidence({ fraudImages }: { fraudImages: FraudImage[] }) {
+  if (!fraudImages || fraudImages.length === 0) return null;
 
-  // If only Manual Check fallback
-  if (fraudImages.length === 1 && fraudImages[0].type === "Manual Check") {
-    return (
-      <div className="p-4 rounded-lg bg-white dark:bg-gray-800 shadow">
-        <h2 className="text-lg font-semibold mb-2">🚨 Fraud Evidence</h2>
-        <p className="text-gray-600 dark:text-gray-300">
-          No fraud images were found for this ticker —
-          <a
-            href={fraudImages[0].url || "https://www.stopnasdaqchinafraud.com/"}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-1 text-blue-600 hover:underline"
-          >
-            Manual Check
-          </a>
-        </p>
-      </div>
-    );
-  }
+  const manualCheckOnly =
+    fraudImages.length === 1 && fraudImages[0].type === "Manual Check";
 
-  // Otherwise, render images
   return (
     <div className="p-4 rounded-lg bg-white dark:bg-gray-800 shadow">
-      <h2 className="text-lg font-semibold mb-2">🚨 Fraud Evidence</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-        {fraudImages.map((img, idx) => (
+      <h2 className="text-lg font-semibold mb-2">🕵️ Fraud Evidence</h2>
+
+      {manualCheckOnly ? (
+        <p className="text-gray-600 dark:text-gray-300">
+          No fraud images found. Please{" "}
           <a
-            key={idx}
-            href={img.full || "#"}
+            href="https://www.stopnasdaqchinafraud.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="block"
+            className="text-blue-600 underline"
           >
-            {img.thumb ? (
-              <img
-                src={img.thumb}
-                alt="Fraud Evidence"
-                className="rounded-lg shadow"
-              />
-            ) : (
-              <div className="w-full h-24 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs text-gray-500">
-                No preview
-              </div>
-            )}
-            <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 mt-1">
-              {img.approvedAt?.slice(0, 10) || ""}
-            </p>
+            check manually
           </a>
-        ))}
-      </div>
+          .
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {fraudImages.map((img, idx) => (
+            <div
+              key={idx}
+              className="flex flex-col items-center bg-gray-50 dark:bg-gray-900 rounded-lg shadow-sm p-2"
+            >
+              {img.thumb ? (
+                <a href={img.full || img.thumb} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={img.thumb}
+                    alt={img.caption || `Fraud evidence ${idx + 1}`}
+                    className="rounded-lg w-full object-cover"
+                  />
+                </a>
+              ) : (
+                <div className="text-gray-500">No image</div>
+              )}
+
+              {/* ✅ New: Show caption */}
+              {img.caption && (
+                <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 text-center">
+                  {img.caption}
+                </p>
+              )}
+
+              {img.approvedAt && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Approved: {new Date(img.approvedAt).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
