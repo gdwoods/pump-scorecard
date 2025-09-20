@@ -1,169 +1,107 @@
-# 📘 Pump Scorecard
+# Pump Scorecard  
 
-The **Pump Scorecard** is a Next.js app that scans a stock ticker and produces a **risk scorecard** to help identify potential pump-and-dump activity.  
-It combines **market data, SEC filings, promotions, fraud evidence, and intraday behavior** into a weighted risk score and summary verdict.
+A Next.js web application for short-sellers to quickly assess risk signals on microcap tickers. The app aggregates fundamentals, SEC filings, insider/institutional ownership, fraud evidence, and historical price behavior into a **weighted risk score**.  
 
 ---
 
-## 🚀 Usage
+## 🚀 Usage  
 
-### 🔍 Scanning a Ticker
-1. Enter a ticker symbol (e.g., `AAPL`, `QMMM`) into the input box.  
-2. Click **Scan**.  
-3. The app will fetch and analyze:
+1. Enter a ticker in the search box.  
+2. The app scans:  
+   - **SEC filings** (10-Q, 10-K, S-1, S-3, etc.)  
+   - **Fundamentals** from Yahoo Finance  
+   - **Promotions** (paid stock promo databases, email alerts)  
+   - **Fraud evidence** (stopnasdaqchinafraud.com)  
+   - **Historical charts** (droppiness / spike analysis)  
+   - **Country of origin** and address parsing  
+3. Results are displayed in cards with detailed sections:  
+   - Final Verdict  
    - Fundamentals  
-   - Historical charts  
-   - SEC filings  
-   - Promotion evidence  
-   - Fraud images  
-   - Droppiness (spike/retrace patterns)
+   - Country & Address  
+   - Promotions  
+   - Filings  
+   - Fraud Evidence  
+   - Droppiness (spike/fade behavior)  
 
-📸 Example: Final Verdict Card  
-![Final Verdict Screenshot](docs/images/final-verdict.png)
-
-📸 Example: SEC Filings + Fraud Evidence  
-![Filings Screenshot](docs/images/sec-filings.png)
-
-📸 Example: Droppiness Scatter  
-![Droppiness Screenshot](docs/images/droppiness.png)
-
-📸 Example: Criteria Section  
-![Criteria Screenshot](docs/images/criteria.png)
-
-### 📄 Exporting a Scorecard
-- Click **Export PDF** to generate a PDF report for the current ticker.  
-- The PDF includes: Final Verdict, Charts, Criteria, Fundamentals, Filings, Promotions, Fraud Evidence, and Droppiness.
+4. Manual checkboxes can be toggled to adjust the score if the automated scan misses nuance.  
+5. Export the full report as a PDF for record-keeping or sharing.  
 
 ---
 
-## 📊 Sections & Interpretation
+## 🛠️ Technical Details  
 
-### ✅ Final Verdict
-- **Verdict** (Low / Moderate / High Risk)  
-- **Score (0–100)** adjusted for auto + manual signals  
-- **Summary** explains what drove the risk rating  
-- **Droppiness Verdict**: how spikes have behaved historically
+### Data Sources  
 
-### 📊 Charts
-- **6-month daily chart** (Yahoo Finance)  
-- **Droppiness Scatter**: shows spikes and whether they retraced vs held
+- **Yahoo Finance**: fundamentals, key statistics, chart data.  
+- **SEC EDGAR**: filings scraped via API, company addresses normalized with custom country parser.  
+- **Fraud Evidence**: pulled from stopnasdaqchinafraud.com’s dataset, thumbnails/lightbox for images.  
+- **Promotions**: external databases and trackers, linked if no entries found.  
 
-### 🌍 Country
-- Uses data from SEC, Polygon, or Yahoo  
-- Flags risky jurisdictions: **China / Hong Kong / Malaysia**
+### Processing Flow  
 
-### 📝 Criteria
-- **Auto signals**:
-  - Sudden volume spike  
-  - Sudden price spike  
-  - Valuation mismatch  
-  - Reverse split  
-  - Dilution/offering filing (S-1, 424B, etc.)  
-  - Promoted stock evidence  
-  - Fraud evidence online  
-  - Risky country  
+1. **Ticker Input → API Scan Route**  
+   - `/api/scan/[ticker]/route.ts` orchestrates all lookups.  
+   - Each module is wrapped in try/catch to fail gracefully.  
 
-- **Manual flags** (user-checked):
-  - Pump suspicion  
-  - Thin float  
-  - Shady insiders  
-  - Other red flag  
+2. **Fundamentals**  
+   - Market cap, float, insider/institutional ownership, average volume.  
+   - Missing values filled with `null` and labeled in UI.  
 
-> ✅ Manual checks update the risk score dynamically
+3. **Filings**  
+   - Parsed for recent S-1/S-3 (dilution risk), going-concern warnings, and leadership changes.  
 
-### 💵 Fundamentals
-- Last Price, Market Cap, Shares Outstanding, Float  
-- Average & Latest Volume  
-- Short Float %, Insider %, Institutional %  
-- Values normalized and formatted (e.g. `14.8B`, `56.2M`)
+4. **Fraud Evidence**  
+   - If ticker matches known fraud cases, thumbnails are shown.  
+   - If no evidence → displays *“No fraud evidence found for this ticker. Please do a manual check here”* with a link to the fraud site.  
+
+5. **Promotions**  
+   - Stock promotion alerts shown by date/type.  
+   - If no results → displays *“No promotions found for this ticker. Please do a manual check here”* with a link.  
 
 ---
 
-## 🛠️ How Risk Scoring Works
+## 📊 Droppiness Score  
 
-### 📉 Droppiness: Spike & Fade Analysis
+The **Droppiness Score** measures how a ticker behaves after major spikes over the last 24 months.  
 
-- **Data period**: last ~24 months of intraday 1-min data (from Polygon), aggregated to 4-hour candles  
-- **Spike detection**:
-  - >20% increase over previous close  
-  - Accompanied by volume much higher than normal (e.g. 3× average)
-- **Retracement check**:
-  - Look ahead after each spike  
-  - If price falls by >50% from the spike high → considered “faded (retraced)”  
-  - Otherwise considered “held”
-- **Score calculation**:
-  - Count of faded spikes divided by total spikes, scaled to 0-100  
-  - If many spikes fade → higher droppiness score  
-  - If few shadows or most spikes hold → lower droppiness score
-- **Verdicts**:
-  - **No qualifying spikes** → *“No qualifying spikes in the last 24 months”*  
-  - **Droppiness ≥ 70** → *“Spikes usually fade quickly”*  
-  - **Droppiness < 40** → *“Spikes often hold”*  
-  - **Otherwise** → *“Mixed behavior”*
+**How it works:**  
+- A “spike” is identified when price jumps significantly on high volume.  
+- We then measure whether the stock retraced (dropped back down) within a short window.  
+- Each spike contributes to the overall score: many fades = higher droppiness.  
+
+**Interpretation for short sellers:**  
+- **Spikes fade quickly →** This is a hallmark of pump-and-dump activity. It is a **negative credibility signal** for the company, but a **positive setup for shorts**, since history shows spikes do not hold.  
+- **Spikes hold →** Suggests stronger underlying support or genuine buying. It is **less favorable for shorts** and riskier to bet against.  
+- **Mixed behavior →** A balanced profile; some spikes fade, others sustain.  
+
+The score is converted into a **verdict** (e.g. *“Spikes usually fade quickly”* vs. *“Spikes often hold”*) and displayed in the Final Verdict card.  
 
 ---
 
-## ⚙️ Technical Details & Scoring by Component
+## 📊 Risk Scoring  
 
-| Component | How the data is retrieved | What’s checked | How it adds to the risk score |
-|-----------|----------------------------|----------------|-------------------------------|
-| **Yahoo Finance** | `quote` + `quoteSummary` modules + `chart` API | Float & short interest; insider/institutional ownership; price history; volume | Short float & low insider ownership increase risk; price & volume spikes feed into droppiness & other criteria |
-| **Polygon.io** | Reference metadata + intraday raw data (1-min), aggregated to 4-hr candles | Country metadata; intraday behavior for droppiness | Country risk; droppiness behavior derived from intraday bars |
-| **SEC Filings (EDGAR)** | company tickers JSON → CIK → submission filings | Dilution / stock offerings; reverse splits; filing frequency | Offers (S-1, 424B etc.) + reverse split add significant risk points |
-| **Promotions tracker** | StockPromotionTracker API by ticker | If promotions are found, types & dates | Presence of promotions adds risk; more sources or frequent promotions add more points |
-| **Fraud Evidence** | stopnasdaqchinafraud.com API | Ticker-token matches in caption/text; image evidence if available | Visual / fraud evidence adds major risk; lack of evidence lowers risk |
-| **Country Risk** | SEC business address; fallback to Polygon or Yahoo | HQ country; flags risky ones like China, Hong Kong, Malaysia | Risky country adds moderate risk |
-| **Manual Flags (User)** | Checkboxes in UI | Pump suspicion; thin float; insiders; etc. | Each adds bonus points; affects final verdict dynamically |
+Each module contributes to a weighted score:  
 
----
+- **Fundamentals**: weak balance sheet, low cash, high burn → risk points.  
+- **Filings**: dilution potential, going concern flagged → risk points.  
+- **Promotions**: more promotions = higher score.  
+- **Fraud**: confirmed fraud evidence = heavy penalty.  
+- **Droppiness**: fades boost score (indicating historical pump-and-dump activity).  
 
-## 🔢 Risk Scoring Formula
-
-1. **Auto-detected signals** (weighted equally among):  
-   - Sudden volume spike  
-   - Sudden price spike  
-   - Dilution (offerings, reverse splits)  
-   - Fraud evidence  
-   Each gives a base chunk of the score when present.
-
-2. **Droppiness Adjustment**:  
-   - If spikes mostly fade → subtract or boost depending on behavior (e.g. if many fade, that signals risk)  
-
-3. **Manual Flags**:  
-   - User can add flags; each adds bonus risk points
-
-4. **Capping and mapping**:  
-   - Final score capped between 0-100  
-   - Score mapped to verdict:  
-     - < 40 → **Low risk**  
-     - 40–69 → **Moderate risk**  
-     - ≥ 70 → **High risk**
+Manual flags adjust the score in real time to reflect user judgment.  
 
 ---
 
-## 🧰 Tech Stack
+## 📦 Deployment  
 
-- Next.js 15.5.3 (App Router + API routes)  
-- React (client / server components)  
-- TailwindCSS styling  
-- Yahoo Finance (`yahoo-finance2`), Polygon.io, SEC Edgar, StockPromotionTracker, stopnasdaqchinafraud APIs  
-- PDF export functionality  
+- Built on **Next.js 15** with Turbopack.  
+- Hosted on Vercel.  
+- Exports PDF reports using serverless API route.  
 
 ---
 
-## 🔮 Potential Enhancements
+## 🔗 External Links  
 
-- Watchlist / batch scanning mode  
-- Risk trends chart  
-- Borrow fee / short interest charge data  
-- Social sentiment (Telegram, Twitter) integration  
-
----
-
-## 📦 Setup & Dev Commands
-
-```bash
-npm install
-npm run dev
-npm run build
-npx prettier --write .
+- [Stop Nasdaq China Fraud](https://www.stopnasdaqchinafraud.com/)  
+- [SEC EDGAR](https://www.sec.gov/edgar/searchedgar/companysearch.html)  
+- [Yahoo Finance API](https://github.com/gadicc/node-yahoo-finance2)  
