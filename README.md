@@ -51,7 +51,7 @@ A Next.js web application for short-sellers to quickly assess risk signals on mi
    - Parsed for recent S-1/S-3 (dilution risk), going-concern warnings, and leadership changes.  
 
 4. **Fraud Evidence**  
-   - If ticker matches known fraud cases, thumbnails are shown.  
+   - If ticker matches known fraud cases, thumbnails are shown with lightbox expansion.  
    - If no evidence → displays *“No fraud evidence found for this ticker. Please do a manual check here”* with a link to the fraud site.  
 
 5. **Promotions**  
@@ -66,15 +66,22 @@ The **Droppiness Score** measures how a ticker behaves after major spikes over t
 
 **How it works:**  
 - A “spike” is identified when price jumps significantly on high volume.  
-- We then measure whether the stock retraced (dropped back down) within a short window.  
-- Each spike contributes to the overall score: many fades = higher droppiness.  
+- The system measures whether the stock retraced (dropped back down) within a short window.  
+- Each spike contributes to the overall score:  
+  - **Retraced quickly → adds to droppiness** (hallmark of pump-and-dump).  
+  - **Held levels → lowers droppiness** (suggests support or genuine demand).  
 
 **Interpretation for short sellers:**  
-- **Spikes fade quickly →** This is a hallmark of pump-and-dump activity. It is a **negative credibility signal** for the company, but a **positive setup for shorts**, since history shows spikes do not hold.  
-- **Spikes hold →** Suggests stronger underlying support or genuine buying. It is **less favorable for shorts** and riskier to bet against.  
-- **Mixed behavior →** A balanced profile; some spikes fade, others sustain.  
+- **Spikes fade quickly →** Negative credibility signal for the company, but a **positive short setup**, since history shows spikes don’t hold.  
+- **Spikes hold →** Riskier for shorts, as the stock may have stronger underlying support.  
+- **Mixed behavior →** Some spikes fade, others sustain → moderate risk profile.  
 
-The score is converted into a **verdict** (e.g. *“Spikes usually fade quickly”* vs. *“Spikes often hold”*) and displayed in the Final Verdict card.  
+**Verdict Mapping:**  
+- Droppiness Score ≥ 70 → “Spikes usually fade quickly”  
+- Droppiness Score ≤ 40 → “Spikes often hold”  
+- Between 40–70 → “Mixed behavior”  
+
+The verdict is shown in both the Droppiness section and the Final Verdict card.  
 
 ---
 
@@ -82,13 +89,23 @@ The score is converted into a **verdict** (e.g. *“Spikes usually fade quickly�
 
 Each module contributes to a weighted score:  
 
-- **Fundamentals**: weak balance sheet, low cash, high burn → risk points.  
-- **Filings**: dilution potential, going concern flagged → risk points.  
-- **Promotions**: more promotions = higher score.  
-- **Fraud**: confirmed fraud evidence = heavy penalty.  
-- **Droppiness**: fades boost score (indicating historical pump-and-dump activity).  
+- **Fundamentals**: 20% (weak balance sheet, high burn, low cash = risk).  
+- **Filings**: 25% (recent S-1/S-3, going concern = risk).  
+- **Promotions**: 20% (multiple paid campaigns = risk).  
+- **Fraud**: 25% (confirmed fraud evidence = major penalty).  
+- **Droppiness**: 10% (fades add points = riskier credibility profile).  
 
 Manual flags adjust the score in real time to reflect user judgment.  
+
+---
+
+## ⚠️ Limitations  
+
+- **Coverage Gaps**:  
+  - Fraud database only covers certain regions (primarily China).  
+  - Promotions data may miss Telegram/WhatsApp campaigns.  
+- **Interpretation**: Risk score is an **opinionated signal**, not investment advice.  
+- **Manual Review**: Always verify with external links provided in Fraud and Promotions sections.  
 
 ---
 
@@ -100,8 +117,34 @@ Manual flags adjust the score in real time to reflect user judgment.
 
 ---
 
+## 👨‍💻 Developer Notes  
+
+- **Main Scan Logic**: `/app/api/scan/[ticker]/route.ts`  
+- **Risk Scoring Logic**: `/utils/scoring.ts`  
+- **UI Components**: `/components/` folder (FinalVerdict, Chart, DroppinessCard, etc.)  
+- **PDF Export**: `/app/api/export-pdf/route.ts`  
+
+To extend:  
+- Add new data sources by editing the scan route.  
+- Adjust scoring weights in `/utils/scoring.ts`.  
+- Add new report elements in `/components` and export handler.  
+
+---
+
 ## 🔗 External Links  
 
 - [Stop Nasdaq China Fraud](https://www.stopnasdaqchinafraud.com/)  
 - [SEC EDGAR](https://www.sec.gov/edgar/searchedgar/companysearch.html)  
 - [Yahoo Finance API](https://github.com/gadicc/node-yahoo-finance2)  
+
+---
+
+## 📊 Example Output  
+
+**Ticker: QMMM**  
+- Country: China  
+- Filings: Recent S-3 shelf offering  
+- Fraud Evidence: 3 confirmed images from stopnasdaqchinafraud.com  
+- Promotions: 2 paid email campaigns in last 30 days  
+- Droppiness: Score 82 → “Spikes usually fade quickly”  
+- Weighted Risk Score: 87/100 → Very High Risk  
