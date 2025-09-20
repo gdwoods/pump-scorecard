@@ -33,7 +33,7 @@ type IntradayCandle = {
 
 export async function GET(
   req: Request,
-  context: { params: Promise<{ ticker: string }> }
+  context: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker } = await context.params;
   const upperTicker = ticker.toUpperCase();
@@ -46,16 +46,18 @@ export async function GET(
     let shortFloat: number | null = null;
     let insiderOwnership: number | null = null;
     let institutionalOwnership: number | null = null;
-// ---------- Percent normalization helper ----------
-const toPercent = (raw: any): number | null => {
-  const n = Number(raw);
-  if (!isFinite(n) || n < 0) return null;
 
-  if (n <= 1.5) return +(n * 100).toFixed(1);  // fraction
-  if (n <= 100) return +n.toFixed(1);          // already %
-  if (n <= 10000) return +(n / 100).toFixed(1); // over-scaled
-  return 100.0;
-};
+    // ---------- Percent normalization helper ----------
+    const toPercent = (raw: any): number | null => {
+      const n = Number(raw);
+      if (!isFinite(n) || n < 0) return null;
+
+      if (n <= 1.5) return +(n * 100).toFixed(1); // fraction
+      if (n <= 100) return +n.toFixed(1); // already %
+      if (n <= 10000) return +(n / 100).toFixed(1); // over-scaled
+      return 100.0;
+    };
+
     try {
       quote = await yahooFinance.quote(upperTicker);
 
@@ -132,26 +134,28 @@ const toPercent = (raw: any): number | null => {
       const polygonKey = process.env.POLYGON_API_KEY;
       if (polygonKey) {
         const polyRes = await fetch(
-          `https://api.polygon.io/v3/reference/tickers/${upperTicker}?apiKey=${polygonKey}`
+          `https://api.polygon.io/v3/reference/tickers/${upperTicker}?apiKey=${polygonKey}`,
         );
         if (polyRes.ok) polyMeta = await polyRes.json();
       }
     } catch {}
-
     // ---------- SEC Filings ----------
     let filings: Filing[] = [];
     let secCountry: string | null = null;
     try {
-      const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
-        headers: {
-          "User-Agent": "pump-scorecard (garthwoods@gmail.com)",
-          Accept: "application/json",
+      const cikRes = await fetch(
+        "https://www.sec.gov/files/company_tickers.json",
+        {
+          headers: {
+            "User-Agent": "pump-scorecard (garthwoods@gmail.com)",
+            Accept: "application/json",
+          },
         },
-      });
+      );
       if (cikRes.ok) {
         const cikJson = await cikRes.json();
         const entry = Object.values(cikJson).find(
-          (c: any) => c.ticker?.toUpperCase() === upperTicker
+          (c: any) => c.ticker?.toUpperCase() === upperTicker,
         );
         if (entry) {
           const cik = entry.cik_str.toString().padStart(10, "0");
@@ -162,7 +166,7 @@ const toPercent = (raw: any): number | null => {
                 "User-Agent": "pump-scorecard (garthwoods@gmail.com)",
                 Accept: "application/json",
               },
-            }
+            },
           );
           if (secRes.ok) {
             const secJson = await secRes.json();
@@ -180,16 +184,15 @@ const toPercent = (raw: any): number | null => {
                   .map((form: string, idx: number) => ({
                     title: form || "Untitled Filing",
                     date: recent.filingDate[idx] || "Unknown",
-                    url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[idx].replace(
-                      /-/g,
-                      ""
-                    )}/${recent.primaryDocument[idx]}`,
+                    url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[
+                      idx
+                    ].replace(/-/g, "")}/${recent.primaryDocument[idx]}`,
                     businessAddress: biz,
                     mailingAddress: mail,
                   }))
                   .sort(
                     (a, b) =>
-                      new Date(b.date).getTime() - new Date(a.date).getTime()
+                      new Date(b.date).getTime() - new Date(a.date).getTime(),
                   )
                   .slice(0, 8) || [];
             }
@@ -202,7 +205,7 @@ const toPercent = (raw: any): number | null => {
     let promotions: Promotion[] = [];
     try {
       const promoRes = await fetch(
-        `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${upperTicker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`
+        `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${upperTicker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`,
       );
       if (promoRes.ok) {
         const promoJson = await promoRes.json();
@@ -216,102 +219,90 @@ const toPercent = (raw: any): number | null => {
     } catch {}
     if (!promotions.length) {
       promotions = [
-        { type: "Manual Check", date: "", url: "https://www.stockpromotiontracker.com/" },
+        {
+          type: "Manual Check",
+          date: "",
+          url: "https://www.stockpromotiontracker.com/",
+        },
       ];
     }
 
-// ---------- Fraud Images (robust ticker-aware filter across fields) ----------
-let fraudImages: any[] = [];
-try {
-  const fraudRes = await fetch(
-    `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
-    { headers: { "User-Agent": "pump-scorecard" } }
-  );
+    // ---------- Fraud Images ----------
+    let fraudImages: FraudImage[] = [];
+    try {
+      const fraudRes = await fetch(
+        `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
+        { headers: { "User-Agent": "pump-scorecard" } },
+      );
+      if (fraudRes.ok) {
+        const fraudJson = await fraudRes.json();
+        const rawResults = Array.isArray(fraudJson?.results)
+          ? fraudJson.results
+          : [];
+        const U = upperTicker.toUpperCase();
 
-  if (fraudRes.ok) {
-    const fraudJson = await fraudRes.json();
-    const rawResults = Array.isArray(fraudJson?.results) ? fraudJson.results : [];
+        const normalize = (s: unknown) =>
+          String(s ?? "")
+            .toUpperCase()
+            .replace(/[$#@()[\]{}.,;:!?'"\-]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
 
-    const U = upperTicker.toUpperCase();
+        const hasTickerToken = (s: string) => {
+          const re = new RegExp(`(^|[^A-Z0-9])${U}([^A-Z0-9]|$)`);
+          return re.test(s);
+        };
 
-    // Normalize text: uppercase, strip common punctuation/noise around tickers
-    const normalize = (s: unknown) =>
-      String(s ?? "")
-        .toUpperCase()
-        .replace(/[$#@()[\]{}.,;:!?'"\-]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+        const strongMatches = rawResults.filter((r: any) => {
+          const fields: string[] = [
+            r.caption,
+            r.text,
+            r.title,
+            r.postTitle,
+            Array.isArray(r.symbols) ? r.symbols.join(" ") : "",
+            Array.isArray(r.tickers) ? r.tickers.join(" ") : "",
+            r.imagePath,
+            r.thumbnailPath,
+          ].map(normalize);
+          return hasTickerToken(fields.join(" | "));
+        });
 
-    // Token-aware regex so we don't match inside other words (DREAMM vs QMMM)
-    const hasTickerToken = (s: string) => {
-      // Allow start/end or non-alphanumeric boundaries
-      const re = new RegExp(`(^|[^A-Z0-9])${U}([^A-Z0-9]|$)`);
-      return re.test(s);
-    };
-
-    // First, find strong matches across many fields
-    const strongMatches = rawResults.filter((r: any) => {
-      const fields: string[] = [
-        r.caption,
-        r.text,
-        r.title,
-        r.postTitle,
-        Array.isArray(r.symbols) ? r.symbols.join(" ") : "",
-        Array.isArray(r.tickers) ? r.tickers.join(" ") : "",
-        r.imagePath,       // sometimes paths include the ticker
-        r.thumbnailPath,
-      ].map(normalize);
-
-      const haystack = fields.join(" | ");
-      return hasTickerToken(haystack);
-    });
-
-    const picked = strongMatches; // no blank/generic fallback to avoid unrelated images
-
-    fraudImages = picked
-      .map((img: any) => ({
-        full: img.imagePath
-          ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}`
-          : null,
-        thumb: img.thumbnailPath
-          ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
-          : null,
-        approvedAt: img.approvedAt || null,
-        caption: img.caption ?? img.text ?? img.title ?? img.postTitle ?? "",
-        // helpful to have a source click-through if the API returns one
-        sourceUrl: img.link ?? img.url ?? img.postUrl ?? null,
-      }))
-      .filter((img: any) => img.full && img.thumb);
-
-    // Optional: small debug to understand filtering in Vercel logs
-    console.log(
-      `🧪 Fraud filter: total=${rawResults.length}, strong=${fraudImages.length} for ${upperTicker}`
-    );
-  } else {
-    console.error("⚠️ Fraud API not ok:", fraudRes.status, await fraudRes.text());
-  }
-} catch (err) {
-  console.error("⚠️ Fraud fetch failed:", err);
-}
-
-// ✅ Clean fallback that your FraudEvidence component recognizes
-if (!fraudImages || fraudImages.length === 0) {
-  fraudImages = [
-    {
-      full: null,
-      thumb: null,
-      approvedAt: null,
-      type: "Manual Check", // <-- required by your component
-      url: `https://www.stopnasdaqchinafraud.com/?q=${encodeURIComponent(upperTicker)}`,
-      caption: "Manual Check",
-    },
-  ];
-}
-
-
+        fraudImages = strongMatches
+          .map((img: any) => ({
+            full: img.imagePath
+              ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}`
+              : null,
+            thumb: img.thumbnailPath
+              ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
+              : null,
+            approvedAt: img.approvedAt || null,
+            caption:
+              img.caption ?? img.text ?? img.title ?? img.postTitle ?? "",
+            sourceUrl: img.link ?? img.url ?? img.postUrl ?? null,
+          }))
+          .filter((img: FraudImage) => img.full && img.thumb);
+      }
+    } catch {}
+    if (!fraudImages || fraudImages.length === 0) {
+      fraudImages = [
+        {
+          full: null,
+          thumb: null,
+          approvedAt: null,
+          caption: "Manual Check",
+          sourceUrl: `https://www.stopnasdaqchinafraud.com/?q=${encodeURIComponent(
+            upperTicker,
+          )}`,
+        },
+      ];
+    }
     // ---------- Droppiness ----------
     let droppinessScore = 0;
-    let droppinessDetail: Array<{ date: string; spikePct: number; retraced: boolean }> = [];
+    const droppinessDetail: Array<{
+      date: string;
+      spikePct: number;
+      retraced: boolean;
+    }> = [];
     let intraday: IntradayCandle[] = [];
     try {
       const TWENTYFOUR_MONTHS_MS = 1000 * 60 * 60 * 24 * 730;
@@ -320,10 +311,11 @@ if (!fraudImages || fraudImages.length === 0) {
       const startDateStr = startDate.toISOString().slice(0, 10);
       const endDateStr = endDate.toISOString().slice(0, 10);
 
-      let oneMinBars: any[] = [];
+      const oneMinBars: any[] = [];
       const polygonKey = process.env.POLYGON_API_KEY;
       if (polygonKey) {
-        let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
+        let url: string | null =
+          `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
         while (url) {
           const res = await fetch(url);
           if (!res.ok) break;
@@ -337,7 +329,7 @@ if (!fraudImages || fraudImages.length === 0) {
                 low: c.l,
                 close: c.c,
                 volume: c.v,
-              }))
+              })),
             );
           }
           if (json.next_url) {
@@ -357,7 +349,8 @@ if (!fraudImages || fraudImages.length === 0) {
         const bucketMs = 1000 * 60 * 60 * 4;
         let bucket: any = null;
         for (const bar of oneMinBars) {
-          const bucketTime = Math.floor(bar.date.getTime() / bucketMs) * bucketMs;
+          const bucketTime =
+            Math.floor(bar.date.getTime() / bucketMs) * bucketMs;
           if (!bucket || bucket.bucketTime !== bucketTime) {
             if (bucket) candles.push(bucket);
             bucket = {
@@ -391,7 +384,11 @@ if (!fraudImages || fraudImages.length === 0) {
           spikeCount++;
           let retraced = false;
           if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
-          if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9)
+          if (
+            !retraced &&
+            candles[i + 1] &&
+            candles[i + 1].close < cur.close * 0.9
+          )
             retraced = true;
           if (retraced) retraceCount++;
           droppinessDetail.push({
@@ -401,14 +398,16 @@ if (!fraudImages || fraudImages.length === 0) {
           });
         }
       }
-      droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
+      droppinessScore =
+        spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
     } catch {}
 
     // ---------- Scores ----------
     const latest = history.at(-1) || {};
     const prev = history.at(-2) || latest;
     const avgVol =
-      history.reduce((s, q) => s + (q.volume || 0), 0) / (history.length || 1) || 0;
+      history.reduce((s, q) => s + (q.volume || 0), 0) /
+        (history.length || 1) || 0;
 
     const sudden_volume_spike =
       !!latest.volume && avgVol > 0 && latest.volume > avgVol * 3;
@@ -418,7 +417,9 @@ if (!fraudImages || fraudImages.length === 0) {
     let weightedRiskScore = 0;
     if (sudden_volume_spike) weightedRiskScore += 20;
     if (sudden_price_spike) weightedRiskScore += 20;
-    if (filings.some((f) => f.title.includes("S-1") || f.title.includes("424B")))
+    if (
+      filings.some((f) => f.title.includes("S-1") || f.title.includes("424B"))
+    )
       weightedRiskScore += 20;
     if (fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"))
       weightedRiskScore += 20;
@@ -434,14 +435,15 @@ if (!fraudImages || fraudImages.length === 0) {
       summaryVerdict === "Low risk"
         ? "This one looks pretty clean — no major pump-and-dump signals right now."
         : summaryVerdict === "Moderate risk"
-        ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
-        : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
+          ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
+          : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
 
     // ---------- Fundamentals mismatch ----------
     let valuation_fundamentals_mismatch = false;
     try {
       const marketCap = quote.marketCap || 0;
-      const revenue = (quote as any)?.totalRevenue || (quote as any)?.revenue || 0;
+      const revenue =
+        (quote as any)?.totalRevenue || (quote as any)?.revenue || 0;
       if (marketCap > 500_000_000) {
         if (!revenue || revenue <= 0) {
           valuation_fundamentals_mismatch = true;
@@ -457,7 +459,7 @@ if (!fraudImages || fraudImages.length === 0) {
     try {
       if (filings.length > 0) {
         reverse_split = filings.some((f) =>
-          f.title.toLowerCase().includes("reverse split")
+          f.title.toLowerCase().includes("reverse split"),
         );
       }
       if (
@@ -472,7 +474,12 @@ if (!fraudImages || fraudImages.length === 0) {
 
     // ---------- Promoted stock ----------
     let promoted_stock = false;
-    let promotionEvidence: { source: string; title: string; date?: string; url?: string }[] = [];
+    const promotionEvidence: {
+      source: string;
+      title: string;
+      date?: string;
+      url?: string;
+    }[] = [];
     try {
       if (promotions.length > 0 && promotions[0].type !== "Manual Check") {
         promoted_stock = true;
@@ -482,7 +489,7 @@ if (!fraudImages || fraudImages.length === 0) {
             title: p.type,
             date: p.date,
             url: p.url,
-          })
+          }),
         );
       }
       if (filings.length > 0) {
@@ -506,25 +513,64 @@ if (!fraudImages || fraudImages.length === 0) {
       }
     } catch {}
 
-    // ---------- Country ----------
-    let country = "Unknown";
-    let countrySource = "Unknown";
-    if (secCountry) {
-      country = secCountry.trim();
-      countrySource = "SEC";
-    } else if (polyMeta?.results?.country) {
-      country = polyMeta.results.country.trim();
-      countrySource = "Polygon";
-    } else if (polyMeta?.results?.locale) {
-      country =
-        polyMeta.results.locale.toUpperCase() === "US"
-          ? "United States"
-          : polyMeta.results.locale.trim();
-      countrySource = "Polygon";
-    } else if (quote.country) {
-      country = quote.country.trim();
-      countrySource = "Yahoo";
-    }
+// ---------- Country ----------
+let country = "Unknown";
+let countrySource = "Unknown";
+
+// Helper: scan any object for keywords
+const detectCountry = (addr: any): string | null => {
+  if (!addr) return null;
+  const hay = JSON.stringify(addr).toUpperCase();
+  if (hay.includes("CHINA")) return "China";
+  if (hay.includes("HONG KONG")) return "Hong Kong";
+  if (hay.includes("MALAYSIA")) return "Malaysia";
+  if (hay.includes("SINGAPORE")) return "Singapore";
+  return null;
+};
+
+// SEC first
+let detectedFromSec: string | null = null;
+try {
+  if (filings.length > 0) {
+    const f = filings[0];
+    detectedFromSec = detectCountry(f.businessAddress) || detectCountry(f.mailingAddress);
+  }
+} catch {}
+
+if (secCountry) {
+  country = secCountry.trim();
+  countrySource = "SEC (direct)";
+} else if (detectedFromSec) {
+  country = detectedFromSec;
+  countrySource = "SEC (address scan)";
+} else if (polyMeta?.results?.country) {
+  country = polyMeta.results.country.trim();
+  countrySource = "Polygon";
+} else if (polyMeta?.results?.locale) {
+  country =
+    polyMeta.results.locale.toUpperCase() === "US"
+      ? "United States"
+      : polyMeta.results.locale.trim();
+  countrySource = "Polygon";
+} else if (quote.country) {
+  country = quote.country.trim();
+  countrySource = "Yahoo";
+}
+// ---------- Country Overrides ----------
+const overrides: Record<string, string> = {
+  UOKA: "China",
+  // Add more overrides here if Yahoo/Polygon mislabel ADRs
+};
+
+if (overrides[upperTicker]) {
+  country = overrides[upperTicker];
+  countrySource = "Override Map";
+}
+
+const riskyCountries = ["China", "Hong Kong", "Malaysia", "Singapore"];
+
+
+
 
     return NextResponse.json({
       ticker: upperTicker,
@@ -537,9 +583,9 @@ if (!fraudImages || fraudImages.length === 0) {
       floatShares: quote.floatShares ?? quote.sharesOutstanding ?? null,
       avgVolume: quote.averageDailyVolume3Month ?? null,
       latestVolume: quote.regularMarketVolume ?? null,
-  shortFloat: toPercent(shortFloat),
-insiderOwnership: toPercent(insiderOwnership),
-institutionalOwnership: toPercent(institutionalOwnership),
+      shortFloat: toPercent(shortFloat),
+      insiderOwnership: toPercent(insiderOwnership),
+      institutionalOwnership: toPercent(institutionalOwnership),
 
       exchange: quote.fullExchangeName || "Unknown",
       country,
@@ -563,19 +609,20 @@ institutionalOwnership: toPercent(institutionalOwnership),
       valuation_fundamentals_mismatch,
       reverse_split,
       dilution_offering: filings.some(
-        (f) => f.title.includes("S-1") || f.title.includes("424B")
+        (f) => f.title.includes("S-1") || f.title.includes("424B"),
       ),
       promoted_stock,
       promotionEvidence,
       fraud_evidence:
         fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"),
-      risky_country: ["China", "Hong Kong", "Malaysia"].includes(country),
+  risky_country: riskyCountries.includes(country),
+
     });
   } catch (err: any) {
     console.error("scan route failed:", err?.message || err);
     return NextResponse.json(
       { error: err?.message || "Internal Server Error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
