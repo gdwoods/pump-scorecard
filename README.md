@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📘 Pump Scorecard
 
-## Getting Started
+The **Pump Scorecard** is a Next.js app that scans a stock ticker and produces a **risk scorecard** to help identify potential pump-and-dump activity.  
+It combines **market data, SEC filings, promotions, fraud evidence, and intraday behavior** into a weighted risk score and summary verdict.
 
-First, run the development server:
+---
 
+## 🚀 Usage
+
+### 🔍 Scanning a Ticker
+1. Enter a ticker symbol (e.g., `AAPL`, `QMMM`) into the input box.  
+2. Click **Scan**.  
+3. The app will fetch and analyze:
+   - Fundamentals
+   - Historical charts
+   - SEC filings
+   - Promotion evidence
+   - Fraud images
+   - Droppiness (spike/retrace patterns)
+
+📸 Example: Final Verdict Card  
+![Final Verdict Screenshot](docs/images/final-verdict.png)
+
+📸 Example: SEC Filings + Fraud Evidence  
+![Filings Screenshot](docs/images/sec-filings.png)
+
+📸 Example: Droppiness Scatter  
+![Droppiness Screenshot](docs/images/droppiness.png)
+
+### 📄 Exporting a Scorecard
+- Click **Export PDF** to generate a PDF report for the current ticker.  
+- The PDF includes: Final Verdict, Charts, Criteria, Fundamentals, Filings, Promotions, Fraud Evidence, and Droppiness.
+
+---
+
+## 📊 Sections & Interpretation
+
+### ✅ Final Verdict
+- **Verdict** (Low / Moderate / High Risk).  
+- **Score (0–100)** adjusted for auto + manual signals.  
+- **Summary** explains what drove the risk rating.  
+- **Droppiness Verdict**: how spikes typically behave.
+
+### 📊 Charts
+- **6-month daily chart** (Yahoo Finance).  
+- **Droppiness Scatter**: shows spikes & retraces.
+
+### 🌍 Country
+- Uses SEC, Polygon, or Yahoo metadata.  
+- Flags risky locales: **China / Hong Kong / Malaysia**.
+
+### 📝 Criteria
+- **Auto signals** (from backend).  
+- **Manual flags** (user-checked, affect score).  
+
+📸 Example: Criteria Section  
+![Criteria Screenshot](docs/images/criteria.png)
+
+---
+
+## ⚙️ Technical Details
+
+### Data Sources
+- **Yahoo Finance (`yahoo-finance2`)** — fundamentals, history, float, ownership.  
+- **Polygon.io** — reference metadata, intraday candles.  
+- **SEC Edgar** — filings and addresses.  
+- **StockPromotionTracker** — promotion history.  
+- **StopNasdaqChinaFraud** — fraud-related images.  
+
+### Risk Scoring
+- Auto criteria: +20 each  
+- Droppiness adjustment: ±15  
+- Manual flags: +10 each  
+- Score capped at 0–100  
+
+---
+
+## 🛠️ Development
+
+Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+npm install
