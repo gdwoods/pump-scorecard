@@ -35,18 +35,23 @@ export default function Page() {
       }
 
       // ✅ Add droppiness verdict
-      if (
-        json.droppinessScore === 0 &&
-        (!json.droppinessDetail || json.droppinessDetail.length === 0)
-      ) {
-        json.droppinessVerdict = "No qualifying spikes in the last 24 months";
-      } else if (json.droppinessScore >= 70) {
-        json.droppinessVerdict = "Spikes usually fade quickly";
-      } else if (json.droppinessScore < 40) {
-        json.droppinessVerdict = "Spikes often hold";
-      } else {
-        json.droppinessVerdict = "Mixed behavior";
-      }
+if (
+  json.droppinessScore === 0 &&
+  (!json.droppinessDetail || json.droppinessDetail.length === 0)
+) {
+  json.droppinessVerdict =
+    "No qualifying spikes were detected in the last 24 months — the stock has not shown pump-like behavior recently.";
+} else if (json.droppinessScore >= 70) {
+  json.droppinessVerdict =
+    "Spikes usually fade quickly — most large moves retraced within a few sessions.";
+} else if (json.droppinessScore < 40) {
+  json.droppinessVerdict =
+    "Spikes often hold — many large moves remained elevated after the initial run-up.";
+} else {
+  json.droppinessVerdict =
+    "Mixed behavior — some spikes retraced quickly, while others held their gains.";
+}
+
 
       setResult(json);
       setManualFlags({}); // reset flags for new ticker
@@ -79,6 +84,14 @@ export default function Page() {
   const toggleManualFlag = (key: string) => {
     setManualFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+
+  // ✅ Combine backend score with manual flag adjustments
+  let adjustedScore = result?.weightedRiskScore ?? 0;
+  if (manualFlags.pumpSuspicion) adjustedScore += 15;
+  if (manualFlags.thinFloat) adjustedScore += 10;
+  if (manualFlags.insiders) adjustedScore += 10;
+  if (manualFlags.other) adjustedScore += 5;
+  if (adjustedScore > 100) adjustedScore = 100;
 
   return (
     <div className="p-6 space-y-6">
@@ -119,7 +132,7 @@ export default function Page() {
           <FinalVerdict
             verdict={result.summaryVerdict}
             summary={result.summaryText}
-            score={result.weightedRiskScore}
+            score={adjustedScore}  
             manualFlags={manualFlags}
             droppinessVerdict={result.droppinessVerdict}
           />
@@ -150,14 +163,14 @@ export default function Page() {
           <SecFilings filings={result.filings} />
 
           {/* Fraud */}
-          <FraudEvidence fraudImages={result.fraudImages} />
+        <FraudEvidence fraudImages={result.fraudImages || []} />
+
 
           {/* Droppiness score + scatter */}
           <DroppinessCard
             score={result.droppinessScore}
             detail={result.droppinessDetail || []}
           />
-
           <DroppinessScatter detail={result.droppinessDetail || []} />
         </div>
       )}

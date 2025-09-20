@@ -5,6 +5,32 @@ import { parseSecAddress } from "@/utils/normalizeCountry";
 
 export const runtime = "nodejs";
 
+type HistoryPoint = { date: string; close: number; volume: number };
+type Filing = {
+  title: string;
+  date: string;
+  url: string;
+  businessAddress?: any;
+  mailingAddress?: any;
+};
+type Promotion = { type: string; date: string; url: string };
+type FraudImage = {
+  full: string | null;
+  thumb: string | null;
+  approvedAt: string | null;
+  caption: string;
+  sourceUrl: string | null;
+};
+type IntradayCandle = {
+  bucketTime: number;
+  date: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
 export async function GET(
   req: Request,
   context: { params: Promise<{ ticker: string }> }
@@ -15,9 +41,77 @@ export async function GET(
   try {
     // ---------- Yahoo Finance ----------
     let quote: any = {};
-    let history: any[] = [];
+    let history: HistoryPoint[] = [];
+
+    let shortFloat: number | null = null;
+    let insiderOwnership: number | null = null;
+    let institutionalOwnership: number | null = null;
+// ---------- Percent normalization helper ----------
+const toPercent = (raw: any): number | null => {
+  const n = Number(raw);
+  if (!isFinite(n) || n < 0) return null;
+
+  if (n <= 1.5) return +(n * 100).toFixed(1);  // fraction
+  if (n <= 100) return +n.toFixed(1);          // already %
+  if (n <= 10000) return +(n / 100).toFixed(1); // over-scaled
+  return 100.0;
+};
     try {
       quote = await yahooFinance.quote(upperTicker);
+
+      shortFloat = (quote as any)?.shortPercentFloat ?? null;
+      insiderOwnership = (quote as any)?.heldPercentInsiders ?? null;
+      institutionalOwnership = (quote as any)?.heldPercentInstitutions ?? null;
+
+      try {
+        const summary = await yahooFinance.quoteSummary(upperTicker, {
+          modules: [
+            "defaultKeyStatistics",
+            "insiderHolders",
+            "institutionOwnership",
+            "majorHoldersBreakdown",
+          ],
+        });
+
+        const stats = summary?.defaultKeyStatistics || {};
+        const insiders = summary?.insiderHolders || {};
+        const institutions = summary?.institutionOwnership || {};
+        const holders = summary?.majorHoldersBreakdown || {};
+
+        if (shortFloat == null && stats.shortPercentOfFloat != null) {
+          shortFloat = stats.shortPercentOfFloat;
+        }
+
+        if (
+          insiderOwnership == null &&
+          Array.isArray((insiders as any).ownershipList)
+        ) {
+          insiderOwnership =
+            (insiders as any).ownershipList[0]?.percentHeld ?? null;
+        }
+        if (
+          institutionalOwnership == null &&
+          Array.isArray((institutions as any).ownershipList)
+        ) {
+          institutionalOwnership =
+            (institutions as any).ownershipList[0]?.percentHeld ?? null;
+        }
+
+        // ✅ majorHoldersBreakdown fallback
+        if (insiderOwnership == null && holders.insidersPercentHeld != null) {
+          insiderOwnership = holders.insidersPercentHeld;
+        }
+        if (
+          institutionalOwnership == null &&
+          holders.institutionsPercentHeld != null
+        ) {
+          institutionalOwnership = holders.institutionsPercentHeld;
+        }
+      } catch {
+        // optional
+      }
+
+      // 6-month daily chart
       const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 180;
       const chart = await yahooFinance.chart(upperTicker, {
         period1: new Date(Date.now() - SIX_MONTHS_MS),
@@ -30,9 +124,7 @@ export async function GET(
           close: q.close,
           volume: q.volume,
         })) || [];
-    } catch (err) {
-      console.error("⚠️ Yahoo fetch failed:", err);
-    }
+    } catch {}
 
     // ---------- Polygon Meta ----------
     let polyMeta: any = {};
@@ -44,12 +136,10 @@ export async function GET(
         );
         if (polyRes.ok) polyMeta = await polyRes.json();
       }
-    } catch (err) {
-      console.error("⚠️ Polygon meta failed:", err);
-    }
+    } catch {}
 
     // ---------- SEC Filings ----------
-    let filings: any[] = [];
+    let filings: Filing[] = [];
     let secCountry: string | null = null;
     try {
       const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
@@ -61,7 +151,7 @@ export async function GET(
       if (cikRes.ok) {
         const cikJson = await cikRes.json();
         const entry = Object.values(cikJson).find(
-          (c: any) => c.ticker.toUpperCase() === upperTicker
+          (c: any) => c.ticker?.toUpperCase() === upperTicker
         );
         if (entry) {
           const cik = entry.cik_str.toString().padStart(10, "0");
@@ -85,32 +175,31 @@ export async function GET(
 
             const recent = secJson?.filings?.recent;
             if (recent?.form && Array.isArray(recent.form)) {
-              filings = recent.form.map((form: string, idx: number) => ({
-                title: form || "Untitled Filing",
-                date: recent.filingDate[idx] || "Unknown",
-                url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[idx].replace(
-                  /-/g,
-                  ""
-                )}/${recent.primaryDocument[idx]}`,
-                businessAddress: biz,
-                mailingAddress: mail,
-              }));
-              filings = filings
-                .sort(
-                  (a, b) =>
-                    new Date(b.date).getTime() - new Date(a.date).getTime()
-                )
-                .slice(0, 8);
+              filings =
+                recent.form
+                  .map((form: string, idx: number) => ({
+                    title: form || "Untitled Filing",
+                    date: recent.filingDate[idx] || "Unknown",
+                    url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[idx].replace(
+                      /-/g,
+                      ""
+                    )}/${recent.primaryDocument[idx]}`,
+                    businessAddress: biz,
+                    mailingAddress: mail,
+                  }))
+                  .sort(
+                    (a, b) =>
+                      new Date(b.date).getTime() - new Date(a.date).getTime()
+                  )
+                  .slice(0, 8) || [];
             }
           }
         }
       }
-    } catch (err) {
-      console.error("⚠️ SEC fetch failed:", err);
-    }
+    } catch {}
 
     // ---------- Promotions ----------
-    let promotions: { type: string; date: string; url: string }[] = [];
+    let promotions: Promotion[] = [];
     try {
       const promoRes = await fetch(
         `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${upperTicker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`
@@ -124,17 +213,10 @@ export async function GET(
           url: "https://www.stockpromotiontracker.com/",
         }));
       }
-    } catch (err) {
-      console.error("⚠️ Promotions fetch failed:", err);
-    }
-
-    if (!promotions || promotions.length === 0) {
+    } catch {}
+    if (!promotions.length) {
       promotions = [
-        {
-          type: "Manual Check",
-          date: "",
-          url: "https://www.stockpromotiontracker.com/",
-        },
+        { type: "Manual Check", date: "", url: "https://www.stockpromotiontracker.com/" },
       ];
     }
 
@@ -227,11 +309,10 @@ if (!fraudImages || fraudImages.length === 0) {
 }
 
 
-
-    // ---------- Droppiness (Polygon intraday) ----------
-    let droppinessScore: number = 0;
-    let droppinessDetail: any[] = [];
-    let intraday: any[] = [];
+    // ---------- Droppiness ----------
+    let droppinessScore = 0;
+    let droppinessDetail: Array<{ date: string; spikePct: number; retraced: boolean }> = [];
+    let intraday: IntradayCandle[] = [];
     try {
       const TWENTYFOUR_MONTHS_MS = 1000 * 60 * 60 * 24 * 730;
       const startDate = new Date(Date.now() - TWENTYFOUR_MONTHS_MS);
@@ -241,7 +322,6 @@ if (!fraudImages || fraudImages.length === 0) {
 
       let oneMinBars: any[] = [];
       const polygonKey = process.env.POLYGON_API_KEY;
-
       if (polygonKey) {
         let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
         while (url) {
@@ -272,8 +352,7 @@ if (!fraudImages || fraudImages.length === 0) {
         }
       }
 
-      // Aggregate to 4h
-      let candles: any[] = [];
+      const candles: IntradayCandle[] = [];
       if (oneMinBars.length > 0) {
         const bucketMs = 1000 * 60 * 60 * 4;
         let bucket: any = null;
@@ -299,7 +378,6 @@ if (!fraudImages || fraudImages.length === 0) {
         }
         if (bucket) candles.push(bucket);
       }
-
       intraday = candles;
 
       let spikeCount = 0;
@@ -313,9 +391,8 @@ if (!fraudImages || fraudImages.length === 0) {
           spikeCount++;
           let retraced = false;
           if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
-          if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) {
+          if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9)
             retraced = true;
-          }
           if (retraced) retraceCount++;
           droppinessDetail.push({
             date: cur.date?.toISOString() || "",
@@ -324,38 +401,34 @@ if (!fraudImages || fraudImages.length === 0) {
           });
         }
       }
-      droppinessScore =
-        spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
-    } catch (err) {
-      console.error("⚠️ Droppiness calc failed:", err);
-    }
+      droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
+    } catch {}
 
     // ---------- Scores ----------
     const latest = history.at(-1) || {};
     const prev = history.at(-2) || latest;
     const avgVol =
-      history.reduce((s, q) => s + (q.volume || 0), 0) /
-        (history.length || 1) || 0;
+      history.reduce((s, q) => s + (q.volume || 0), 0) / (history.length || 1) || 0;
+
     const sudden_volume_spike =
       !!latest.volume && avgVol > 0 && latest.volume > avgVol * 3;
     const sudden_price_spike =
       latest.close > (prev.close || latest.close) * 1.25;
 
-    let weightedScore = 0;
-    if (sudden_volume_spike) weightedScore += 20;
-    if (sudden_price_spike) weightedScore += 20;
+    let weightedRiskScore = 0;
+    if (sudden_volume_spike) weightedRiskScore += 20;
+    if (sudden_price_spike) weightedRiskScore += 20;
     if (filings.some((f) => f.title.includes("S-1") || f.title.includes("424B")))
-      weightedScore += 20;
+      weightedRiskScore += 20;
     if (fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"))
-      weightedScore += 20;
+      weightedRiskScore += 20;
+    if (droppinessScore >= 70) weightedRiskScore -= 15;
+    else if (droppinessScore < 40) weightedRiskScore += 15;
+    if (weightedRiskScore < 0) weightedRiskScore = 0;
 
-    if (droppinessScore >= 70) weightedScore -= 15;
-    else if (droppinessScore < 40) weightedScore += 15;
-    if (weightedScore < 0) weightedScore = 0;
-
-    let summaryVerdict = "Low risk";
-    if (weightedScore >= 70) summaryVerdict = "High risk";
-    else if (weightedScore >= 40) summaryVerdict = "Moderate risk";
+    let summaryVerdict: "Low risk" | "Moderate risk" | "High risk" = "Low risk";
+    if (weightedRiskScore >= 70) summaryVerdict = "High risk";
+    else if (weightedRiskScore >= 40) summaryVerdict = "Moderate risk";
 
     const summaryText =
       summaryVerdict === "Low risk"
@@ -364,7 +437,76 @@ if (!fraudImages || fraudImages.length === 0) {
         ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
         : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
 
-    // ---------- Country selection ----------
+    // ---------- Fundamentals mismatch ----------
+    let valuation_fundamentals_mismatch = false;
+    try {
+      const marketCap = quote.marketCap || 0;
+      const revenue = (quote as any)?.totalRevenue || (quote as any)?.revenue || 0;
+      if (marketCap > 500_000_000) {
+        if (!revenue || revenue <= 0) {
+          valuation_fundamentals_mismatch = true;
+        } else {
+          const ratio = marketCap / revenue;
+          if (ratio > 50) valuation_fundamentals_mismatch = true;
+        }
+      }
+    } catch {}
+
+    // ---------- Reverse split ----------
+    let reverse_split = false;
+    try {
+      if (filings.length > 0) {
+        reverse_split = filings.some((f) =>
+          f.title.toLowerCase().includes("reverse split")
+        );
+      }
+      if (
+        !reverse_split &&
+        quote.sharesOutstanding &&
+        quote.floatShares &&
+        quote.sharesOutstanding < quote.floatShares / 10
+      ) {
+        reverse_split = true;
+      }
+    } catch {}
+
+    // ---------- Promoted stock ----------
+    let promoted_stock = false;
+    let promotionEvidence: { source: string; title: string; date?: string; url?: string }[] = [];
+    try {
+      if (promotions.length > 0 && promotions[0].type !== "Manual Check") {
+        promoted_stock = true;
+        promotions.forEach((p) =>
+          promotionEvidence.push({
+            source: "StockPromotionTracker",
+            title: p.type,
+            date: p.date,
+            url: p.url,
+          })
+        );
+      }
+      if (filings.length > 0) {
+        filings.forEach((f) => {
+          const t = f.title.toLowerCase();
+          if (
+            t.includes("promotion") ||
+            t.includes("promotional") ||
+            t.includes("investor awareness") ||
+            t.includes("stock promotion")
+          ) {
+            promoted_stock = true;
+            promotionEvidence.push({
+              source: "SEC Filing",
+              title: f.title,
+              date: f.date,
+              url: f.url,
+            });
+          }
+        });
+      }
+    } catch {}
+
+    // ---------- Country ----------
     let country = "Unknown";
     let countrySource = "Unknown";
     if (secCountry) {
@@ -387,15 +529,23 @@ if (!fraudImages || fraudImages.length === 0) {
     return NextResponse.json({
       ticker: upperTicker,
       companyName: quote.longName || quote.shortName || upperTicker,
-      marketCap: quote.marketCap || null,
-      sharesOutstanding: quote.sharesOutstanding || null,
+
+      // ---------- Fundamentals
+      lastPrice: quote.regularMarketPrice ?? null,
+      marketCap: quote.marketCap ?? null,
+      sharesOutstanding: quote.sharesOutstanding ?? null,
       floatShares: quote.floatShares ?? quote.sharesOutstanding ?? null,
-      shortFloat: (quote as any)?.shortRatio || null,
-      insiderOwnership: (quote as any)?.insiderHoldPercent || null,
-      institutionalOwnership: (quote as any)?.institutionalHoldPercent || null,
+      avgVolume: quote.averageDailyVolume3Month ?? null,
+      latestVolume: quote.regularMarketVolume ?? null,
+  shortFloat: toPercent(shortFloat),
+insiderOwnership: toPercent(insiderOwnership),
+institutionalOwnership: toPercent(institutionalOwnership),
+
       exchange: quote.fullExchangeName || "Unknown",
       country,
       countrySource,
+
+      // ---------- Other data
       history,
       intraday,
       filings,
@@ -403,14 +553,28 @@ if (!fraudImages || fraudImages.length === 0) {
       fraudImages,
       droppinessScore,
       droppinessDetail,
-      weightedRiskScore: weightedScore,
+      weightedRiskScore,
       summaryVerdict,
       summaryText,
+
+      // ---------- Flags
+      sudden_volume_spike,
+      sudden_price_spike,
+      valuation_fundamentals_mismatch,
+      reverse_split,
+      dilution_offering: filings.some(
+        (f) => f.title.includes("S-1") || f.title.includes("424B")
+      ),
+      promoted_stock,
+      promotionEvidence,
+      fraud_evidence:
+        fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"),
+      risky_country: ["China", "Hong Kong", "Malaysia"].includes(country),
     });
   } catch (err: any) {
-    console.error("❌ Fatal route error:", err);
+    console.error("scan route failed:", err?.message || err);
     return NextResponse.json(
-      { error: err.message || "Internal Server Error" },
+      { error: err?.message || "Internal Server Error" },
       { status: 500 }
     );
   }

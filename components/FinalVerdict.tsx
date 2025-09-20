@@ -1,7 +1,5 @@
 "use client";
 
-import React from "react";
-
 export default function FinalVerdict({
   verdict,
   summary,
@@ -15,37 +13,50 @@ export default function FinalVerdict({
   manualFlags: Record<string, boolean>;
   droppinessVerdict?: string;
 }) {
-  let bgClass = "bg-gray-100 text-gray-800"; // default muted gray
+  // ✅ Compute adjusted verdict from score
+  let adjustedVerdict: "Low risk" | "Moderate risk" | "High risk" = "Low risk";
+  if (score >= 70) adjustedVerdict = "High risk";
+  else if (score >= 40) adjustedVerdict = "Moderate risk";
 
-  if (verdict === "High risk") {
-    bgClass = "bg-red-100 text-red-800";
-  } else if (verdict === "Moderate risk") {
-    bgClass = "bg-yellow-100 text-yellow-800";
-  } else if (verdict === "Low risk") {
-    bgClass = "bg-green-100 text-green-800";
-  }
+  // ✅ Background color by verdict
+  const bg =
+    adjustedVerdict === "High risk"
+      ? "bg-red-50 border-red-400"
+      : adjustedVerdict === "Moderate risk"
+      ? "bg-yellow-50 border-yellow-400"
+      : "bg-green-50 border-green-400";
 
   return (
-    <div className={`rounded-2xl p-4 shadow ${bgClass}`}>
-      <h2 className="text-xl font-bold">Final Verdict: {verdict}</h2>
-      <p className="mt-2">{summary}</p>
-      <p className="mt-2 font-semibold">Weighted Score: {score}</p>
+    <div className={`p-4 border rounded-lg shadow-sm ${bg}`}>
+      <h2 className="text-xl font-bold mb-2">🚨 Final Verdict</h2>
 
+      <p className="mb-2">
+        <span className="font-semibold">Verdict:</span>{" "}
+        <span
+          className={
+            adjustedVerdict === "High risk"
+              ? "text-red-600"
+              : adjustedVerdict === "Moderate risk"
+              ? "text-yellow-600"
+              : "text-green-600"
+          }
+        >
+          {adjustedVerdict}
+        </span>
+      </p>
+
+      <p className="mb-2">
+        <span className="font-semibold">Score:</span> {score} / 100
+      </p>
+
+      {/* Summary text */}
+      <p className="mb-2">{summary}</p>
+
+      {/* ✅ Droppiness verdict fully integrated */}
       {droppinessVerdict && (
-        <p className="mt-2 italic">Droppiness: {droppinessVerdict}</p>
-      )}
-
-      {Object.keys(manualFlags).length > 0 && (
-        <div className="mt-2">
-          <p className="font-semibold">Manual Flags:</p>
-          <ul className="list-disc list-inside text-sm">
-            {Object.entries(manualFlags)
-              .filter(([_, v]) => v)
-              .map(([k]) => (
-                <li key={k}>{k}</li>
-              ))}
-          </ul>
-        </div>
+        <p className="mt-3 text-sm text-gray-700">
+          <span className="font-semibold">Droppiness:</span> {droppinessVerdict}
+        </p>
       )}
     </div>
   );

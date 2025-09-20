@@ -1,60 +1,42 @@
-// components/Promotions.tsx
 "use client";
 
-import React from "react";
+export default function Promotions({ promotions }: { promotions: any[] }) {
+  const items = Array.isArray(promotions) ? promotions : [];
 
-type Promotion = {
-  type: string;
-  date: string;
-  url: string;
-};
+  return (
+    <div className="p-4 border rounded-lg bg-white shadow-sm">
+      <h2 className="text-lg font-semibold mb-3">📢 Promotions</h2>
 
-interface Props {
-  promotions: Promotion[];
-}
-
-export default function Promotions({ promotions }: Props) {
-  if (!promotions || promotions.length === 0) return null;
-
-  // If only Manual Check fallback
-  if (promotions.length === 1 && promotions[0].type === "Manual Check") {
-    return (
-      <div className="p-4 rounded-lg bg-white dark:bg-gray-800 shadow">
-        <h2 className="text-lg font-semibold mb-2">📢 Promotions</h2>
-        <p className="text-gray-600 dark:text-gray-300">
-          No promotions were found for this ticker —
+      {items.length === 0 || (items.length === 1 && items[0].type === "Manual Check") ? (
+        <p className="text-sm text-gray-700">
+          No promotions found for this ticker — please manually check at{" "}
           <a
-            href={promotions[0].url || "https://www.stockpromotiontracker.com/"}
+            href="https://www.stockpromotiontracker.com/"
             target="_blank"
-            rel="noopener noreferrer"
-            className="ml-1 text-blue-600 hover:underline"
+            rel="noreferrer"
+            className="text-blue-600 underline"
           >
-            Manual Check
+            stockpromotiontracker.com
           </a>
         </p>
-      </div>
-    );
-  }
-
-  // Otherwise, render list
-  return (
-    <div className="p-4 rounded-lg bg-white dark:bg-gray-800 shadow">
-      <h2 className="text-lg font-semibold mb-2">📢 Promotions</h2>
-      <ul className="list-disc list-inside text-gray-700 dark:text-gray-300">
-        {promotions.map((p, idx) => (
-          <li key={idx}>
-            {p.date} — {p.type}{" "}
-            <a
-              href={p.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline ml-1"
-            >
-              View
-            </a>
-          </li>
-        ))}
-      </ul>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {items.map((p, i) => (
+            <li key={i}>
+              {p.date} — {p.type} (
+              <a
+                href={p.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-600 underline"
+              >
+                Source
+              </a>
+              )
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

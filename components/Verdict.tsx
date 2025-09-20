@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/Card";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function Verdict({ verdict }: { verdict: string }) {
   let classes = "text-green-700";

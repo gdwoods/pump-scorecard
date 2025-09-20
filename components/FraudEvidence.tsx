@@ -1,71 +1,90 @@
-// components/FraudEvidence.tsx
 "use client";
+import { useState } from "react";
 
-interface FraudImage {
-  full: string | null;
-  thumb: string | null;
-  approvedAt: string | null;
+type FraudItem = {
+  full?: string | null;
+  thumb?: string | null;
   caption?: string | null;
-  type?: string;
-  url?: string;
-}
+  sourceUrl?: string | null;
+};
 
-export default function FraudEvidence({ fraudImages }: { fraudImages: FraudImage[] }) {
-  if (!fraudImages || fraudImages.length === 0) return null;
+export default function FraudEvidence({ fraudImages }: { fraudImages: FraudItem[] }) {
+  const items = Array.isArray(fraudImages) ? fraudImages : [];
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
-  const manualCheckOnly =
-    fraudImages.length === 1 && fraudImages[0].type === "Manual Check";
+  // Detect the special "manual check only" case
+  const isOnlyManual =
+    items.length > 0 && items.every((it) => (it.caption || "").toLowerCase() === "manual check");
+
+  // If there are any real items, hide manual placeholders from the list
+  const displayed = items.filter((it) => (it.caption || "").toLowerCase() !== "manual check");
+
+  // URL to use for manual check link (prefer the one from the API, fallback to site root)
+  const manualUrl =
+    (isOnlyManual && items[0]?.sourceUrl) || "https://www.stopnasdaqchinafraud.com/";
 
   return (
-    <div className="p-4 rounded-lg bg-white dark:bg-gray-800 shadow">
-      <h2 className="text-lg font-semibold mb-2">🕵️ Fraud Evidence</h2>
+    <div className="p-4 border rounded-lg bg-white shadow-sm">
+      <h2 className="text-lg font-semibold mb-3">🕵️ Fraud Evidence</h2>
 
-      {manualCheckOnly ? (
-        <p className="text-gray-600 dark:text-gray-300">
-          No fraud images found. Please{" "}
+      {/* Empty / manual-only state */}
+      {items.length === 0 || isOnlyManual ? (
+        <p className="text-sm text-gray-700">
+          No fraud evidence found for this ticker — please manually check at{" "}
           <a
-            href="https://www.stopnasdaqchinafraud.com/"
+            href={manualUrl}
             target="_blank"
-            rel="noopener noreferrer"
+            rel="noreferrer"
             className="text-blue-600 underline"
           >
-            check manually
+            stopnasdaqchinafraud.com
           </a>
-          .
         </p>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {fraudImages.map((img, idx) => (
-            <div
-              key={idx}
-              className="flex flex-col items-center bg-gray-50 dark:bg-gray-900 rounded-lg shadow-sm p-2"
-            >
-              {img.thumb ? (
-                <a href={img.full || img.thumb} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src={img.thumb}
-                    alt={img.caption || `Fraud evidence ${idx + 1}`}
-                    className="rounded-lg w-full object-cover"
-                  />
-                </a>
+        <ul className="space-y-3">
+          {displayed.map((f, i) => (
+            <li key={i} className="flex items-start gap-3">
+              {f.thumb ? (
+                <img
+                  src={f.thumb}
+                  alt={f.caption ?? "Fraud evidence"}
+                  className="w-16 h-16 rounded object-cover cursor-pointer hover:opacity-80"
+                  onClick={() => setLightboxUrl(f.full || f.thumb!)}
+                />
               ) : (
-                <div className="text-gray-500">No image</div>
+                <div className="w-16 h-16 rounded bg-gray-100 border flex items-center justify-center text-xs text-gray-400">
+                  N/A
+                </div>
               )}
-
-              {/* ✅ New: Show caption */}
-              {img.caption && (
-                <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 text-center">
-                  {img.caption}
-                </p>
-              )}
-
-              {img.approvedAt && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Approved: {new Date(img.approvedAt).toLocaleDateString()}
-                </p>
-              )}
-            </div>
+              <div className="text-sm">
+                <div className="font-medium">{f.caption || "Evidence"}</div>
+                {f.sourceUrl && (
+                  <a
+                    href={f.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 underline"
+                  >
+                    Source
+                  </a>
+                )}
+              </div>
+            </li>
           ))}
+        </ul>
+      )}
+
+      {/* Lightbox overlay */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img
+            src={lightboxUrl}
+            alt="Fraud Evidence Full"
+            className="max-w-[90%] max-h-[90%] rounded shadow-lg"
+          />
         </div>
       )}
     </div>
