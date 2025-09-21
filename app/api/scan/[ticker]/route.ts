@@ -33,7 +33,7 @@ type IntradayCandle = {
 
 export async function GET(
   req: Request,
-  context: { params: Promise<{ ticker: string }> },
+  context: { params: Promise<{ ticker: string }> }
 ) {
   const { ticker } = await context.params;
   const upperTicker = ticker.toUpperCase();
@@ -51,7 +51,6 @@ export async function GET(
     const toPercent = (raw: any): number | null => {
       const n = Number(raw);
       if (!isFinite(n) || n < 0) return null;
-
       if (n <= 1.5) return +(n * 100).toFixed(1); // fraction
       if (n <= 100) return +n.toFixed(1); // already %
       if (n <= 10000) return +(n / 100).toFixed(1); // over-scaled
@@ -128,34 +127,98 @@ export async function GET(
         })) || [];
     } catch {}
 
+// ---------- News (Finnhub with Yahoo fallback) ----------
+let news: Array<{ title: string; url: string; publisher?: string; published?: number | null }> = [];
+let newsSource: "Finnhub" | "Yahoo" | "None" = "None";
+
+try {
+  const finnhubKey = process.env.FINNHUB_API_KEY;
+  let gotFinnhub = false;
+
+  if (finnhubKey) {
+    const resp = await fetch(
+      `https://finnhub.io/api/v1/company-news?symbol=${upperTicker}&from=${new Date(
+        Date.now() - 1000 * 60 * 60 * 24 * 7
+      )
+        .toISOString()
+        .split("T")[0]}&to=${new Date().toISOString().split("T")[0]}&token=${finnhubKey}`,
+      { headers: { Accept: "application/json" } }
+    );
+
+    if (resp.ok) {
+      const json = await resp.json();
+      console.log(`Finnhub returned ${Array.isArray(json) ? json.length : 0} articles for ${upperTicker}`);
+
+      if (Array.isArray(json) && json.length > 0) {
+        news = json.slice(0, 5).map((a: any) => ({
+          title: a.headline,
+          url: a.url,
+          publisher: a.source || "Finnhub",
+          published: a.datetime ? a.datetime * 1000 : null, // Finnhub gives UNIX seconds
+        }));
+        gotFinnhub = true;
+        newsSource = "Finnhub";
+      }
+    } else {
+      console.warn("Finnhub request failed:", resp.status, resp.statusText);
+    }
+  }
+
+  // ---------- Fallback: Yahoo Finance search ----------
+  if (!gotFinnhub) {
+    const newsResp: any = await yahooFinance.search(upperTicker, { newsCount: 5 });
+    if (newsResp && Array.isArray(newsResp.news)) {
+      news = newsResp.news.map((n: any) => {
+        let published: number | null = null;
+        if (typeof n.providerPublishTime === "number") {
+          published = n.providerPublishTime;
+        } else if (n.pubDate) {
+          const parsed = Date.parse(n.pubDate);
+          if (!Number.isNaN(parsed)) published = parsed;
+        }
+        return {
+          title: n.title,
+          url: n.link,
+          publisher: n.publisher,
+          published,
+        };
+      });
+      if (news.length > 0) newsSource = "Yahoo";
+      console.log(`Yahoo returned ${news.length} articles for ${upperTicker}`);
+    }
+  }
+} catch (err) {
+  console.error("News fetch failed:", err);
+}
+
+
+
     // ---------- Polygon Meta ----------
     let polyMeta: any = {};
     try {
       const polygonKey = process.env.POLYGON_API_KEY;
       if (polygonKey) {
         const polyRes = await fetch(
-          `https://api.polygon.io/v3/reference/tickers/${upperTicker}?apiKey=${polygonKey}`,
+          `https://api.polygon.io/v3/reference/tickers/${upperTicker}?apiKey=${polygonKey}`
         );
         if (polyRes.ok) polyMeta = await polyRes.json();
       }
     } catch {}
+
     // ---------- SEC Filings ----------
     let filings: Filing[] = [];
     let secCountry: string | null = null;
     try {
-      const cikRes = await fetch(
-        "https://www.sec.gov/files/company_tickers.json",
-        {
-          headers: {
-            "User-Agent": "pump-scorecard (garthwoods@gmail.com)",
-            Accept: "application/json",
-          },
+      const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
+        headers: {
+          "User-Agent": "pump-scorecard (garthwoods@gmail.com)",
+          Accept: "application/json",
         },
-      );
+      });
       if (cikRes.ok) {
         const cikJson = await cikRes.json();
         const entry = Object.values(cikJson).find(
-          (c: any) => c.ticker?.toUpperCase() === upperTicker,
+          (c: any) => c.ticker?.toUpperCase() === upperTicker
         );
         if (entry) {
           const cik = entry.cik_str.toString().padStart(10, "0");
@@ -166,7 +229,7 @@ export async function GET(
                 "User-Agent": "pump-scorecard (garthwoods@gmail.com)",
                 Accept: "application/json",
               },
-            },
+            }
           );
           if (secRes.ok) {
             const secJson = await secRes.json();
@@ -184,15 +247,16 @@ export async function GET(
                   .map((form: string, idx: number) => ({
                     title: form || "Untitled Filing",
                     date: recent.filingDate[idx] || "Unknown",
-                    url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[
-                      idx
-                    ].replace(/-/g, "")}/${recent.primaryDocument[idx]}`,
+                    url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[idx].replace(
+                      /-/g,
+                      ""
+                    )}/${recent.primaryDocument[idx]}`,
                     businessAddress: biz,
                     mailingAddress: mail,
                   }))
                   .sort(
                     (a, b) =>
-                      new Date(b.date).getTime() - new Date(a.date).getTime(),
+                      new Date(b.date).getTime() - new Date(a.date).getTime()
                   )
                   .slice(0, 8) || [];
             }
@@ -200,12 +264,11 @@ export async function GET(
         }
       }
     } catch {}
-
     // ---------- Promotions ----------
     let promotions: Promotion[] = [];
     try {
       const promoRes = await fetch(
-        `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${upperTicker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`,
+        `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${upperTicker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`
       );
       if (promoRes.ok) {
         const promoJson = await promoRes.json();
@@ -219,11 +282,7 @@ export async function GET(
     } catch {}
     if (!promotions.length) {
       promotions = [
-        {
-          type: "Manual Check",
-          date: "",
-          url: "https://www.stockpromotiontracker.com/",
-        },
+        { type: "Manual Check", date: "", url: "https://www.stockpromotiontracker.com/" },
       ];
     }
 
@@ -232,13 +291,13 @@ export async function GET(
     try {
       const fraudRes = await fetch(
         `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
-        { headers: { "User-Agent": "pump-scorecard" } },
+        { headers: { "User-Agent": "pump-scorecard" } }
       );
+
       if (fraudRes.ok) {
         const fraudJson = await fraudRes.json();
-        const rawResults = Array.isArray(fraudJson?.results)
-          ? fraudJson.results
-          : [];
+        const rawResults = Array.isArray(fraudJson?.results) ? fraudJson.results : [];
+
         const U = upperTicker.toUpperCase();
 
         const normalize = (s: unknown) =>
@@ -276,13 +335,13 @@ export async function GET(
               ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
               : null,
             approvedAt: img.approvedAt || null,
-            caption:
-              img.caption ?? img.text ?? img.title ?? img.postTitle ?? "",
+            caption: img.caption ?? img.text ?? img.title ?? img.postTitle ?? "",
             sourceUrl: img.link ?? img.url ?? img.postUrl ?? null,
           }))
           .filter((img: FraudImage) => img.full && img.thumb);
       }
     } catch {}
+
     if (!fraudImages || fraudImages.length === 0) {
       fraudImages = [
         {
@@ -291,18 +350,15 @@ export async function GET(
           approvedAt: null,
           caption: "Manual Check",
           sourceUrl: `https://www.stopnasdaqchinafraud.com/?q=${encodeURIComponent(
-            upperTicker,
+            upperTicker
           )}`,
         },
       ];
     }
+
     // ---------- Droppiness ----------
     let droppinessScore = 0;
-    const droppinessDetail: Array<{
-      date: string;
-      spikePct: number;
-      retraced: boolean;
-    }> = [];
+    let droppinessDetail: Array<{ date: string; spikePct: number; retraced: boolean }> = [];
     let intraday: IntradayCandle[] = [];
     try {
       const TWENTYFOUR_MONTHS_MS = 1000 * 60 * 60 * 24 * 730;
@@ -311,11 +367,10 @@ export async function GET(
       const startDateStr = startDate.toISOString().slice(0, 10);
       const endDateStr = endDate.toISOString().slice(0, 10);
 
-      const oneMinBars: any[] = [];
+      let oneMinBars: any[] = [];
       const polygonKey = process.env.POLYGON_API_KEY;
       if (polygonKey) {
-        let url: string | null =
-          `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
+        let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
         while (url) {
           const res = await fetch(url);
           if (!res.ok) break;
@@ -329,7 +384,7 @@ export async function GET(
                 low: c.l,
                 close: c.c,
                 volume: c.v,
-              })),
+              }))
             );
           }
           if (json.next_url) {
@@ -349,8 +404,7 @@ export async function GET(
         const bucketMs = 1000 * 60 * 60 * 4;
         let bucket: any = null;
         for (const bar of oneMinBars) {
-          const bucketTime =
-            Math.floor(bar.date.getTime() / bucketMs) * bucketMs;
+          const bucketTime = Math.floor(bar.date.getTime() / bucketMs) * bucketMs;
           if (!bucket || bucket.bucketTime !== bucketTime) {
             if (bucket) candles.push(bucket);
             bucket = {
@@ -384,11 +438,7 @@ export async function GET(
           spikeCount++;
           let retraced = false;
           if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
-          if (
-            !retraced &&
-            candles[i + 1] &&
-            candles[i + 1].close < cur.close * 0.9
-          )
+          if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9)
             retraced = true;
           if (retraced) retraceCount++;
           droppinessDetail.push({
@@ -398,9 +448,38 @@ export async function GET(
           });
         }
       }
-      droppinessScore =
-        spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
+      droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
     } catch {}
+    // ---------- Country (decide once; used by scoring & response) ----------
+    let country = "Unknown";
+    let countrySource = "Unknown";
+    if (secCountry) {
+      country = secCountry.trim();
+      countrySource = "SEC";
+    } else if (polyMeta?.results?.country) {
+      country = String(polyMeta.results.country).trim();
+      countrySource = "Polygon";
+    } else if (polyMeta?.results?.locale) {
+      country =
+        String(polyMeta.results.locale).toUpperCase() === "US"
+          ? "United States"
+          : String(polyMeta.results.locale).trim();
+      countrySource = "Polygon";
+    } else if (quote.country) {
+      country = String(quote.country).trim();
+      countrySource = "Yahoo";
+    }
+    // ---------- Manual country overrides ----------
+    const overrides: Record<string, string> = {
+      UOKA: "China",
+      MBX: "Singapore",
+      // add more tickers as needed
+    };
+
+    if (overrides[upperTicker]) {
+      country = overrides[upperTicker];
+      countrySource = "Manual Override";
+    }
 
     // ---------- Scores ----------
     const latest = history.at(-1) || {};
@@ -410,21 +489,39 @@ export async function GET(
         (history.length || 1) || 0;
 
     const sudden_volume_spike =
-      !!latest.volume && avgVol > 0 && latest.volume > avgVol * 3;
+      !!(latest as any).volume &&
+      avgVol > 0 &&
+      (latest as any).volume > avgVol * 3;
+
     const sudden_price_spike =
-      latest.close > (prev.close || latest.close) * 1.25;
+      (latest as any).close >
+      ((prev as any).close || (latest as any).close) * 1.25;
 
     let weightedRiskScore = 0;
     if (sudden_volume_spike) weightedRiskScore += 20;
     if (sudden_price_spike) weightedRiskScore += 20;
-    if (
-      filings.some((f) => f.title.includes("S-1") || f.title.includes("424B"))
-    )
+
+    // Dilution proxy (S-1 / 424B)
+    if (filings.some((f) => f.title.includes("S-1") || f.title.includes("424B"))) {
       weightedRiskScore += 20;
-    if (fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"))
+    }
+
+    // External fraud evidence (only counts when not a manual placeholder)
+    if (fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual")) {
       weightedRiskScore += 20;
+    }
+
+    // Droppiness adjustment (history of fades is bearish on credibility)
     if (droppinessScore >= 70) weightedRiskScore -= 15;
     else if (droppinessScore < 40) weightedRiskScore += 15;
+
+    // Risky country adjustment (now includes Singapore)
+    const RISKY = new Set(["China", "Hong Kong", "Malaysia", "Singapore"]);
+    if (RISKY.has(country)) {
+      weightedRiskScore += 15;
+    }
+
+    // Clamp to non-negative
     if (weightedRiskScore < 0) weightedRiskScore = 0;
 
     let summaryVerdict: "Low risk" | "Moderate risk" | "High risk" = "Low risk";
@@ -435,148 +532,15 @@ export async function GET(
       summaryVerdict === "Low risk"
         ? "This one looks pretty clean — no major pump-and-dump signals right now."
         : summaryVerdict === "Moderate risk"
-          ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
-          : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
+        ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
+        : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
 
-    // ---------- Fundamentals mismatch ----------
-    let valuation_fundamentals_mismatch = false;
-    try {
-      const marketCap = quote.marketCap || 0;
-      const revenue =
-        (quote as any)?.totalRevenue || (quote as any)?.revenue || 0;
-      if (marketCap > 500_000_000) {
-        if (!revenue || revenue <= 0) {
-          valuation_fundamentals_mismatch = true;
-        } else {
-          const ratio = marketCap / revenue;
-          if (ratio > 50) valuation_fundamentals_mismatch = true;
-        }
-      }
-    } catch {}
-
-    // ---------- Reverse split ----------
-    let reverse_split = false;
-    try {
-      if (filings.length > 0) {
-        reverse_split = filings.some((f) =>
-          f.title.toLowerCase().includes("reverse split"),
-        );
-      }
-      if (
-        !reverse_split &&
-        quote.sharesOutstanding &&
-        quote.floatShares &&
-        quote.sharesOutstanding < quote.floatShares / 10
-      ) {
-        reverse_split = true;
-      }
-    } catch {}
-
-    // ---------- Promoted stock ----------
-    let promoted_stock = false;
-    const promotionEvidence: {
-      source: string;
-      title: string;
-      date?: string;
-      url?: string;
-    }[] = [];
-    try {
-      if (promotions.length > 0 && promotions[0].type !== "Manual Check") {
-        promoted_stock = true;
-        promotions.forEach((p) =>
-          promotionEvidence.push({
-            source: "StockPromotionTracker",
-            title: p.type,
-            date: p.date,
-            url: p.url,
-          }),
-        );
-      }
-      if (filings.length > 0) {
-        filings.forEach((f) => {
-          const t = f.title.toLowerCase();
-          if (
-            t.includes("promotion") ||
-            t.includes("promotional") ||
-            t.includes("investor awareness") ||
-            t.includes("stock promotion")
-          ) {
-            promoted_stock = true;
-            promotionEvidence.push({
-              source: "SEC Filing",
-              title: f.title,
-              date: f.date,
-              url: f.url,
-            });
-          }
-        });
-      }
-    } catch {}
-
-// ---------- Country ----------
-let country = "Unknown";
-let countrySource = "Unknown";
-
-// Helper: scan any object for keywords
-const detectCountry = (addr: any): string | null => {
-  if (!addr) return null;
-  const hay = JSON.stringify(addr).toUpperCase();
-  if (hay.includes("CHINA")) return "China";
-  if (hay.includes("HONG KONG")) return "Hong Kong";
-  if (hay.includes("MALAYSIA")) return "Malaysia";
-  if (hay.includes("SINGAPORE")) return "Singapore";
-  return null;
-};
-
-// SEC first
-let detectedFromSec: string | null = null;
-try {
-  if (filings.length > 0) {
-    const f = filings[0];
-    detectedFromSec = detectCountry(f.businessAddress) || detectCountry(f.mailingAddress);
-  }
-} catch {}
-
-if (secCountry) {
-  country = secCountry.trim();
-  countrySource = "SEC (direct)";
-} else if (detectedFromSec) {
-  country = detectedFromSec;
-  countrySource = "SEC (address scan)";
-} else if (polyMeta?.results?.country) {
-  country = polyMeta.results.country.trim();
-  countrySource = "Polygon";
-} else if (polyMeta?.results?.locale) {
-  country =
-    polyMeta.results.locale.toUpperCase() === "US"
-      ? "United States"
-      : polyMeta.results.locale.trim();
-  countrySource = "Polygon";
-} else if (quote.country) {
-  country = quote.country.trim();
-  countrySource = "Yahoo";
-}
-// ---------- Country Overrides ----------
-const overrides: Record<string, string> = {
-  UOKA: "China",
-  // Add more overrides here if Yahoo/Polygon mislabel ADRs
-};
-
-if (overrides[upperTicker]) {
-  country = overrides[upperTicker];
-  countrySource = "Override Map";
-}
-
-const riskyCountries = ["China", "Hong Kong", "Malaysia", "Singapore"];
-
-
-
-
+    // ---------- Return ----------
     return NextResponse.json({
       ticker: upperTicker,
       companyName: quote.longName || quote.shortName || upperTicker,
 
-      // ---------- Fundamentals
+      // Fundamentals
       lastPrice: quote.regularMarketPrice ?? null,
       marketCap: quote.marketCap ?? null,
       sharesOutstanding: quote.sharesOutstanding ?? null,
@@ -591,38 +555,43 @@ const riskyCountries = ["China", "Hong Kong", "Malaysia", "Singapore"];
       country,
       countrySource,
 
-      // ---------- Other data
+      // Series / details
       history,
       intraday,
       filings,
+      news,
+      newsSource,
       promotions,
       fraudImages,
       droppinessScore,
       droppinessDetail,
+
+      // Scoring
       weightedRiskScore,
       summaryVerdict,
       summaryText,
 
-      // ---------- Flags
+      // Flags for UI
       sudden_volume_spike,
       sudden_price_spike,
-      valuation_fundamentals_mismatch,
-      reverse_split,
+      valuation_fundamentals_mismatch: false, // set earlier if you kept that logic; or compute here
+      reverse_split: false,                    // set earlier if you kept that logic; or compute here
       dilution_offering: filings.some(
-        (f) => f.title.includes("S-1") || f.title.includes("424B"),
+        (f) => f.title.includes("S-1") || f.title.includes("424B")
       ),
-      promoted_stock,
-      promotionEvidence,
+      promoted_stock: promotions.length > 0 && promotions[0].type !== "Manual Check",
+      promotionEvidence: promotions
+        .filter((p) => p.type !== "Manual Check")
+        .map((p) => ({ source: "StockPromotionTracker", title: p.type, date: p.date, url: p.url })),
       fraud_evidence:
         fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"),
-  risky_country: riskyCountries.includes(country),
-
+      risky_country: RISKY.has(country),
     });
   } catch (err: any) {
     console.error("scan route failed:", err?.message || err);
     return NextResponse.json(
       { error: err?.message || "Internal Server Error" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

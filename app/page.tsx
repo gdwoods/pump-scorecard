@@ -8,6 +8,7 @@ import Criteria from "@/components/Criteria";
 import Fundamentals from "@/components/Fundamentals";
 import Promotions from "@/components/Promotions";
 import SecFilings from "@/components/SecFilings";
+import NewsSection from "@/components/NewsSection";
 import FraudEvidence from "@/components/FraudEvidence";
 import DroppinessCard from "@/components/DroppinessCard";
 import DroppinessScatter from "@/components/DroppinessScatter";
@@ -161,6 +162,10 @@ if (
 
           {/* Filings */}
           <SecFilings filings={result.filings} />
+
+{/* News */}
+    <NewsSection items={result.news || []} source={result.newsSource} />
+
 
           {/* Fraud */}
         <FraudEvidence fraudImages={result.fraudImages || []} />
