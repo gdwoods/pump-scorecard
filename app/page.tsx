@@ -11,7 +11,7 @@ import SecFilings from "@/components/SecFilings";
 import NewsSection from "@/components/NewsSection";
 import FraudEvidence from "@/components/FraudEvidence";
 import DroppinessCard from "@/components/DroppinessCard";
-import DroppinessScatter from "@/components/DroppinessScatter";
+import DroppinessScatter from "@/components/DroppinessChart";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
