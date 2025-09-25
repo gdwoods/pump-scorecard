@@ -67,18 +67,21 @@ export default function DroppinessChart({
             domain={[0, "dataMax + 50"]}
             label={{ value: "Spike %", angle: -90, position: "insideLeft" }}
           />
-          <Tooltip
-            cursor={{ strokeDasharray: "3 3" }}
-            labelFormatter={(ts) =>
-              `Date: ${new Date(ts).toISOString().split("T")[0]}`
-            }
-            formatter={(value: any, _name: any, props: any) => {
-              if (props.dataKey === "spikePct") {
-                return [`${value}%`, props.name]; // only show % + series name
-              }
-              return null;
-            }}
-          />
+<Tooltip
+  cursor={{ strokeDasharray: "3 3" }}
+  labelFormatter={() => ""} // suppresses the duplicate label row
+  formatter={(value: any, _name: any, props: any) => {
+    if (props.dataKey === "spikePct") {
+      const dateStr = new Date(props.payload.date).toISOString().split("T")[0];
+      return [
+        `${value}% (${dateStr})`, // inline: 120% (2025-01-05)
+        props.name,               // Held or Retraced
+      ];
+    }
+    return null;
+  }}
+/>
+
           <Legend verticalAlign="top" content={renderLegend} />
 
           {/* Held series */}
