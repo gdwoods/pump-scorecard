@@ -473,6 +473,8 @@ try {
     const overrides: Record<string, string> = {
       UOKA: "China",
       MBX: "Singapore",
+      ARBB: "Singapore",
+      SDM: "Singapore",
       // add more tickers as needed
     };
 
