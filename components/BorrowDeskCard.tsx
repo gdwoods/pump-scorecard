@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  LineChart,
+  ComposedChart,
+  Bar,
   Line,
   XAxis,
   YAxis,
@@ -22,17 +22,13 @@ export default function BorrowDeskCard({
     updated: string;
     source: string;
     daily?: Array<{ date: string; fee: number; available: number }>;
-    realTime?: Array<{ datetime: string; fee: number; available: number }>;
   };
 }) {
-  const [chartMode, setChartMode] = useState<"fee" | "available">("fee");
-
-  // pick daily history, fallback to realtime if no daily
   const chartData =
     borrowData.daily?.map((d) => ({
       date: d.date,
       fee: Number(d.fee),
-      available: d.available,
+      available: Number(d.available),
     })) || [];
 
   return (
@@ -74,56 +70,56 @@ export default function BorrowDeskCard({
               </a>
             </p>
 
-            {/* Toggle buttons */}
+            {/* Combo chart */}
             {chartData.length > 0 && (
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => setChartMode("fee")}
-                  className={`px-2 py-1 text-xs rounded ${
-                    chartMode === "fee"
-                      ? "bg-red-600 text-white"
-                      : "bg-gray-200 dark:bg-gray-600"
-                  }`}
-                >
-                  Fee %
-                </button>
-                <button
-                  onClick={() => setChartMode("available")}
-                  className={`px-2 py-1 text-xs rounded ${
-                    chartMode === "available"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-200 dark:bg-gray-600"
-                  }`}
-                >
-                  Available
-                </button>
-              </div>
-            )}
-
-            {/* Mini Chart */}
-            {chartData.length > 0 && (
-              <div className="h-40 mt-4">
+              <div className="h-64 mt-4">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
+                  <ComposedChart data={chartData}>
+                    {/* X-axis (dates) */}
                     <XAxis
                       dataKey="date"
                       tick={{ fontSize: 10 }}
                       minTickGap={20}
                     />
+
+                    {/* Left Y-axis (Available shares) */}
                     <YAxis
-                      dataKey={chartMode}
+                      yAxisId="left"
+                      orientation="left"
                       tick={{ fontSize: 10 }}
                       domain={["auto", "auto"]}
                     />
+
+                    {/* Right Y-axis (Fee %) */}
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      tick={{ fontSize: 10 }}
+                      domain={[0, "auto"]}
+                      tickFormatter={(v) => `${v}%`}
+                    />
+
                     <Tooltip />
+
+                    {/* Bars = Available shares */}
+                    <Bar
+                      yAxisId="left"
+                      dataKey="available"
+                      fill="#60a5fa"
+                      barSize={20}
+                      opacity={0.7}
+                    />
+
+                    {/* Line = Fee % */}
                     <Line
+                      yAxisId="right"
                       type="monotone"
-                      dataKey={chartMode}
-                      stroke={chartMode === "fee" ? "#ef4444" : "#3b82f6"}
+                      dataKey="fee"
+                      stroke="#ef4444"
                       strokeWidth={2}
                       dot={false}
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             )}
