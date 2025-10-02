@@ -30,10 +30,12 @@ function formatPercent(num?: number | null): string {
 
 export default function Fundamentals({ ticker, result }: FundamentalsProps) {
   return (
-    <div className="p-4 border rounded-lg bg-white shadow-sm">
-      <h2 className="text-lg font-semibold mb-3">📊 {ticker} Fundamentals</h2>
+    <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow-sm transition-colors">
+      <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
+        📊 {ticker} Fundamentals
+      </h2>
 
-      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
         <li>
           <strong>Last Price:</strong>{" "}
           {result.lastPrice != null ? `$${result.lastPrice.toFixed(2)}` : "N/A"}

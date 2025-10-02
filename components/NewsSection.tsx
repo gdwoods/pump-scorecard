@@ -1,4 +1,5 @@
 "use client";
+import CardTitle from "./CardTitle";
 
 export type NewsItem = {
   title: string;
@@ -24,7 +25,7 @@ function formatPublished(published: NewsItem["published"]) {
   if (ms == null) return "";
   const d = new Date(ms);
   return Number.isFinite(d.valueOf())
-    ? d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "";
 }
 
@@ -38,11 +39,11 @@ export default function NewsSection({
   const news = Array.isArray(items) ? items : [];
 
   return (
-    <div className="p-4 border rounded-lg bg-white shadow-sm">
-      <h2 className="text-lg font-semibold mb-3">📰 {ticker} Recent News</h2>
+    <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow">
+      <CardTitle icon="📰" ticker={ticker} label="Recent News" />
 
       {news.length === 0 ? (
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-gray-700 dark:text-gray-300">
           <strong>No recent news found for this ticker</strong>. Please also check{" "}
           <a
             href="https://news.google.com/"
@@ -60,15 +61,17 @@ export default function NewsSection({
             className="text-blue-600 underline"
           >
             X (Twitter)
-          </a>
-          .
+          </a>.
         </p>
       ) : (
         <ul className="space-y-3">
           {news.map((n, i) => {
             const dateStr = formatPublished(n.published);
             return (
-              <li key={i} className="border rounded-lg p-2 bg-gray-50 flex flex-col">
+              <li
+                key={i}
+                className="border rounded-lg p-2 bg-gray-50 dark:bg-gray-700 flex flex-col"
+              >
                 <a
                   href={n.url}
                   target="_blank"

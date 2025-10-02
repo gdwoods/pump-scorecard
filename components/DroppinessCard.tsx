@@ -1,4 +1,5 @@
 "use client";
+import CardTitle from "./CardTitle";
 
 export default function DroppinessCard({
   ticker,
@@ -12,8 +13,8 @@ export default function DroppinessCard({
   verdict: string;
 }) {
   return (
-    <div className="p-4 border rounded-lg bg-white shadow-sm">
-      <h2 className="text-lg font-semibold mb-3">📉 {ticker} Droppiness</h2>
+    <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow">
+      <CardTitle icon="📉" ticker={ticker} label="Droppiness" />
 
       <p className="mb-2">
         <span className="font-semibold">Score:</span> {score}% over the last 24 months
@@ -22,10 +23,10 @@ export default function DroppinessCard({
       <p className="mb-2">{verdict}</p>
 
       {detail && detail.length > 0 && (
-        <ul className="text-sm text-gray-700 space-y-1">
+        <ul className="text-sm text-gray-700 dark:text-gray-200 space-y-1">
           {detail
-            .slice(-15) // ⬅️ show only the last 15 spikes
-            .reverse() // newest at the top
+            .slice(-5)
+            .reverse()
             .map((d, idx) => (
               <li key={idx}>
                 {new Date(d.date).toLocaleDateString()}: spike of {d.spikePct}%{" "}

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import CardTitle from "./CardTitle";
 
 type FraudItem = {
   full?: string | null;
@@ -27,11 +28,11 @@ export default function FraudEvidence({
     (isOnlyManual && items[0]?.sourceUrl) || "https://www.stopnasdaqchinafraud.com/";
 
   return (
-    <div className="p-4 border rounded-lg bg-white shadow-sm">
-      <h2 className="text-lg font-semibold mb-3">🕵️ {ticker} Fraud Evidence</h2>
+    <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow">
+      <CardTitle icon="🕵️" ticker={ticker} label="Fraud Evidence" />
 
       {items.length === 0 || isOnlyManual ? (
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-gray-700 dark:text-gray-300">
           No fraud evidence found for this ticker — please manually check at{" "}
           <a href={manualUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">
             stopnasdaqchinafraud.com

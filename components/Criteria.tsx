@@ -1,14 +1,15 @@
 "use client";
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import CardTitle from "./CardTitle";
 
 interface Props {
+  ticker: string;
   result: any;
   manualFlags: Record<string, boolean>;
   toggleManualFlag: (key: string) => void;
 }
 
-// Map known API keys to human labels
 const LABELS: Record<string, string> = {
   sudden_volume_spike: "Sudden volume spike",
   sudden_price_spike: "Sudden price spike",
@@ -17,10 +18,9 @@ const LABELS: Record<string, string> = {
   dilution_offering: "Dilution/offering filing",
   promoted_stock: "Promoted stock",
   fraud_evidence: "Fraud evidence posted online",
-  risky_country: "Risky country (China/HK/Singapore/Malaysia)",
+  risky_country: "Risky country (China/HK/Malaysia)",
 };
 
-// For manual toggles
 const MANUAL_LABELS: Record<string, string> = {
   pumpSuspicion: "Pump suspicion",
   thinFloat: "Thin float risk",
@@ -28,43 +28,28 @@ const MANUAL_LABELS: Record<string, string> = {
   other: "Other red flag",
 };
 
-export default function Criteria({ result, manualFlags, toggleManualFlag }: Props) {
+export default function Criteria({ ticker, result, manualFlags, toggleManualFlag }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-
-  // Auto-detected booleans
-  const autoKeys = Object.keys(LABELS).filter(
-    (k) => typeof result?.[k] === "boolean"
-  );
+  const autoKeys = Object.keys(LABELS).filter((k) => typeof result?.[k] === "boolean");
 
   return (
-    <div className="p-4 border rounded-lg bg-gray-50">
-      <h2 className="text-lg font-semibold mb-3">✅ {result.ticker} Criteria</h2>
+    <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow">
+      <CardTitle icon="✅" ticker={ticker} label="Criteria" />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {autoKeys.map((key) => {
           const val = result?.[key];
           const label = LABELS[key] || key;
 
-// Evidence array convention: key + "Evidence" or key + "Images"
-const evidenceKey =
-  key === "promoted_stock"
-    ? "promotionEvidence"
-    : key === "fraud_evidence"
-    ? "fraudImages"
-    : null;
+          const evidenceKey =
+            key === "promoted_stock"
+              ? "promotionEvidence"
+              : key === "fraud_evidence"
+              ? "fraudImages"
+              : null;
 
-let evidence: any[] = evidenceKey ? result?.[evidenceKey] || [] : [];
-
-// Special case: filter out manual fraud placeholders
-if (key === "fraud_evidence") {
-  evidence = evidence.filter(
-    (it: any) =>
-      (it.caption || "").toLowerCase() !== "manual check" &&
-      (it.full || it.thumb || it.sourceUrl) // must have some content
-  );
-}
-
-const evidenceCount = evidence.length;
-
+          const evidence: any[] = evidenceKey ? result?.[evidenceKey] || [] : [];
+          const evidenceCount = evidence.length;
 
           return (
             <div key={key}>
@@ -75,10 +60,7 @@ const evidenceCount = evidence.length;
                   {evidenceCount > 0 && (
                     <span
                       onClick={() =>
-                        setExpanded((prev) => ({
-                          ...prev,
-                          [key]: !prev[key],
-                        }))
+                        setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))
                       }
                       className="ml-2 inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded-full cursor-pointer hover:bg-blue-200 transition"
                       title="Click to toggle evidence"
@@ -92,10 +74,9 @@ const evidenceCount = evidence.length;
               {evidenceCount > 0 && expanded[key] && (
                 <Card className="ml-6 mt-2 bg-white shadow-sm border rounded-xl">
                   <CardContent className="p-2">
-                    <ul className="list-disc list-inside text-sm text-gray-700 mt-1">
+                    <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-200 mt-1">
                       {evidence.map((item: any, i: number) => (
                         <li key={i}>
-                          {/* Handle different evidence types gracefully */}
                           {item.source && <strong>{item.source}: </strong>}
                           {item.title || item.caption || "Evidence"}
                           {item.date ? ` (${item.date})` : ""}
