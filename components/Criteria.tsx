@@ -49,7 +49,16 @@ export default function Criteria({ ticker, result, manualFlags, toggleManualFlag
               : null;
 
           const evidence: any[] = evidenceKey ? result?.[evidenceKey] || [] : [];
-          const evidenceCount = evidence.length;
+
+          // ✅ Fix: filter out "manual check" items for fraud evidence
+          const filteredEvidence =
+            key === "fraud_evidence"
+              ? evidence.filter(
+                  (item: any) => (item.caption || "").toLowerCase() !== "manual check"
+                )
+              : evidence;
+
+          const evidenceCount = filteredEvidence.length;
 
           return (
             <div key={key}>
@@ -75,7 +84,7 @@ export default function Criteria({ ticker, result, manualFlags, toggleManualFlag
                 <Card className="ml-6 mt-2 bg-white shadow-sm border rounded-xl">
                   <CardContent className="p-2">
                     <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-200 mt-1">
-                      {evidence.map((item: any, i: number) => (
+                      {filteredEvidence.map((item: any, i: number) => (
                         <li key={i}>
                           {item.source && <strong>{item.source}: </strong>}
                           {item.title || item.caption || "Evidence"}
