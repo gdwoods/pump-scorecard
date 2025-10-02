@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from "recharts";
 
@@ -30,6 +31,13 @@ export default function BorrowDeskCard({
       fee: Number(d.fee),
       available: Number(d.available),
     })) || [];
+
+  // Formatter for large numbers → 10k, 2M
+  const formatNumber = (num: number) => {
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(0)}K`;
+    return num.toString();
+  };
 
   return (
     <Card className="p-4">
@@ -72,39 +80,51 @@ export default function BorrowDeskCard({
 
             {/* Combo chart */}
             {chartData.length > 0 && (
-              <div className="h-64 mt-4">
+              <div className="h-72 mt-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={chartData}>
-                    {/* X-axis (dates) */}
                     <XAxis
                       dataKey="date"
                       tick={{ fontSize: 10 }}
                       minTickGap={20}
                     />
 
-                    {/* Left Y-axis (Available shares) */}
+                    {/* Available shares axis (left) */}
                     <YAxis
                       yAxisId="left"
                       orientation="left"
                       tick={{ fontSize: 10 }}
+                      tickFormatter={formatNumber}
                       domain={["auto", "auto"]}
                     />
 
-                    {/* Right Y-axis (Fee %) */}
+                    {/* Fee % axis (right) */}
                     <YAxis
                       yAxisId="right"
                       orientation="right"
                       tick={{ fontSize: 10 }}
-                      domain={[0, "auto"]}
                       tickFormatter={(v) => `${v}%`}
+                      domain={[0, "auto"]}
                     />
 
-                    <Tooltip />
+                    <Tooltip
+                      formatter={(val: any, name: string) =>
+                        name === "Fee %"
+                          ? `${val.toFixed(2)}%`
+                          : formatNumber(val)
+                      }
+                    />
+
+                    <Legend
+                      verticalAlign="top"
+                      wrapperStyle={{ fontSize: "12px" }}
+                    />
 
                     {/* Bars = Available shares */}
                     <Bar
                       yAxisId="left"
                       dataKey="available"
+                      name="Available"
                       fill="#60a5fa"
                       barSize={20}
                       opacity={0.7}
@@ -115,6 +135,7 @@ export default function BorrowDeskCard({
                       yAxisId="right"
                       type="monotone"
                       dataKey="fee"
+                      name="Fee %"
                       stroke="#ef4444"
                       strokeWidth={2}
                       dot={false}
