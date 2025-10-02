@@ -1,65 +1,71 @@
 "use client";
 
-interface Props {
-  result: any;
+type FundamentalsProps = {
+  ticker: string;
+  result: {
+    lastPrice?: number | null;
+    marketCap?: number | null;
+    sharesOutstanding?: number | null;
+    floatShares?: number | null;
+    avgVolume?: number | null;
+    latestVolume?: number | null;
+    shortFloat?: number | null;
+    insiderOwnership?: number | null;
+    institutionalOwnership?: number | null;
+  };
+};
+
+function formatNumber(num?: number | null): string {
+  if (num == null) return "N/A";
+  if (Math.abs(num) >= 1e9) return (num / 1e9).toFixed(2) + "B";
+  if (Math.abs(num) >= 1e6) return (num / 1e6).toFixed(2) + "M";
+  if (Math.abs(num) >= 1e3) return (num / 1e3).toFixed(2) + "K";
+  return num.toString();
 }
 
-// Format large numbers to K/M/B/T
-const formatNumber = (value: number | null, prefix = ""): string => {
-  if (value == null || isNaN(value)) return "N/A";
-  const abs = Math.abs(value);
-  if (abs >= 1e12) return `${prefix}${(value / 1e12).toFixed(1)}T`;
-  if (abs >= 1e9) return `${prefix}${(value / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `${prefix}${(value / 1e6).toFixed(1)}M`;
-  if (abs >= 1e3) return `${prefix}${(value / 1e3).toFixed(1)}K`;
-  return `${prefix}${value}`;
-};
+function formatPercent(num?: number | null): string {
+  if (num == null) return "N/A";
+  return num.toFixed(1) + "%";
+}
 
-// Format percentage values
-const formatPercent = (value: number | null): string => {
-  if (value == null || isNaN(value)) return "N/A";
-  return `${value.toFixed(1)}%`;
-};
-
-export default function Fundamentals({ result }: Props) {
+export default function Fundamentals({ ticker, result }: FundamentalsProps) {
   return (
     <div className="p-4 border rounded-lg bg-white shadow-sm">
-      <h2 className="text-lg font-semibold mb-3">📊 Fundamentals</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1 gap-x-8 text-sm">
-        <span>Last Price: {formatNumber(result.lastPrice, "$")}</span>
-        <span>Market Cap: {formatNumber(result.marketCap, "$")}</span>
+      <h2 className="text-lg font-semibold mb-3">📊 {ticker} Fundamentals</h2>
 
-        <span>
-          Shares Outstanding: {formatNumber(result.sharesOutstanding)}
-        </span>
-        <span>Float Shares: {formatNumber(result.floatShares)}</span>
-
-        <span>Avg Volume: {formatNumber(result.avgVolume)}</span>
-        <span>Latest Volume: {formatNumber(result.latestVolume)}</span>
-
-        <span
-          className={
-            result.shortFloat > 30 ? "text-red-600 font-semibold" : ""
-          }
-        >
-          Short Float: {formatPercent(result.shortFloat)}
-        </span>
-
-        <span
-          className={
-            result.insiderOwnership > 20 ? "text-orange-600 font-semibold" : ""
-          }
-        >
-          Insider Ownership: {formatPercent(result.insiderOwnership)}
-        </span>
-
-        <span>
-          Institutional Ownership: {formatPercent(result.institutionalOwnership)}
-        </span>
-
-        <span>Country: {result.country || "Unknown"}</span>
-        <span>Exchange: {result.exchange}</span>
-      </div>
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        <li>
+          <strong>Last Price:</strong>{" "}
+          {result.lastPrice != null ? `$${result.lastPrice.toFixed(2)}` : "N/A"}
+        </li>
+        <li>
+          <strong>Market Cap:</strong> {formatNumber(result.marketCap)}
+        </li>
+        <li>
+          <strong>Shares Outstanding:</strong>{" "}
+          {formatNumber(result.sharesOutstanding)}
+        </li>
+        <li>
+          <strong>Float Shares:</strong> {formatNumber(result.floatShares)}
+        </li>
+        <li>
+          <strong>Avg Daily Volume:</strong> {formatNumber(result.avgVolume)}
+        </li>
+        <li>
+          <strong>Latest Volume:</strong> {formatNumber(result.latestVolume)}
+        </li>
+        <li>
+          <strong>Short Float:</strong> {formatPercent(result.shortFloat)}
+        </li>
+        <li>
+          <strong>Insider Ownership:</strong>{" "}
+          {formatPercent(result.insiderOwnership)}
+        </li>
+        <li>
+          <strong>Institutional Ownership:</strong>{" "}
+          {formatPercent(result.institutionalOwnership)}
+        </li>
+      </ul>
     </div>
   );
 }

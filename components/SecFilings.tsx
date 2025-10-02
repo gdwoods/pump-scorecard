@@ -1,88 +1,82 @@
 "use client";
-
 import { useState } from "react";
 
 type Filing = {
-  title?: string;
-  date?: string;
-  url?: string;
+  title: string;
+  date: string;
+  url: string;
+  businessAddress?: any;
+  mailingAddress?: any;
 };
 
-type Props = {
-  filings?: Filing[];
-};
-
-export default function SecFilings({ filings = [] }: Props) {
+export default function SecFilings({
+  ticker,
+  filings,
+}: {
+  ticker: string;
+  filings: Filing[];
+}) {
   const [filter, setFilter] = useState<"all" | "dilution">("all");
+  const items = Array.isArray(filings) ? filings : [];
 
-  const isDilution = (title?: string) =>
-    title
-      ? ["S-1", "424B", "F-1", "F-3", "F-4", "S-3"].some((f) =>
-          title.toUpperCase().includes(f)
-        )
-      : false;
-
-  // Always work with an array, never undefined
-  const displayFilings = (filings || []).filter((f) =>
-    filter === "dilution" ? isDilution(f.title) : true
-  );
+  const filtered =
+    filter === "all"
+      ? items
+      : items.filter((f) => f.title.includes("S-1") || f.title.includes("424B"));
 
   return (
     <div className="p-4 rounded-lg bg-white dark:bg-gray-800 shadow">
       <div className="flex justify-between items-center mb-2">
-        <h2 className="text-lg font-semibold">📄 SEC Filings</h2>
+        <h2 className="text-lg font-semibold">📄 {ticker} SEC Filings</h2>
         <div className="space-x-2">
           <button
-            onClick={() => setFilter("dilution")}
-            className={`px-3 py-1 rounded ${
-              filter === "dilution"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 dark:bg-gray-700"
+            onClick={() => setFilter("all")}
+            className={`px-2 py-1 text-xs rounded ${
+              filter === "all" ? "bg-blue-600 text-white" : "bg-gray-200"
             }`}
           >
-            Dilution-Only
+            All
           </button>
           <button
-            onClick={() => setFilter("all")}
-            className={`px-3 py-1 rounded ${
-              filter === "all"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 dark:bg-gray-700"
+            onClick={() => setFilter("dilution")}
+            className={`px-2 py-1 text-xs rounded ${
+              filter === "dilution" ? "bg-blue-600 text-white" : "bg-gray-200"
             }`}
           >
-            All Filings
+            Dilution
           </button>
         </div>
       </div>
 
-      {displayFilings.length === 0 ? (
-        <p className="text-gray-500 italic">No filings found.</p>
+      {filtered.length === 0 ? (
+        <p className="text-sm text-gray-700">
+          No filings found for this ticker. Check{" "}
+          <a
+            href="https://www.sec.gov/edgar/search/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-600 underline"
+          >
+            SEC EDGAR
+          </a>
+          .
+        </p>
       ) : (
-        <ul className="space-y-2">
-          {displayFilings.slice(0, 10).map((filing, idx) => (
-            <li key={idx} className="flex justify-between">
-              <span>
-                {filing.date || "Unknown"} — {filing.title || "Unknown"}
-              </span>
-              {filing.url && (
-                <a
-                  href={filing.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 underline"
-                >
-                  View
-                </a>
-              )}
+        <ul className="space-y-2 text-sm">
+          {filtered.map((f, i) => (
+            <li key={i} className="border rounded p-2 bg-gray-50">
+              <a
+                href={f.url}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-blue-600 underline"
+              >
+                {f.title}
+              </a>{" "}
+              <span className="text-gray-500">({f.date})</span>
             </li>
           ))}
         </ul>
-      )}
-
-      {filings.length > 10 && (
-        <p className="text-gray-500 text-sm italic mt-2">
-          Showing 10 of {filings.length} filings…
-        </p>
       )}
     </div>
   );

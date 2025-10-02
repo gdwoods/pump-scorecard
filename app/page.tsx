@@ -36,23 +36,22 @@ export default function Page() {
       }
 
       // ✅ Add droppiness verdict
-if (
-  json.droppinessScore === 0 &&
-  (!json.droppinessDetail || json.droppinessDetail.length === 0)
-) {
-  json.droppinessVerdict =
-    "No qualifying spikes were detected in the last 24 months — the stock has not shown pump-like behavior recently.";
-} else if (json.droppinessScore >= 70) {
-  json.droppinessVerdict =
-    "Spikes usually fade quickly — most large moves retraced within a few sessions.";
-} else if (json.droppinessScore < 40) {
-  json.droppinessVerdict =
-    "Spikes often hold — many large moves remained elevated after the initial run-up.";
-} else {
-  json.droppinessVerdict =
-    "Mixed behavior — some spikes retraced quickly, while others held their gains.";
-}
-
+      if (
+        json.droppinessScore === 0 &&
+        (!json.droppinessDetail || json.droppinessDetail.length === 0)
+      ) {
+        json.droppinessVerdict =
+          "No qualifying spikes were detected in the last 24 months — the stock has not shown pump-like behavior recently.";
+      } else if (json.droppinessScore >= 70) {
+        json.droppinessVerdict =
+          "Spikes usually fade quickly — most large moves retraced within a few sessions.";
+      } else if (json.droppinessScore < 40) {
+        json.droppinessVerdict =
+          "Spikes often hold — many large moves remained elevated after the initial run-up.";
+      } else {
+        json.droppinessVerdict =
+          "Mixed behavior — some spikes retraced quickly, while others held their gains.";
+      }
 
       setResult(json);
       setManualFlags({}); // reset flags for new ticker
@@ -133,7 +132,7 @@ if (
           <FinalVerdict
             verdict={result.summaryVerdict}
             summary={result.summaryText}
-            score={adjustedScore}  
+            score={adjustedScore}
             manualFlags={manualFlags}
             droppinessVerdict={result.droppinessVerdict}
           />
@@ -149,32 +148,36 @@ if (
 
           {/* Criteria */}
           <Criteria
+            ticker={result.ticker}
             result={result}
             manualFlags={manualFlags}
             toggleManualFlag={toggleManualFlag}
           />
 
           {/* Fundamentals */}
-          <Fundamentals result={result} />
+          <Fundamentals ticker={result.ticker} result={result} />
 
           {/* Promotions */}
-          <Promotions promotions={result.promotions} />
+          <Promotions ticker={result.ticker} promotions={result.promotions} />
 
           {/* Filings */}
-          <SecFilings filings={result.filings} />
+          <SecFilings ticker={result.ticker} filings={result.filings} />
 
-{/* News */}
-    <NewsSection items={result.news || []} source={result.newsSource} />
-
+          {/* News */}
+          <NewsSection ticker={result.ticker} items={result.news || []} />
 
           {/* Fraud */}
-        <FraudEvidence fraudImages={result.fraudImages || []} />
-
+          <FraudEvidence
+            ticker={result.ticker}
+            fraudImages={result.fraudImages || []}
+          />
 
           {/* Droppiness score + scatter */}
           <DroppinessCard
+            ticker={result.ticker}
             score={result.droppinessScore}
             detail={result.droppinessDetail || []}
+            verdict={result.droppinessVerdict}
           />
           <DroppinessScatter detail={result.droppinessDetail || []} />
         </div>

@@ -23,28 +23,27 @@ function formatPublished(published: NewsItem["published"]) {
 
   if (ms == null) return "";
   const d = new Date(ms);
-  return Number.isFinite(d.valueOf()) ? d.toLocaleString() : "";
+  return Number.isFinite(d.valueOf())
+    ? d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : "";
 }
 
 export default function NewsSection({
+  ticker,
   items,
-  source,
 }: {
+  ticker: string;
   items?: NewsItem[] | null;
-  source?: string;
 }) {
   const news = Array.isArray(items) ? items : [];
 
   return (
     <div className="p-4 border rounded-lg bg-white shadow-sm">
-      <h2 className="text-lg font-semibold mb-3">
-        📰 Recent News {source ? `(${source})` : ""}
-      </h2>
+      <h2 className="text-lg font-semibold mb-3">📰 {ticker} Recent News</h2>
 
       {news.length === 0 ? (
         <p className="text-sm text-gray-700">
-          <strong>No recent news found for this ticker</strong>. Please also
-          check{" "}
+          <strong>No recent news found for this ticker</strong>. Please also check{" "}
           <a
             href="https://news.google.com/"
             target="_blank"
@@ -69,10 +68,7 @@ export default function NewsSection({
           {news.map((n, i) => {
             const dateStr = formatPublished(n.published);
             return (
-              <li
-                key={i}
-                className="border rounded-lg p-2 bg-gray-50 flex flex-col"
-              >
+              <li key={i} className="border rounded-lg p-2 bg-gray-50 flex flex-col">
                 <a
                   href={n.url}
                   target="_blank"

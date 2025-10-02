@@ -441,11 +441,18 @@ try {
           if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9)
             retraced = true;
           if (retraced) retraceCount++;
-          droppinessDetail.push({
-            date: cur.date?.toISOString() || "",
-            spikePct: +(spikePct * 100).toFixed(1),
-            retraced,
-          });
+const spikeDate =
+  cur.date instanceof Date ? cur.date : new Date(cur.date);
+
+// ⛔ Skip future dates
+if (spikeDate.getTime() <= Date.now()) {
+  droppinessDetail.push({
+    date: spikeDate.toISOString(),
+    spikePct: +(spikePct * 100).toFixed(1),
+    retraced,
+  });
+}
+
         }
       }
       droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
@@ -589,6 +596,8 @@ try {
     });
   } catch (err: any) {
     console.error("scan route failed:", err?.message || err);
+    droppinessDetail = droppinessDetail.filter(d => new Date(d.date).getTime() <= Date.now());
+
     return NextResponse.json(
       { error: err?.message || "Internal Server Error" },
       { status: 500 }

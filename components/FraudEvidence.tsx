@@ -8,35 +8,32 @@ type FraudItem = {
   sourceUrl?: string | null;
 };
 
-export default function FraudEvidence({ fraudImages }: { fraudImages: FraudItem[] }) {
+export default function FraudEvidence({
+  ticker,
+  fraudImages,
+}: {
+  ticker: string;
+  fraudImages: FraudItem[];
+}) {
   const items = Array.isArray(fraudImages) ? fraudImages : [];
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
-  // Detect the special "manual check only" case
   const isOnlyManual =
     items.length > 0 && items.every((it) => (it.caption || "").toLowerCase() === "manual check");
 
-  // If there are any real items, hide manual placeholders from the list
   const displayed = items.filter((it) => (it.caption || "").toLowerCase() !== "manual check");
 
-  // URL to use for manual check link (prefer the one from the API, fallback to site root)
   const manualUrl =
     (isOnlyManual && items[0]?.sourceUrl) || "https://www.stopnasdaqchinafraud.com/";
 
   return (
     <div className="p-4 border rounded-lg bg-white shadow-sm">
-      <h2 className="text-lg font-semibold mb-3">🕵️ Fraud Evidence</h2>
+      <h2 className="text-lg font-semibold mb-3">🕵️ {ticker} Fraud Evidence</h2>
 
-      {/* Empty / manual-only state */}
       {items.length === 0 || isOnlyManual ? (
         <p className="text-sm text-gray-700">
           No fraud evidence found for this ticker — please manually check at{" "}
-          <a
-            href={manualUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-blue-600 underline"
-          >
+          <a href={manualUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">
             stopnasdaqchinafraud.com
           </a>
         </p>
@@ -74,7 +71,6 @@ export default function FraudEvidence({ fraudImages }: { fraudImages: FraudItem[
         </ul>
       )}
 
-      {/* Lightbox overlay */}
       {lightboxUrl && (
         <div
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"

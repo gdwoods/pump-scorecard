@@ -17,7 +17,7 @@ const LABELS: Record<string, string> = {
   dilution_offering: "Dilution/offering filing",
   promoted_stock: "Promoted stock",
   fraud_evidence: "Fraud evidence posted online",
-  risky_country: "Risky country (China/HK/Malaysia)",
+  risky_country: "Risky country (China/HK/Singapore/Malaysia)",
 };
 
 // For manual toggles
@@ -38,22 +38,33 @@ export default function Criteria({ result, manualFlags, toggleManualFlag }: Prop
 
   return (
     <div className="p-4 border rounded-lg bg-gray-50">
-      <h2 className="text-lg font-semibold mb-3">✅ Criteria</h2>
+      <h2 className="text-lg font-semibold mb-3">✅ {result.ticker} Criteria</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {autoKeys.map((key) => {
           const val = result?.[key];
           const label = LABELS[key] || key;
 
-          // Evidence array convention: key + "Evidence" or key + "Images"
-          const evidenceKey =
-            key === "promoted_stock"
-              ? "promotionEvidence"
-              : key === "fraud_evidence"
-              ? "fraudImages"
-              : null;
+// Evidence array convention: key + "Evidence" or key + "Images"
+const evidenceKey =
+  key === "promoted_stock"
+    ? "promotionEvidence"
+    : key === "fraud_evidence"
+    ? "fraudImages"
+    : null;
 
-          const evidence: any[] = evidenceKey ? result?.[evidenceKey] || [] : [];
-          const evidenceCount = evidence.length;
+let evidence: any[] = evidenceKey ? result?.[evidenceKey] || [] : [];
+
+// Special case: filter out manual fraud placeholders
+if (key === "fraud_evidence") {
+  evidence = evidence.filter(
+    (it: any) =>
+      (it.caption || "").toLowerCase() !== "manual check" &&
+      (it.full || it.thumb || it.sourceUrl) // must have some content
+  );
+}
+
+const evidenceCount = evidence.length;
+
 
           return (
             <div key={key}>

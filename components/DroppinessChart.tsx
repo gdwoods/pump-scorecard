@@ -17,24 +17,27 @@ export default function DroppinessChart({
 }: {
   detail: { date: string; spikePct: number; retraced: boolean }[];
 }) {
+  const today = Date.now();
+
+  // Filter out any future dates and split into Held vs Retraced
   const dataHeld = detail
-    .filter((d) => !d.retraced)
+    .filter((d) => !d.retraced && new Date(d.date).getTime() <= today)
     .map((d) => ({
       date: new Date(d.date).getTime(),
       spikePct: d.spikePct,
     }));
 
   const dataRetraced = detail
-    .filter((d) => d.retraced)
+    .filter((d) => d.retraced && new Date(d.date).getTime() <= today)
     .map((d) => ({
       date: new Date(d.date).getTime(),
       spikePct: d.spikePct,
     }));
 
-  const sizeFn = (spikePct: number) =>
-    Math.min(12, 4 + spikePct / 30); // scale dot size
+  // Scale dot size by spike %
+  const sizeFn = (spikePct: number) => Math.min(12, 4 + spikePct / 30);
 
-  // Custom legend so Held = green, Retraced = red
+  // Custom legend
   const renderLegend = () => (
     <div className="flex space-x-4 text-sm mb-2">
       <span className="flex items-center">
@@ -57,7 +60,7 @@ export default function DroppinessChart({
           <XAxis
             dataKey="date"
             type="number"
-            domain={["auto", "auto"]}
+            domain={["auto", () => Date.now()]} // clamp max = today
             tickFormatter={(ts) => new Date(ts).toISOString().split("T")[0]}
             angle={-30}
             textAnchor="end"
@@ -67,21 +70,19 @@ export default function DroppinessChart({
             domain={[0, "dataMax + 50"]}
             label={{ value: "Spike %", angle: -90, position: "insideLeft" }}
           />
-<Tooltip
-  cursor={{ strokeDasharray: "3 3" }}
-  labelFormatter={() => ""} // suppresses the duplicate label row
-  formatter={(value: any, _name: any, props: any) => {
-    if (props.dataKey === "spikePct") {
-      const dateStr = new Date(props.payload.date).toISOString().split("T")[0];
-      return [
-        `${value}% (${dateStr})`, // inline: 120% (2025-01-05)
-        props.name,               // Held or Retraced
-      ];
-    }
-    return null;
-  }}
-/>
-
+          <Tooltip
+            cursor={{ strokeDasharray: "3 3" }}
+            labelFormatter={() => ""} // suppress duplicate label
+            formatter={(value: any, _name: any, props: any) => {
+              if (props.dataKey === "spikePct") {
+                const dateStr = new Date(props.payload.date)
+                  .toISOString()
+                  .split("T")[0];
+                return [`${value}% (${dateStr})`, props.name];
+              }
+              return null;
+            }}
+          />
           <Legend verticalAlign="top" content={renderLegend} />
 
           {/* Held series */}
