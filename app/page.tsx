@@ -12,7 +12,7 @@ import NewsSection from "@/components/NewsSection";
 import FraudEvidence from "@/components/FraudEvidence";
 import DroppinessCard from "@/components/DroppinessCard";
 import DroppinessScatter from "@/components/DroppinessChart";
-import DarkModeToggle from "@/components/DarkModeToggle";
+import ScoreBreakdown from "@/components/ScoreBreakdown";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
@@ -94,22 +94,54 @@ export default function Page() {
   if (manualFlags.other) adjustedScore += 5;
   if (adjustedScore > 100) adjustedScore = 100;
 
+  // ✅ Build score breakdown array
+  const breakdown: { label: string; value: number }[] = [];
+  if (result?.dilution_offering) {
+    breakdown.push({ label: "Dilution / offering (S-1 / 424B)", value: 20 });
+  }
+  if (result?.fraud_evidence) {
+    breakdown.push({ label: "Fraud evidence posted online", value: 20 });
+  }
+  if (result?.risky_country) {
+    breakdown.push({ label: "Risky country", value: 15 });
+  }
+
+  if (manualFlags.pumpSuspicion) {
+    breakdown.push({ label: "Pump suspicion", value: 15 });
+  }
+  if (manualFlags.thinFloat) {
+    breakdown.push({ label: "Thin float risk", value: 10 });
+  }
+  if (manualFlags.insiders) {
+    breakdown.push({ label: "Shady insiders", value: 10 });
+  }
+  if (manualFlags.other) {
+    breakdown.push({ label: "Other red flag", value: 5 });
+  }
+
   return (
-    <div className="p-6 space-y-6 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold flex items-center gap-2 text-blue-600 dark:text-blue-400">
+        <h1 className="text-2xl font-bold flex items-center gap-2 text-blue-600">
           <img src="/logo.png" alt="Pump Scorecard Logo" className="h-8 w-8" />
           Booker Mastermind — Pump Scorecard
         </h1>
 
-        <div className="flex items-center gap-2">
-          <DarkModeToggle />
+        <div className="flex gap-2">
           <button
             onClick={exportPDF}
-            className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 dark:bg-gray-600"
+            className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
           >
             Export PDF
+          </button>
+          <button
+            onClick={() =>
+              document.documentElement.classList.toggle("dark")
+            }
+            className="px-4 py-2 border rounded"
+          >
+            🌓 Toggle Dark Mode
           </button>
         </div>
       </div>
@@ -120,7 +152,7 @@ export default function Page() {
           value={ticker}
           onChange={(e) => setTicker(e.target.value)}
           placeholder="Enter ticker symbol"
-          className="border px-3 py-2 rounded flex-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+          className="border px-3 py-2 rounded flex-1"
         />
         <button
           onClick={scan}
@@ -141,6 +173,13 @@ export default function Page() {
             droppinessVerdict={result.droppinessVerdict}
           />
 
+          {/* ✅ Score Breakdown */}
+          <ScoreBreakdown
+            ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
+            breakdown={breakdown}
+            total={adjustedScore}
+          />
+
           {/* Main chart */}
           <Chart result={result} />
 
@@ -152,16 +191,10 @@ export default function Page() {
 
           {/* Criteria */}
           <Criteria
-            ticker={result.ticker}
+            ticker={ticker}
             result={result}
             manualFlags={manualFlags}
             toggleManualFlag={toggleManualFlag}
-          />
-
-          {/* Fraud */}
-          <FraudEvidence
-            ticker={result.ticker}
-            fraudImages={result.fraudImages || []}
           />
 
           {/* Fundamentals */}
@@ -175,6 +208,12 @@ export default function Page() {
 
           {/* News */}
           <NewsSection ticker={result.ticker} items={result.news || []} />
+
+          {/* Fraud */}
+          <FraudEvidence
+            ticker={result.ticker}
+            fraudImages={result.fraudImages || []}
+          />
 
           {/* Droppiness score + scatter */}
           <DroppinessCard
