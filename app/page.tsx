@@ -105,7 +105,6 @@ export default function Page() {
   if (result?.risky_country) {
     breakdown.push({ label: "Risky country", value: 15 });
   }
-
   if (manualFlags.pumpSuspicion) {
     breakdown.push({ label: "Pump suspicion", value: 15 });
   }
@@ -162,69 +161,68 @@ export default function Page() {
         </button>
       </div>
 
-      {result && (
-        <div className="space-y-6">
-          {/* Final verdict */}
-          <FinalVerdict
-            verdict={result.summaryVerdict}
-            summary={result.summaryText}
-            score={adjustedScore}
-            manualFlags={manualFlags}
-            droppinessVerdict={result.droppinessVerdict}
-          />
+ {result && (
+  <div className="space-y-6">
+    {/* Final verdict */}
+    <FinalVerdict
+      verdict={result.summaryVerdict}
+      summary={result.summaryText}
+      score={adjustedScore}
+      manualFlags={manualFlags}
+      droppinessVerdict={result.droppinessVerdict}
+    />
 
-          {/* ✅ Score Breakdown */}
-          <ScoreBreakdown
-            ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
-            breakdown={breakdown}
-            total={adjustedScore}
-          />
+    {/* Score + Chart */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <ScoreBreakdown
+        ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
+        breakdown={breakdown}
+        total={adjustedScore}
+      />
+      <Chart result={result} />
+    </div>
 
-          {/* Main chart */}
-          <Chart result={result} />
+    {/* Country + Criteria + Fundamentals */}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <CountrySection
+        country={result.country}
+        source={result.countrySource}
+      />
+      <Criteria
+        ticker={ticker}
+        result={result}
+        manualFlags={manualFlags}
+        toggleManualFlag={toggleManualFlag}
+      />
+      <Fundamentals ticker={result.ticker} result={result} />
+    </div>
 
-          {/* Country */}
-          <CountrySection
-            country={result.country}
-            source={result.countrySource}
-          />
+    {/* ✅ Droppiness score + scatter moved up */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <DroppinessCard
+        ticker={result.ticker}
+        score={result.droppinessScore}
+        detail={result.droppinessDetail || []}
+        verdict={result.droppinessVerdict}
+      />
+      <DroppinessScatter detail={result.droppinessDetail || []} />
+    </div>
 
-          {/* Criteria */}
-          <Criteria
-            ticker={ticker}
-            result={result}
-            manualFlags={manualFlags}
-            toggleManualFlag={toggleManualFlag}
-          />
+    {/* Promotions + Filings + FraudEvidence */}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <Promotions ticker={result.ticker} promotions={result.promotions} />
+      <SecFilings ticker={result.ticker} filings={result.filings} />
+      <FraudEvidence
+        ticker={result.ticker}
+        fraudImages={result.fraudImages || []}
+      />
+    </div>
 
-          {/* Fundamentals */}
-          <Fundamentals ticker={result.ticker} result={result} />
+    {/* News full width */}
+    <NewsSection ticker={result.ticker} items={result.news || []} />
+  </div>
+)}
 
-          {/* Promotions */}
-          <Promotions ticker={result.ticker} promotions={result.promotions} />
-
-          {/* Filings */}
-          <SecFilings ticker={result.ticker} filings={result.filings} />
-
-          {/* News */}
-          <NewsSection ticker={result.ticker} items={result.news || []} />
-
-          {/* Fraud */}
-          <FraudEvidence
-            ticker={result.ticker}
-            fraudImages={result.fraudImages || []}
-          />
-
-          {/* Droppiness score + scatter */}
-          <DroppinessCard
-            ticker={result.ticker}
-            score={result.droppinessScore}
-            detail={result.droppinessDetail || []}
-            verdict={result.droppinessVerdict}
-          />
-          <DroppinessScatter detail={result.droppinessDetail || []} />
-        </div>
-      )}
     </div>
   );
 }

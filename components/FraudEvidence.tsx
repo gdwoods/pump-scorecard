@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import CollapsibleCard from "./CollapsibleCard";
 import CardTitle from "./CardTitle";
 
 type FraudItem = {
@@ -28,7 +29,7 @@ export default function FraudEvidence({
     (isOnlyManual && items[0]?.sourceUrl) || "https://www.stopnasdaqchinafraud.com/";
 
   return (
-    <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow">
+    <CollapsibleCard title={`🕵️ ${ticker} Fraud Evidence`} defaultOpen={true}>
       <CardTitle icon="🕵️" ticker={ticker} label="Fraud Evidence" />
 
       {items.length === 0 || isOnlyManual ? (
@@ -84,6 +85,6 @@ export default function FraudEvidence({
           />
         </div>
       )}
-    </div>
+    </CollapsibleCard>
   );
 }

@@ -25,7 +25,7 @@ export default function DroppinessCard({
       {detail && detail.length > 0 && (
         <ul className="text-sm text-gray-700 dark:text-gray-200 space-y-1">
           {detail
-            .slice(-5)
+            .slice(-15)
             .reverse()
             .map((d, idx) => (
               <li key={idx}>

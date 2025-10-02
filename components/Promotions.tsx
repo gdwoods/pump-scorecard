@@ -1,4 +1,5 @@
 "use client";
+import CollapsibleCard from "./CollapsibleCard";
 
 type Promotion = {
   type: string;
@@ -16,11 +17,7 @@ export default function Promotions({
   const items = promotions || [];
 
   return (
-    <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow-sm transition-colors">
-      <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-        📢 {ticker} Promotions
-      </h2>
-
+    <CollapsibleCard title={`📢 ${ticker} Promotions`} defaultOpen={true}>
       {items.length === 0 ||
       (items.length === 1 && items[0].type === "Manual Check") ? (
         <p className="text-sm text-gray-700 dark:text-gray-300">
@@ -51,6 +48,6 @@ export default function Promotions({
           ))}
         </ul>
       )}
-    </div>
+    </CollapsibleCard>
   );
 }

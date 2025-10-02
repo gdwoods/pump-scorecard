@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import CollapsibleCard from "./CollapsibleCard";
 import CardTitle from "./CardTitle";
 
 type Filing = {
@@ -23,7 +24,7 @@ export default function SecFilings({
     filter === "all" ? items : items.filter((f) => f.dilutionRisk === true);
 
   return (
-    <div className="p-4 rounded-lg bg-white dark:bg-gray-800 shadow">
+    <CollapsibleCard title={`📄 ${ticker} SEC Filings`} defaultOpen={true}>
       <div className="flex justify-between items-center mb-2">
         <CardTitle icon="📄" ticker={ticker} label="SEC Filings" />
         <div className="space-x-2">
@@ -52,12 +53,23 @@ export default function SecFilings({
 
       {filtered.length === 0 ? (
         <p className="text-sm text-gray-700 dark:text-gray-300">
-          No SEC filings found for this ticker.
+          No SEC filings found — please manually check{" "}
+          <a
+            href="https://www.sec.gov/edgar/searchedgar/companysearch.html"
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-600 dark:text-blue-400 underline"
+          >
+            EDGAR
+          </a>
         </p>
       ) : (
         <ul className="space-y-2 text-sm">
           {filtered.map((f, i) => (
-            <li key={i} className="flex justify-between items-center border-b pb-1">
+            <li
+              key={i}
+              className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-1"
+            >
               <div>
                 <span className="font-medium">{f.formType}</span> – {f.date}
               </div>
@@ -65,7 +77,7 @@ export default function SecFilings({
                 href={f.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 underline"
+                className="text-blue-600 dark:text-blue-400 underline"
               >
                 View
               </a>
@@ -73,6 +85,6 @@ export default function SecFilings({
           ))}
         </ul>
       )}
-    </div>
+    </CollapsibleCard>
   );
 }
