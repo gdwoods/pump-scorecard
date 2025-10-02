@@ -13,6 +13,8 @@ import FraudEvidence from "@/components/FraudEvidence";
 import DroppinessCard from "@/components/DroppinessCard";
 import DroppinessScatter from "@/components/DroppinessChart";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
+import BorrowDeskCard from "@/components/BorrowDeskCard";
+
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
@@ -217,6 +219,14 @@ export default function Page() {
         fraudImages={result.fraudImages || []}
       />
     </div>
+
+{result.borrowData && (
+  <BorrowDeskCard
+    ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
+    borrowData={result.borrowData}
+  />
+)}
+
 
     {/* News full width */}
     <NewsSection ticker={result.ticker} items={result.news || []} />

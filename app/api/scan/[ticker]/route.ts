@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import yahooFinance from "yahoo-finance2";
 import { parseSecAddress } from "@/utils/normalizeCountry";
+import { fetchBorrowDesk } from "@/utils/fetchBorrowDesk";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,46 @@ type IntradayCandle = {
   close: number;
   volume: number;
 };
+
+// ---------- iBorrowDesk scraper ----------
+async function fetchBorrowData(ticker: string) {
+  try {
+    const url = `https://www.iborrowdesk.com/report/${ticker}`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "pump-scorecard (garthwoods@gmail.com)" },
+    });
+    if (!res.ok) {
+      return { fee: "Manual Check", available: "Manual Check", updated: "N/A", source: url };
+    }
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+console.log("=== iBorrowDesk raw HTML preview ===");
+console.log(html.slice(0, 2000)); // just first 2000 chars so you don't flood logs
+
+    // On iBorrowDesk, the main data table has id="report-table"
+    const firstRow = $("#report-table tbody tr").first();
+    if (!firstRow || firstRow.length === 0) {
+      return { fee: "Manual Check", available: "Manual Check", updated: "N/A", source: url };
+    }
+
+    // Columns are: Date | Fee | Available | Utilization | Updated
+    const fee = firstRow.find("td").eq(1).text().trim() || "N/A";
+    const available = firstRow.find("td").eq(2).text().trim() || "N/A";
+    const updated = firstRow.find("td").eq(4).text().trim() || "N/A"; // column index 4
+
+    return { fee, available, updated, source: url };
+  } catch (err) {
+    console.error("BorrowDesk scrape failed:", err);
+    return {
+      fee: "Manual Check",
+      available: "Manual Check",
+      updated: "N/A",
+      source: `https://www.iborrowdesk.com/report/${ticker}`,
+    };
+  }
+}
+
 
 export async function GET(
   req: Request,
@@ -542,6 +583,10 @@ if (spikeDate.getTime() <= Date.now()) {
         ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
         : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
 
+// ---------- iBorrowDesk ----------
+const borrowData = await fetchBorrowDesk(upperTicker);
+
+
     // ---------- Return ----------
     return NextResponse.json({
       ticker: upperTicker,
@@ -572,6 +617,9 @@ if (spikeDate.getTime() <= Date.now()) {
       fraudImages,
       droppinessScore,
       droppinessDetail,
+
+      // ✅ New iBorrowDesk section
+      borrowData,
 
       // Scoring
       weightedRiskScore,
