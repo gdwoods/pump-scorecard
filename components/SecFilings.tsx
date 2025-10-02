@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import CollapsibleCard from "./CollapsibleCard";
-import CardTitle from "./CardTitle";
 
 type Filing = {
   formType: string;
@@ -25,8 +24,9 @@ export default function SecFilings({
 
   return (
     <CollapsibleCard title={`📄 ${ticker} SEC Filings`} defaultOpen={true}>
+      {/* Removed CardTitle here */}
+
       <div className="flex justify-between items-center mb-2">
-        <CardTitle icon="📄" ticker={ticker} label="SEC Filings" />
         <div className="space-x-2">
           <button
             onClick={() => setFilter("all")}

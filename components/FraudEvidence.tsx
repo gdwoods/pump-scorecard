@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import CollapsibleCard from "./CollapsibleCard";
-import CardTitle from "./CardTitle";
 
 type FraudItem = {
   full?: string | null;
@@ -30,7 +29,7 @@ export default function FraudEvidence({
 
   return (
     <CollapsibleCard title={`🕵️ ${ticker} Fraud Evidence`} defaultOpen={true}>
-      <CardTitle icon="🕵️" ticker={ticker} label="Fraud Evidence" />
+      {/* Removed CardTitle here */}
 
       {items.length === 0 || isOnlyManual ? (
         <p className="text-sm text-gray-700 dark:text-gray-300">
