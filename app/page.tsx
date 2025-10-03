@@ -15,7 +15,6 @@ import DroppinessScatter from "@/components/DroppinessChart";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 
-
 export default function Page() {
   const [ticker, setTicker] = useState("");
   const [result, setResult] = useState<any>(null);
@@ -163,76 +162,80 @@ export default function Page() {
         </button>
       </div>
 
- {result && (
-  <div className="space-y-6">
-    {/* Final verdict */}
-    <FinalVerdict
-      verdict={result.summaryVerdict}
-      summary={result.summaryText}
-      score={adjustedScore}
-      manualFlags={manualFlags}
-      droppinessVerdict={result.droppinessVerdict}
-    />
+      {result && (
+        <div className="space-y-6">
+          {/* ✅ Final verdict + Score Breakdown + Chart side by side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <FinalVerdict
+              verdict={result.summaryVerdict}
+              summary={result.summaryText}
+              score={adjustedScore}
+              manualFlags={manualFlags}
+              droppinessVerdict={result.droppinessVerdict}
+            />
 
-    {/* Score + Chart */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <ScoreBreakdown
-        ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
-        breakdown={breakdown}
-        total={adjustedScore}
-      />
-      <Chart result={result} />
-    </div>
+            <ScoreBreakdown
+              ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
+              breakdown={
+                breakdown.length > 0
+                  ? breakdown
+                  : [{ label: "No additional risk factors", value: 0 }]
+              }
+              total={adjustedScore}
+            />
 
-    {/* Country + Criteria + Fundamentals */}
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <CountrySection
-        country={result.country}
-        source={result.countrySource}
-      />
-      <Criteria
-        ticker={ticker}
-        result={result}
-        manualFlags={manualFlags}
-        toggleManualFlag={toggleManualFlag}
-      />
-      <Fundamentals ticker={result.ticker} result={result} />
-    </div>
+            <Chart result={result} />
+          </div>
 
-    {/* ✅ Droppiness score + scatter moved up */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <DroppinessCard
-        ticker={result.ticker}
-        score={result.droppinessScore}
-        detail={result.droppinessDetail || []}
-        verdict={result.droppinessVerdict}
-      />
-      <DroppinessScatter detail={result.droppinessDetail || []} />
-    </div>
+          {/* Country + Criteria + Fundamentals */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <CountrySection
+              country={result.country}
+              source={result.countrySource}
+            />
+            <Criteria
+              ticker={ticker}
+              result={result}
+              manualFlags={manualFlags}
+              toggleManualFlag={toggleManualFlag}
+            />
+            <Fundamentals ticker={result.ticker} result={result} />
+          </div>
 
-    {/* Promotions + Filings + FraudEvidence */}
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <Promotions ticker={result.ticker} promotions={result.promotions} />
-      <SecFilings ticker={result.ticker} filings={result.filings} />
-      <FraudEvidence
-        ticker={result.ticker}
-        fraudImages={result.fraudImages || []}
-      />
-    </div>
+          {/* Droppiness score + scatter */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <DroppinessCard
+              ticker={result.ticker}
+              score={result.droppinessScore}
+              detail={result.droppinessDetail || []}
+              verdict={result.droppinessVerdict}
+            />
+            <DroppinessScatter detail={result.droppinessDetail || []} />
+          </div>
 
-{result.borrowData && (
-  <BorrowDeskCard
-    ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
-    borrowData={result.borrowData}
+  {/* Promotions + Fraud + SEC Filings */}
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+  <Promotions ticker={result.ticker} promotions={result.promotions} />
+  <FraudEvidence
+    ticker={result.ticker}
+    fraudImages={result.fraudImages || []}
   />
-)}
+  <SecFilings ticker={result.ticker} filings={result.filings} />
+</div>
 
 
-    {/* News full width */}
-    <NewsSection ticker={result.ticker} items={result.news || []} />
-  </div>
-)}
+          {/* BorrowDesk */}
+          {result.borrowData && (
+            <BorrowDeskCard
+              ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
+              borrowData={result.borrowData}
+            />
+          )}
 
+          {/* News */}
+          <NewsSection ticker={result.ticker} items={result.news || []} />
+        </div>
+      )}
     </div>
   );
 }

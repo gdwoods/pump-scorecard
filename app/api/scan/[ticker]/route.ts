@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import yahooFinance from "yahoo-finance2";
 import { parseSecAddress } from "@/utils/normalizeCountry";
 import { fetchBorrowDesk } from "@/utils/fetchBorrowDesk";
+import * as cheerio from "cheerio";
 
 export const runtime = "nodejs";
 
@@ -45,19 +46,17 @@ async function fetchBorrowData(ticker: string) {
 
     const html = await res.text();
     const $ = cheerio.load(html);
-console.log("=== iBorrowDesk raw HTML preview ===");
-console.log(html.slice(0, 2000)); // just first 2000 chars so you don't flood logs
+    console.log("=== iBorrowDesk raw HTML preview ===");
+    console.log(html.slice(0, 2000));
 
-    // On iBorrowDesk, the main data table has id="report-table"
     const firstRow = $("#report-table tbody tr").first();
     if (!firstRow || firstRow.length === 0) {
       return { fee: "Manual Check", available: "Manual Check", updated: "N/A", source: url };
     }
 
-    // Columns are: Date | Fee | Available | Utilization | Updated
     const fee = firstRow.find("td").eq(1).text().trim() || "N/A";
     const available = firstRow.find("td").eq(2).text().trim() || "N/A";
-    const updated = firstRow.find("td").eq(4).text().trim() || "N/A"; // column index 4
+    const updated = firstRow.find("td").eq(4).text().trim() || "N/A";
 
     return { fee, available, updated, source: url };
   } catch (err) {
@@ -70,7 +69,6 @@ console.log(html.slice(0, 2000)); // just first 2000 chars so you don't flood lo
     };
   }
 }
-
 
 export async function GET(
   req: Request,
@@ -88,13 +86,12 @@ export async function GET(
     let insiderOwnership: number | null = null;
     let institutionalOwnership: number | null = null;
 
-    // ---------- Percent normalization helper ----------
     const toPercent = (raw: any): number | null => {
       const n = Number(raw);
       if (!isFinite(n) || n < 0) return null;
-      if (n <= 1.5) return +(n * 100).toFixed(1); // fraction
-      if (n <= 100) return +n.toFixed(1); // already %
-      if (n <= 10000) return +(n / 100).toFixed(1); // over-scaled
+      if (n <= 1.5) return +(n * 100).toFixed(1);
+      if (n <= 100) return +n.toFixed(1);
+      if (n <= 10000) return +(n / 100).toFixed(1);
       return 100.0;
     };
 
@@ -124,36 +121,21 @@ export async function GET(
           shortFloat = stats.shortPercentOfFloat;
         }
 
-        if (
-          insiderOwnership == null &&
-          Array.isArray((insiders as any).ownershipList)
-        ) {
-          insiderOwnership =
-            (insiders as any).ownershipList[0]?.percentHeld ?? null;
+        if (insiderOwnership == null && Array.isArray((insiders as any).ownershipList)) {
+          insiderOwnership = (insiders as any).ownershipList[0]?.percentHeld ?? null;
         }
-        if (
-          institutionalOwnership == null &&
-          Array.isArray((institutions as any).ownershipList)
-        ) {
-          institutionalOwnership =
-            (institutions as any).ownershipList[0]?.percentHeld ?? null;
+        if (institutionalOwnership == null && Array.isArray((institutions as any).ownershipList)) {
+          institutionalOwnership = (institutions as any).ownershipList[0]?.percentHeld ?? null;
         }
 
-        // ✅ majorHoldersBreakdown fallback
         if (insiderOwnership == null && holders.insidersPercentHeld != null) {
           insiderOwnership = holders.insidersPercentHeld;
         }
-        if (
-          institutionalOwnership == null &&
-          holders.institutionsPercentHeld != null
-        ) {
+        if (institutionalOwnership == null && holders.institutionsPercentHeld != null) {
           institutionalOwnership = holders.institutionsPercentHeld;
         }
-      } catch {
-        // optional
-      }
+      } catch {}
 
-      // 6-month daily chart
       const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 180;
       const chart = await yahooFinance.chart(upperTicker, {
         period1: new Date(Date.now() - SIX_MONTHS_MS),
@@ -168,71 +150,62 @@ export async function GET(
         })) || [];
     } catch {}
 
-// ---------- News (Finnhub with Yahoo fallback) ----------
-let news: Array<{ title: string; url: string; publisher?: string; published?: number | null }> = [];
-let newsSource: "Finnhub" | "Yahoo" | "None" = "None";
+    // ---------- News (Finnhub with Yahoo fallback) ----------
+    let news: Array<{ title: string; url: string; publisher?: string; published?: number | null }> = [];
+    let newsSource: "Finnhub" | "Yahoo" | "None" = "None";
 
-try {
-  const finnhubKey = process.env.FINNHUB_API_KEY;
-  let gotFinnhub = false;
+    try {
+      const finnhubKey = process.env.FINNHUB_API_KEY;
+      let gotFinnhub = false;
 
-  if (finnhubKey) {
-    const resp = await fetch(
-      `https://finnhub.io/api/v1/company-news?symbol=${upperTicker}&from=${new Date(
-        Date.now() - 1000 * 60 * 60 * 24 * 7
-      )
-        .toISOString()
-        .split("T")[0]}&to=${new Date().toISOString().split("T")[0]}&token=${finnhubKey}`,
-      { headers: { Accept: "application/json" } }
-    );
+      if (finnhubKey) {
+        const resp = await fetch(
+          `https://finnhub.io/api/v1/company-news?symbol=${upperTicker}&from=${new Date(
+            Date.now() - 1000 * 60 * 60 * 24 * 7
+          ).toISOString().split("T")[0]}&to=${new Date().toISOString().split("T")[0]}&token=${finnhubKey}`
+        );
 
-    if (resp.ok) {
-      const json = await resp.json();
-      console.log(`Finnhub returned ${Array.isArray(json) ? json.length : 0} articles for ${upperTicker}`);
-
-      if (Array.isArray(json) && json.length > 0) {
-        news = json.slice(0, 5).map((a: any) => ({
-          title: a.headline,
-          url: a.url,
-          publisher: a.source || "Finnhub",
-          published: a.datetime ? a.datetime * 1000 : null, // Finnhub gives UNIX seconds
-        }));
-        gotFinnhub = true;
-        newsSource = "Finnhub";
-      }
-    } else {
-      console.warn("Finnhub request failed:", resp.status, resp.statusText);
-    }
-  }
-
-  // ---------- Fallback: Yahoo Finance search ----------
-  if (!gotFinnhub) {
-    const newsResp: any = await yahooFinance.search(upperTicker, { newsCount: 5 });
-    if (newsResp && Array.isArray(newsResp.news)) {
-      news = newsResp.news.map((n: any) => {
-        let published: number | null = null;
-        if (typeof n.providerPublishTime === "number") {
-          published = n.providerPublishTime;
-        } else if (n.pubDate) {
-          const parsed = Date.parse(n.pubDate);
-          if (!Number.isNaN(parsed)) published = parsed;
+        if (resp.ok) {
+          const json = await resp.json();
+          if (Array.isArray(json) && json.length > 0) {
+            news = json.slice(0, 5).map((a: any) => ({
+              title: a.headline,
+              url: a.url,
+              publisher: a.source || "Finnhub",
+              published: a.datetime ? a.datetime * 1000 : null, // ✅ ms
+            }));
+            gotFinnhub = true;
+            newsSource = "Finnhub";
+          }
         }
-        return {
-          title: n.title,
-          url: n.link,
-          publisher: n.publisher,
-          published,
-        };
-      });
-      if (news.length > 0) newsSource = "Yahoo";
-      console.log(`Yahoo returned ${news.length} articles for ${upperTicker}`);
+      }
+
+      if (!gotFinnhub) {
+        const newsResp: any = await yahooFinance.search(upperTicker, { newsCount: 5 });
+        if (newsResp && Array.isArray(newsResp.news)) {
+          news = newsResp.news.map((n: any) => {
+            let published: number | null = null;
+
+            if (typeof n.providerPublishTime === "number") {
+              published = n.providerPublishTime * 1000; // ✅ ms
+            } else if (n.pubDate) {
+              const parsed = Date.parse(n.pubDate);
+              if (!Number.isNaN(parsed)) published = parsed; // already ms
+            }
+
+            return {
+              title: n.title,
+              url: n.link,
+              publisher: n.publisher,
+              published,
+            };
+          });
+          if (news.length > 0) newsSource = "Yahoo";
+        }
+      }
+    } catch (err) {
+      console.error("News fetch failed:", err);
     }
-  }
-} catch (err) {
-  console.error("News fetch failed:", err);
-}
-
-
 
     // ---------- Polygon Meta ----------
     let polyMeta: any = {};
@@ -305,6 +278,7 @@ try {
         }
       }
     } catch {}
+
     // ---------- Promotions ----------
     let promotions: Promotion[] = [];
     try {
@@ -482,22 +456,21 @@ try {
           if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9)
             retraced = true;
           if (retraced) retraceCount++;
-const spikeDate =
-  cur.date instanceof Date ? cur.date : new Date(cur.date);
+          const spikeDate =
+            cur.date instanceof Date ? cur.date : new Date(cur.date);
 
-// ⛔ Skip future dates
-if (spikeDate.getTime() <= Date.now()) {
-  droppinessDetail.push({
-    date: spikeDate.toISOString(),
-    spikePct: +(spikePct * 100).toFixed(1),
-    retraced,
-  });
-}
-
+          if (spikeDate.getTime() <= Date.now()) {
+            droppinessDetail.push({
+              date: spikeDate.toISOString(),
+              spikePct: +(spikePct * 100).toFixed(1),
+              retraced,
+            });
+          }
         }
       }
       droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
     } catch {}
+
     // ---------- Country (decide once; used by scoring & response) ----------
     let country = "Unknown";
     let countrySource = "Unknown";

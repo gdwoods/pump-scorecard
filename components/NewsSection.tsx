@@ -8,25 +8,31 @@ export type NewsItem = {
   published?: string | number | null;
 };
 
+// Format the published date (absolute + relative)
 function formatPublished(published: NewsItem["published"]) {
   if (published == null) return "";
-  let ms: number | null = null;
 
-  if (typeof published === "number") {
-    ms = published > 1e12 ? published : published * 1000;
-  } else if (/^\d+$/.test(published)) {
-    const n = Number(published);
-    ms = n > 1e12 ? n : n * 1000;
-  } else {
-    const parsed = Date.parse(published);
-    if (!Number.isNaN(parsed)) ms = parsed;
-  }
+  const d = new Date(Number(published));
+  if (!Number.isFinite(d.valueOf())) return "";
 
-  if (ms == null) return "";
-  const d = new Date(ms);
-  return Number.isFinite(d.valueOf())
-    ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : "";
+  // Absolute date
+  const dateStr = d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  // Relative
+  const diff = Date.now() - d.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  let relative = "";
+  if (days === 0) relative = "today";
+  else if (days === 1) relative = "yesterday";
+  else if (days < 30) relative = `${days}d ago`;
+  else if (days < 365) relative = `${Math.floor(days / 30)}mo ago`;
+  else relative = `${Math.floor(days / 365)}y ago`;
+
+  return `${dateStr} (${relative})`;
 }
 
 export default function NewsSection({
@@ -49,7 +55,7 @@ export default function NewsSection({
             href="https://news.google.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 underline"
+            className="text-blue-600 dark:text-blue-400 underline"
           >
             Google News
           </a>{" "}
@@ -58,34 +64,37 @@ export default function NewsSection({
             href="https://x.com/search?q="
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 underline"
+            className="text-blue-600 dark:text-blue-400 underline"
           >
             X (Twitter)
           </a>.
         </p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-3 mt-2">
           {news.map((n, i) => {
             const dateStr = formatPublished(n.published);
             return (
               <li
                 key={i}
-                className="border rounded-lg p-2 bg-gray-50 dark:bg-gray-700 flex flex-col"
+                className="border rounded-lg p-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition"
               >
                 <a
                   href={n.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-medium text-blue-700 underline"
+                  className="text-sm font-medium text-blue-700 dark:text-blue-400 underline"
                 >
                   {n.title}
                 </a>
-                {(n.publisher || dateStr) && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    {n.publisher ?? ""}
-                    {dateStr ? (n.publisher ? ` – ${dateStr}` : dateStr) : ""}
-                  </div>
-                )}
+                <div className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                  {n.publisher ? <span>{n.publisher}</span> : null}
+                  {dateStr && (
+                    <span>
+                      {n.publisher ? " – " : ""}
+                      {dateStr}
+                    </span>
+                  )}
+                </div>
               </li>
             );
           })}

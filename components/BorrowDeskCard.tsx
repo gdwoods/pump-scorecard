@@ -32,7 +32,6 @@ export default function BorrowDeskCard({
       available: Number(d.available),
     })) || [];
 
-  // Formatter for large numbers → 10k, 2M
   const formatNumber = (num: number) => {
     if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
     if (num >= 1_000) return `${(num / 1_000).toFixed(0)}K`;
@@ -40,12 +39,14 @@ export default function BorrowDeskCard({
   };
 
   return (
-    <Card className="p-4">
-      <CardContent>
-        <h2 className="text-lg font-semibold mb-2">💸 {ticker} iBorrowDesk</h2>
+    <Card className="p-4 bg-white dark:bg-slate-800 shadow-sm rounded-xl">
+      <CardContent className="space-y-2">
+        <h2 className="text-lg font-semibold mb-2">
+          💸 {ticker} iBorrowDesk
+        </h2>
 
         {borrowData.fee === "Manual Check" ? (
-          <p>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
             Data unavailable — please manually check{" "}
             <a
               href={borrowData.source}
@@ -78,35 +79,27 @@ export default function BorrowDeskCard({
               </a>
             </p>
 
-            {/* Combo chart */}
             {chartData.length > 0 && (
               <div className="h-72 mt-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={chartData}>
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10 }}
+                      tick={{ fontSize: 10, fill: "currentColor" }}
                       minTickGap={20}
                     />
-
-                    {/* Available shares axis (left) */}
                     <YAxis
                       yAxisId="left"
                       orientation="left"
-                      tick={{ fontSize: 10 }}
+                      tick={{ fontSize: 10, fill: "currentColor" }}
                       tickFormatter={formatNumber}
-                      domain={["auto", "auto"]}
                     />
-
-                    {/* Fee % axis (right) */}
                     <YAxis
                       yAxisId="right"
                       orientation="right"
-                      tick={{ fontSize: 10 }}
+                      tick={{ fontSize: 10, fill: "currentColor" }}
                       tickFormatter={(v) => `${v}%`}
-                      domain={[0, "auto"]}
                     />
-
                     <Tooltip
                       formatter={(val: any, name: string) =>
                         name === "Fee %"
@@ -114,13 +107,10 @@ export default function BorrowDeskCard({
                           : formatNumber(val)
                       }
                     />
-
                     <Legend
                       verticalAlign="top"
-                      wrapperStyle={{ fontSize: "12px" }}
+                      wrapperStyle={{ fontSize: "12px", color: "currentColor" }}
                     />
-
-                    {/* Bars = Available shares */}
                     <Bar
                       yAxisId="left"
                       dataKey="available"
@@ -129,8 +119,6 @@ export default function BorrowDeskCard({
                       barSize={20}
                       opacity={0.7}
                     />
-
-                    {/* Line = Fee % */}
                     <Line
                       yAxisId="right"
                       type="monotone"
