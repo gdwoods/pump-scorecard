@@ -1,5 +1,8 @@
 "use client";
 
+import React from "react";
+import { countryInfo } from "@/utils/countryToFlag";
+
 type FundamentalsProps = {
   ticker: string;
   result: {
@@ -12,6 +15,7 @@ type FundamentalsProps = {
     shortFloat?: number | null;
     insiderOwnership?: number | null;
     institutionalOwnership?: number | null;
+    country?: string | null;
   };
 };
 
@@ -29,6 +33,8 @@ function formatPercent(num?: number | null): string {
 }
 
 export default function Fundamentals({ ticker, result }: FundamentalsProps) {
+  const { flag, isRisky } = countryInfo(result.country);
+
   return (
     <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow-sm transition-colors">
       <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
@@ -66,6 +72,12 @@ export default function Fundamentals({ ticker, result }: FundamentalsProps) {
         <li>
           <strong>Institutional Ownership:</strong>{" "}
           {formatPercent(result.institutionalOwnership)}
+        </li>
+        <li>
+          <strong>Country:</strong>{" "}
+          <span className={isRisky ? "text-red-600 font-semibold" : ""}>
+            {flag} {result.country || "N/A"}
+          </span>
         </li>
       </ul>
     </div>

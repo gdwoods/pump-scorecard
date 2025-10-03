@@ -3,7 +3,6 @@
 import { useState } from "react";
 import FinalVerdict from "@/components/FinalVerdict";
 import Chart from "@/components/Chart";
-import CountrySection from "@/components/CountrySection";
 import Criteria from "@/components/Criteria";
 import Fundamentals from "@/components/Fundamentals";
 import Promotions from "@/components/Promotions";
@@ -87,16 +86,32 @@ export default function Page() {
     setManualFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // ✅ Combine backend score with manual flag adjustments
+  // ✅ Combine backend score with fundamentals + manual flags
   let adjustedScore = result?.weightedRiskScore ?? 0;
+
+  // --- Fundamentals auto-risks ---
+  if (result?.marketCap && result.marketCap < 50_000_000) {
+    adjustedScore += 10; // microcap risk
+  }
+  if (result?.shortFloat && result.shortFloat > 20) {
+    adjustedScore += 10; // high short interest
+  }
+  if (result?.insiderOwnership && result.insiderOwnership > 50) {
+    adjustedScore += 5; // insider-heavy
+  }
+
+  // --- Manual toggles ---
   if (manualFlags.pumpSuspicion) adjustedScore += 15;
   if (manualFlags.thinFloat) adjustedScore += 10;
   if (manualFlags.insiders) adjustedScore += 10;
   if (manualFlags.other) adjustedScore += 5;
+
   if (adjustedScore > 100) adjustedScore = 100;
 
   // ✅ Build score breakdown array
   const breakdown: { label: string; value: number }[] = [];
+
+  // Backend flags
   if (result?.dilution_offering) {
     breakdown.push({ label: "Dilution / offering (S-1 / 424B)", value: 20 });
   }
@@ -106,6 +121,19 @@ export default function Page() {
   if (result?.risky_country) {
     breakdown.push({ label: "Risky country", value: 15 });
   }
+
+  // --- Fundamentals breakdown entries ---
+  if (result?.marketCap && result.marketCap < 50_000_000) {
+    breakdown.push({ label: "Microcap (<$50M)", value: 10 });
+  }
+  if (result?.shortFloat && result.shortFloat > 20) {
+    breakdown.push({ label: "High short float >20%", value: 10 });
+  }
+  if (result?.insiderOwnership && result.insiderOwnership > 50) {
+    breakdown.push({ label: "High insider ownership >50%", value: 5 });
+  }
+
+  // Manual overrides
   if (manualFlags.pumpSuspicion) {
     breakdown.push({ label: "Pump suspicion", value: 15 });
   }
@@ -118,6 +146,11 @@ export default function Page() {
   if (manualFlags.other) {
     breakdown.push({ label: "Other red flag", value: 5 });
   }
+
+  // ✅ Top 3 drivers for FinalVerdict
+  const drivers = [...breakdown]
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 3);
 
   return (
     <div className="p-6 space-y-6">
@@ -164,35 +197,28 @@ export default function Page() {
 
       {result && (
         <div className="space-y-6">
-          {/* ✅ Final verdict + Score Breakdown + Chart side by side */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <FinalVerdict
-              verdict={result.summaryVerdict}
-              summary={result.summaryText}
-              score={adjustedScore}
-              manualFlags={manualFlags}
-              droppinessVerdict={result.droppinessVerdict}
-            />
+          {/* Final verdict */}
+          <FinalVerdict
+            verdict={result.summaryVerdict}
+            summary={result.summaryText}
+            score={adjustedScore}
+            manualFlags={manualFlags}
+            droppinessVerdict={result.droppinessVerdict}
+            drivers={drivers}
+          />
 
+          {/* Score + Chart */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ScoreBreakdown
               ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
-              breakdown={
-                breakdown.length > 0
-                  ? breakdown
-                  : [{ label: "No additional risk factors", value: 0 }]
-              }
+              breakdown={breakdown}
               total={adjustedScore}
             />
-
             <Chart result={result} />
           </div>
 
-          {/* Country + Criteria + Fundamentals */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <CountrySection
-              country={result.country}
-              source={result.countrySource}
-            />
+          {/* Criteria + Fundamentals */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Criteria
               ticker={ticker}
               result={result}
@@ -202,7 +228,7 @@ export default function Page() {
             <Fundamentals ticker={result.ticker} result={result} />
           </div>
 
-          {/* Droppiness score + scatter */}
+          {/* Droppiness */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <DroppinessCard
               ticker={result.ticker}
@@ -213,18 +239,16 @@ export default function Page() {
             <DroppinessScatter detail={result.droppinessDetail || []} />
           </div>
 
-  {/* Promotions + Fraud + SEC Filings */}
-<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-  <Promotions ticker={result.ticker} promotions={result.promotions} />
-  <FraudEvidence
-    ticker={result.ticker}
-    fraudImages={result.fraudImages || []}
-  />
-  <SecFilings ticker={result.ticker} filings={result.filings} />
-</div>
+          {/* Promotions + Fraud + SEC */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Promotions ticker={result.ticker} promotions={result.promotions} />
+            <FraudEvidence
+              ticker={result.ticker}
+              fraudImages={result.fraudImages || []}
+            />
+            <SecFilings ticker={result.ticker} filings={result.filings} />
+          </div>
 
-
-          {/* BorrowDesk */}
           {result.borrowData && (
             <BorrowDeskCard
               ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
@@ -232,7 +256,7 @@ export default function Page() {
             />
           )}
 
-          {/* News */}
+          {/* News full width */}
           <NewsSection ticker={result.ticker} items={result.news || []} />
         </div>
       )}

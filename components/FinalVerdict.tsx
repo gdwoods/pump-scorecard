@@ -6,6 +6,7 @@ type Props = {
   score: number;
   manualFlags: Record<string, boolean>;
   droppinessVerdict: string;
+  drivers?: { label: string; value: number }[];
 };
 
 export default function FinalVerdict({
@@ -14,6 +15,7 @@ export default function FinalVerdict({
   score,
   manualFlags,
   droppinessVerdict,
+  drivers = [],
 }: Props) {
   const color =
     verdict === "High risk"
@@ -56,6 +58,25 @@ export default function FinalVerdict({
       <p className="mt-2 text-gray-600 dark:text-gray-400 text-sm italic">
         {droppinessVerdict}
       </p>
+
+      {/* ✅ Key Risk Drivers */}
+      {drivers.length > 0 ? (
+        <div className="mt-4">
+          <h3 className="text-sm font-semibold mb-1">Key Risk Drivers</h3>
+          <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-300">
+            {drivers.map((d, i) => (
+              <li key={i}>
+                {d.label}{" "}
+                <span className="text-red-500 font-medium">(+{d.value})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500 italic mt-2">
+          No major red flags detected.
+        </p>
+      )}
 
       {/* Manual Flags */}
       {Object.keys(manualFlags).some((k) => manualFlags[k]) && (

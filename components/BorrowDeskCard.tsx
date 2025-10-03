@@ -38,6 +38,32 @@ export default function BorrowDeskCard({
     return num.toString();
   };
 
+  // Risk classification based on fee
+  const classifyRisk = (fee: number) => {
+    if (fee < 50) return { label: "Low risk", color: "bg-green-100 text-green-800" };
+    if (fee < 250) return { label: "Medium risk", color: "bg-yellow-100 text-yellow-800" };
+    return { label: "Elevated risk", color: "bg-red-100 text-red-800" };
+  };
+
+  // Determine trend arrow from last 2 days
+  let trend: "up" | "down" | "flat" | null = null;
+  if (chartData.length >= 2) {
+    const [latest, prev] = [chartData.at(-1)!, chartData.at(-2)!];
+    if (latest.fee > prev.fee) trend = "up";
+    else if (latest.fee < prev.fee) trend = "down";
+    else trend = "flat";
+  }
+
+  const latestFee = Number(borrowData.fee);
+  const risk = isNaN(latestFee) ? null : classifyRisk(latestFee);
+
+  // Dynamic fee color logic
+  const feeColor = (fee: number) => {
+    if (fee < 50) return "#16a34a"; // green-600
+    if (fee < 250) return "#f59e0b"; // amber-500
+    return "#dc2626"; // red-600
+  };
+
   return (
     <Card className="p-4 bg-white dark:bg-slate-800 shadow-sm rounded-xl">
       <CardContent className="space-y-2">
@@ -59,8 +85,18 @@ export default function BorrowDeskCard({
           </p>
         ) : (
           <>
-            <p>
+            <p className="flex items-center gap-2">
               <strong>Fee:</strong> {borrowData.fee}%
+              {trend === "up" && <span className="text-red-600">⬆️</span>}
+              {trend === "down" && <span className="text-green-600">⬇️</span>}
+              {trend === "flat" && <span className="text-gray-400">➖</span>}
+              {risk && (
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.color}`}
+                >
+                  {risk.label}
+                </span>
+              )}
             </p>
             <p>
               <strong>Available:</strong> {borrowData.available}
@@ -119,15 +155,53 @@ export default function BorrowDeskCard({
                       barSize={20}
                       opacity={0.7}
                     />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="fee"
-                      name="Fee %"
-                      stroke="#ef4444"
-                      strokeWidth={2}
-                      dot={false}
-                    />
+<Line
+  yAxisId="right"
+  type="monotone"
+  dataKey="fee"
+  name="Fee %"
+  stroke="#6b7280" // keep line neutral
+  strokeWidth={1.5}
+  dot={(props: any) => {
+    const { cx, cy, value, index } = props;
+    let fill = "#16a34a"; // green
+    if (value >= 50 && value < 250) fill = "#f59e0b"; // orange
+    if (value >= 250) fill = "#dc2626"; // red
+
+    return (
+      <circle
+        key={`dot-${index}`}
+        cx={cx}
+        cy={cy}
+        r={3}
+        fill={fill}
+        stroke="white"
+        strokeWidth={1}
+      />
+    );
+  }}
+  activeDot={(props: any) => {
+    const { cx, cy, value, index } = props;
+    let fill = "#16a34a";
+    if (value >= 50 && value < 250) fill = "#f59e0b";
+    if (value >= 250) fill = "#dc2626";
+
+    return (
+      <circle
+        key={`active-dot-${index}`}
+        cx={cx}
+        cy={cy}
+        r={5}
+        fill={fill}
+        stroke="white"
+        strokeWidth={2}
+      />
+    );
+  }}
+/>
+
+
+
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
