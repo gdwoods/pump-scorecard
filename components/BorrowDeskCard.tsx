@@ -136,13 +136,36 @@ export default function BorrowDeskCard({
                       tick={{ fontSize: 10, fill: "currentColor" }}
                       tickFormatter={(v) => `${v}%`}
                     />
-                    <Tooltip
-                      formatter={(val: any, name: string) =>
-                        name === "Fee %"
-                          ? `${val.toFixed(2)}%`
-                          : formatNumber(val)
-                      }
-                    />
+         <Tooltip
+  contentStyle={{
+    backgroundColor: "#1f2937", // dark background
+    borderColor: "#374151",     // subtle border
+    color: "#f9fafb",           // default text
+  }}
+  labelStyle={{
+    color: "#f9fafb",           // ✅ date is now readable in dark mode
+    fontWeight: "500",
+  }}
+  formatter={(value: any, name: string) => {
+    if (name === "Fee %") {
+      return [`${Number(value).toFixed(2)}%`, "Fee"];
+    }
+    if (name === "Available") {
+      return [Number(value).toLocaleString(), "Available"];
+    }
+    return [value, name];
+  }}
+  labelFormatter={(label) => {
+    const d = new Date(label);
+    if (Number.isNaN(d.valueOf())) return label;
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }}
+/>
+
                     <Legend
                       verticalAlign="top"
                       wrapperStyle={{ fontSize: "12px", color: "currentColor" }}
