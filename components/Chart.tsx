@@ -26,8 +26,6 @@ export default function Chart({ result }: { result: any }) {
     return num.toString();
   };
 
-  const formatMoney = (num: number) => `$${num.toFixed(2)}`;
-
   return (
     <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow">
       <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
@@ -60,39 +58,36 @@ export default function Chart({ result }: { result: any }) {
               tickFormatter={(v) => `$${v}`}
             />
 
-import { formatNumber } from "@/utils/formatNumber";
-
-<Tooltip
-  contentStyle={{
-    backgroundColor: "#1f2937", // dark gray background (Tailwind gray-800)
-    borderColor: "#374151",     // border (Tailwind gray-700)
-    color: "#f9fafb",           // default text (Tailwind gray-50)
-  }}
-  labelStyle={{
-    color: "#f9fafb",           // ✅ tooltip date is now light in dark mode
-    fontWeight: "500",
-  }}
-  formatter={(value: any, _name: string, item: any) => {
-    if (item?.dataKey === "price") {
-      return [formatNumber(value, true), "Price"]; // 💵 formatted like $119.40, $6.83B, etc.
-    }
-    if (item?.dataKey === "volume") {
-      return [formatNumber(value), "Volume"];      // 📊 formatted like 3.68M, 773.30K
-    }
-    return [value, _name];
-  }}
-  labelFormatter={(label) => {
-    const d = new Date(label);
-    if (Number.isNaN(d.valueOf())) return label;
-    return d.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  }}
-/>
-
-
+            {/* Tooltip */}
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#1f2937", // dark gray background
+                borderColor: "#374151",     // subtle border
+                color: "#f9fafb",           // text color
+              }}
+              labelStyle={{
+                color: "#f9fafb",           // tooltip date text
+                fontWeight: "500",
+              }}
+              formatter={(value: any, _name: string, item: any) => {
+                if (item?.dataKey === "price") {
+                  return [formatNumber(value, true), "Price"];
+                }
+                if (item?.dataKey === "volume") {
+                  return [formatNumber(value), "Volume"];
+                }
+                return [value, _name];
+              }}
+              labelFormatter={(label) => {
+                const d = new Date(label);
+                if (Number.isNaN(d.valueOf())) return label;
+                return d.toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                });
+              }}
+            />
 
             <Legend
               verticalAlign="top"

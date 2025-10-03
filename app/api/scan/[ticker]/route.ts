@@ -226,62 +226,97 @@ export async function GET(
       promotions = [{ type: "Manual Check", date: "", url: "https://www.stockpromotiontracker.com/" }];
     }
 
-    // ---------- Fraud ----------
-    let fraudImages: FraudImage[] = [];
-    try {
-      const fraudRes = await fetch(
-        `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
-        { headers: { "User-Agent": "pump-scorecard" } }
-      );
-      if (fraudRes.ok) {
-        const fraudJson = await fraudRes.json();
-        const rawResults = Array.isArray(fraudJson?.results) ? fraudJson.results : [];
-        const U = upperTicker.toUpperCase();
-        const normalize = (s: unknown) =>
-          String(s ?? "").toUpperCase().replace(/[$#@()[\]{}.,;:!?'"\-]/g, " ").replace(/\s+/g, " ").trim();
-        const hasTickerToken = (s: string) => {
-          const re = new RegExp(`(^|[^A-Z0-9])${U}([^A-Z0-9]|$)`);
-          return re.test(s);
-        };
-        const strongMatches = rawResults.filter((r: any) => {
-          const fields: string[] = [
-            r.caption,
-            r.text,
-            r.title,
-            r.postTitle,
-            Array.isArray(r.symbols) ? r.symbols.join(" ") : "",
-            Array.isArray(r.tickers) ? r.tickers.join(" ") : "",
-            r.imagePath,
-            r.thumbnailPath,
-          ].map(normalize);
-          return hasTickerToken(fields.join(" | "));
-        });
-        fraudImages = strongMatches
-          .map((img: any) => ({
-            full: img.imagePath
-              ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}`
-              : null,
-            thumb: img.thumbnailPath
-              ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
-              : null,
-            approvedAt: img.approvedAt || null,
-            caption: img.caption ?? img.text ?? img.title ?? img.postTitle ?? "",
-            sourceUrl: img.link ?? img.url ?? img.postUrl ?? null,
-          }))
-          .filter((img: FraudImage) => img.full && img.thumb);
-      }
-    } catch {}
-    if (!fraudImages || fraudImages.length === 0) {
-      fraudImages = [
-        {
-          full: null,
-          thumb: null,
-          approvedAt: null,
-          caption: "Manual Check",
-          sourceUrl: `https://www.stopnasdaqchinafraud.com/?q=${encodeURIComponent(upperTicker)}`,
-        },
-      ];
-    }
+// ---------- Fraud ----------
+type FraudImage = {
+  full: string | null;
+  thumb: string | null;
+  date: string | null; // ✅ normalized ISO string
+  caption: string;
+  sourceUrl: string | null;
+};
+
+let fraudImages: FraudImage[] = [];
+try {
+  const fraudRes = await fetch(
+    `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
+    { headers: { "User-Agent": "pump-scorecard" } }
+  );
+
+  if (fraudRes.ok) {
+    const fraudJson = await fraudRes.json();
+    const rawResults = Array.isArray(fraudJson?.results) ? fraudJson.results : [];
+    const U = upperTicker.toUpperCase();
+
+    const normalize = (s: unknown) =>
+      String(s ?? "")
+        .toUpperCase()
+        .replace(/[$#@()[\]{}.,;:!?'"\-]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const hasTickerToken = (s: string) => {
+      const re = new RegExp(`(^|[^A-Z0-9])${U}([^A-Z0-9]|$)`);
+      return re.test(s);
+    };
+
+    const strongMatches = rawResults.filter((r: any) => {
+      const fields: string[] = [
+        r.caption,
+        r.text,
+        r.title,
+        r.postTitle,
+        Array.isArray(r.symbols) ? r.symbols.join(" ") : "",
+        Array.isArray(r.tickers) ? r.tickers.join(" ") : "",
+        r.imagePath,
+        r.thumbnailPath,
+      ].map(normalize);
+      return hasTickerToken(fields.join(" | "));
+    });
+
+    fraudImages = strongMatches
+      .map((img: any) => ({
+        full: img.imagePath
+          ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}`
+          : null,
+        thumb: img.thumbnailPath
+          ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
+          : null,
+        date: img.approvedAt
+          ? new Date(img.approvedAt).toISOString()
+          : img.uploadedAt
+          ? new Date(img.uploadedAt).toISOString()
+          : null,
+        caption: img.caption ?? img.text ?? img.title ?? img.postTitle ?? "Evidence",
+        sourceUrl: img.link ?? img.url ?? img.postUrl ?? null,
+      }))
+      .filter((img: FraudImage) => img.full && img.thumb);
+
+    // ✅ Safe sort (newest first, null dates last)
+    fraudImages = fraudImages.sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+  }
+} catch (err) {
+  console.error("Fraud fetch error:", err);
+}
+
+// Fallback if no fraud evidence
+if (!fraudImages || fraudImages.length === 0) {
+  fraudImages = [
+    {
+      full: null,
+      thumb: null,
+      date: null,
+      caption: "Manual Check",
+      sourceUrl: `https://www.stopnasdaqchinafraud.com/?q=${encodeURIComponent(
+        upperTicker
+      )}`,
+    },
+  ];
+}
 
     // ---------- Droppiness ----------
     let droppinessScore = 0;

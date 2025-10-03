@@ -7,6 +7,7 @@ type FraudItem = {
   thumb?: string | null;
   caption?: string | null;
   sourceUrl?: string | null;
+  date?: string | null; // ✅ optional date
 };
 
 export default function FraudEvidence({
@@ -27,10 +28,21 @@ export default function FraudEvidence({
   const manualUrl =
     (isOnlyManual && items[0]?.sourceUrl) || "https://www.stopnasdaqchinafraud.com/";
 
+  const formatDate = (raw: string) => {
+    try {
+      const d = new Date(raw);
+      return d.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      return raw;
+    }
+  };
+
   return (
     <CollapsibleCard title={`🕵️ ${ticker} Fraud Evidence`} defaultOpen={true}>
-      {/* Removed CardTitle here */}
-
       {items.length === 0 || isOnlyManual ? (
         <p className="text-sm text-gray-700 dark:text-gray-300">
           No fraud evidence found for this ticker — please manually check at{" "}
@@ -56,6 +68,11 @@ export default function FraudEvidence({
               )}
               <div className="text-sm">
                 <div className="font-medium">{f.caption || "Evidence"}</div>
+                {f.date && (
+                  <div className="text-xs text-gray-500">
+                    Submitted: {formatDate(f.date)}
+                  </div>
+                )}
                 {f.sourceUrl && (
                   <a
                     href={f.sourceUrl}
