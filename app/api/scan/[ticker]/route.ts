@@ -19,7 +19,7 @@ type Promotion = { type: string; date: string; url: string };
 type FraudImage = {
   full: string | null;
   thumb: string | null;
-  approvedAt: string | null;
+  date: string | null; // normalized ISO
   caption: string;
   sourceUrl: string | null;
 };
@@ -31,6 +31,13 @@ type IntradayCandle = {
   low: number;
   close: number;
   volume: number;
+};
+type CompanyProfile = {
+  sector?: string;
+  industry?: string;
+  employees?: number;
+  website?: string;
+  summary?: string;
 };
 
 // ---------- iBorrowDesk scraper ----------
@@ -82,6 +89,7 @@ export async function GET(
     let shortFloat: number | null = null;
     let insiderOwnership: number | null = null;
     let institutionalOwnership: number | null = null;
+    let companyProfile: CompanyProfile | null = null;
 
     const toPercent = (raw: any): number | null => {
       const n = Number(raw);
@@ -129,6 +137,26 @@ export async function GET(
           institutionalOwnership = holders.institutionsPercentHeld;
         }
       } catch {}
+
+      // ---------- Company Profile ----------
+      try {
+        const profileSummary = await yahooFinance.quoteSummary(upperTicker, {
+          modules: ["summaryProfile"],
+          lang: "en",
+        });
+
+        if (profileSummary?.summaryProfile) {
+          companyProfile = {
+            sector: profileSummary.summaryProfile.sector || null,
+            industry: profileSummary.summaryProfile.industry || null,
+            employees: profileSummary.summaryProfile.fullTimeEmployees || null,
+            website: profileSummary.summaryProfile.website || null,
+            summary: profileSummary.summaryProfile.longBusinessSummary || null,
+          };
+        }
+      } catch (err) {
+        console.error("Company profile fetch failed:", err);
+      }
 
       const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 180;
       const chart = await yahooFinance.chart(upperTicker, {
@@ -226,97 +254,86 @@ export async function GET(
       promotions = [{ type: "Manual Check", date: "", url: "https://www.stockpromotiontracker.com/" }];
     }
 
-// ---------- Fraud ----------
-type FraudImage = {
-  full: string | null;
-  thumb: string | null;
-  date: string | null; // ✅ normalized ISO string
-  caption: string;
-  sourceUrl: string | null;
-};
+    // ---------- Fraud ----------
+    let fraudImages: FraudImage[] = [];
+    try {
+      const fraudRes = await fetch(
+        `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
+        { headers: { "User-Agent": "pump-scorecard" } }
+      );
+      if (fraudRes.ok) {
+        const fraudJson = await fraudRes.json();
+        const rawResults = Array.isArray(fraudJson?.results) ? fraudJson.results : [];
+        const U = upperTicker.toUpperCase();
 
-let fraudImages: FraudImage[] = [];
-try {
-  const fraudRes = await fetch(
-    `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
-    { headers: { "User-Agent": "pump-scorecard" } }
-  );
+        const normalize = (s: unknown) =>
+          String(s ?? "")
+            .toUpperCase()
+            .replace(/[$#@()[\]{}.,;:!?'"\-]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
 
-  if (fraudRes.ok) {
-    const fraudJson = await fraudRes.json();
-    const rawResults = Array.isArray(fraudJson?.results) ? fraudJson.results : [];
-    const U = upperTicker.toUpperCase();
+        const hasTickerToken = (s: string) => {
+          const re = new RegExp(`(^|[^A-Z0-9])${U}([^A-Z0-9]|$)`);
+          return re.test(s);
+        };
 
-    const normalize = (s: unknown) =>
-      String(s ?? "")
-        .toUpperCase()
-        .replace(/[$#@()[\]{}.,;:!?'"\-]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+        const strongMatches = rawResults.filter((r: any) => {
+          const fields: string[] = [
+            r.caption,
+            r.text,
+            r.title,
+            r.postTitle,
+            Array.isArray(r.symbols) ? r.symbols.join(" ") : "",
+            Array.isArray(r.tickers) ? r.tickers.join(" ") : "",
+            r.imagePath,
+            r.thumbnailPath,
+          ].map(normalize);
+          return hasTickerToken(fields.join(" | "));
+        });
 
-    const hasTickerToken = (s: string) => {
-      const re = new RegExp(`(^|[^A-Z0-9])${U}([^A-Z0-9]|$)`);
-      return re.test(s);
-    };
+        fraudImages = strongMatches
+          .map((img: any) => ({
+            full: img.imagePath
+              ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}`
+              : null,
+            thumb: img.thumbnailPath
+              ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
+              : null,
+            date: img.approvedAt
+              ? new Date(img.approvedAt).toISOString()
+              : img.uploadedAt
+              ? new Date(img.uploadedAt).toISOString()
+              : null,
+            caption: img.caption ?? img.text ?? img.title ?? img.postTitle ?? "Evidence",
+            sourceUrl: img.link ?? img.url ?? img.postUrl ?? null,
+          }))
+          .filter((img: FraudImage) => img.full && img.thumb);
 
-    const strongMatches = rawResults.filter((r: any) => {
-      const fields: string[] = [
-        r.caption,
-        r.text,
-        r.title,
-        r.postTitle,
-        Array.isArray(r.symbols) ? r.symbols.join(" ") : "",
-        Array.isArray(r.tickers) ? r.tickers.join(" ") : "",
-        r.imagePath,
-        r.thumbnailPath,
-      ].map(normalize);
-      return hasTickerToken(fields.join(" | "));
-    });
+        fraudImages = fraudImages.sort((a, b) => {
+          if (!a.date && !b.date) return 0;
+          if (!a.date) return 1;
+          if (!b.date) return -1;
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        });
+      }
+    } catch (err) {
+      console.error("Fraud fetch error:", err);
+    }
 
-    fraudImages = strongMatches
-      .map((img: any) => ({
-        full: img.imagePath
-          ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}`
-          : null,
-        thumb: img.thumbnailPath
-          ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}`
-          : null,
-        date: img.approvedAt
-          ? new Date(img.approvedAt).toISOString()
-          : img.uploadedAt
-          ? new Date(img.uploadedAt).toISOString()
-          : null,
-        caption: img.caption ?? img.text ?? img.title ?? img.postTitle ?? "Evidence",
-        sourceUrl: img.link ?? img.url ?? img.postUrl ?? null,
-      }))
-      .filter((img: FraudImage) => img.full && img.thumb);
-
-    // ✅ Safe sort (newest first, null dates last)
-    fraudImages = fraudImages.sort((a, b) => {
-      if (!a.date && !b.date) return 0;
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
-  }
-} catch (err) {
-  console.error("Fraud fetch error:", err);
-}
-
-// Fallback if no fraud evidence
-if (!fraudImages || fraudImages.length === 0) {
-  fraudImages = [
-    {
-      full: null,
-      thumb: null,
-      date: null,
-      caption: "Manual Check",
-      sourceUrl: `https://www.stopnasdaqchinafraud.com/?q=${encodeURIComponent(
-        upperTicker
-      )}`,
-    },
-  ];
-}
+    if (!fraudImages || fraudImages.length === 0) {
+      fraudImages = [
+        {
+          full: null,
+          thumb: null,
+          date: null,
+          caption: "Manual Check",
+          sourceUrl: `https://www.stopnasdaqchinafraud.com/?q=${encodeURIComponent(
+            upperTicker
+          )}`,
+        },
+      ];
+    }
 
     // ---------- Droppiness ----------
     let droppinessScore = 0;
@@ -398,16 +415,13 @@ if (!fraudImages || fraudImages.length === 0) {
           spikeCount++;
           let retraced = false;
           if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
-          if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) retraced = true;
+          if (!retraceCount && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) retraced = true;
           if (retraced) retraceCount++;
-          const spikeDate = cur.date instanceof Date ? cur.date : new Date(cur.date);
-          if (spikeDate.getTime() <= Date.now()) {
-            droppinessDetail.push({
-              date: spikeDate.toISOString(),
-              spikePct: +(spikePct * 100).toFixed(1),
-              retraced,
-            });
-          }
+          droppinessDetail.push({
+            date: cur.date.toISOString(),
+            spikePct: +(spikePct * 100).toFixed(1),
+            retraced,
+          });
         }
       }
       droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
@@ -423,7 +437,10 @@ if (!fraudImages || fraudImages.length === 0) {
       country = String(polyMeta.results.country).trim();
       countrySource = "Polygon";
     } else if (polyMeta?.results?.locale) {
-      country = String(polyMeta.results.locale).toUpperCase() === "US" ? "United States" : String(polyMeta.results.locale).trim();
+      country =
+        String(polyMeta.results.locale).toUpperCase() === "US"
+          ? "United States"
+          : String(polyMeta.results.locale).trim();
       countrySource = "Polygon";
     } else if (quote.country) {
       country = String(quote.country).trim();
@@ -439,16 +456,21 @@ if (!fraudImages || fraudImages.length === 0) {
     // ---------- Scores ----------
     const latest = history.at(-1) || {};
     const prev = history.at(-2) || latest;
-    const avgVol = history.reduce((s, q) => s + (q.volume || 0), 0) / (history.length || 1) || 0;
+    const avgVol =
+      history.reduce((s, q) => s + (q.volume || 0), 0) / (history.length || 1) || 0;
 
-    const sudden_volume_spike = !!(latest as any).volume && avgVol > 0 && (latest as any).volume > avgVol * 3;
-    const sudden_price_spike = (latest as any).close > ((prev as any).close || (latest as any).close) * 1.25;
+    const sudden_volume_spike =
+      !!(latest as any).volume && avgVol > 0 && (latest as any).volume > avgVol * 3;
+    const sudden_price_spike =
+      (latest as any).close > ((prev as any).close || (latest as any).close) * 1.25;
 
     let weightedRiskScore = 0;
     if (sudden_volume_spike) weightedRiskScore += 20;
     if (sudden_price_spike) weightedRiskScore += 20;
-    if (filings.some((f) => f.title.includes("S-1") || f.title.includes("424B"))) weightedRiskScore += 20;
-    if (fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual")) weightedRiskScore += 20;
+    if (filings.some((f) => f.title.includes("S-1") || f.title.includes("424B")))
+      weightedRiskScore += 20;
+    if (fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"))
+      weightedRiskScore += 20;
     if (droppinessScore >= 70) weightedRiskScore -= 15;
     else if (droppinessScore < 40) weightedRiskScore += 15;
 
@@ -475,7 +497,6 @@ if (!fraudImages || fraudImages.length === 0) {
       ticker: upperTicker,
       companyName: quote.longName || quote.shortName || upperTicker,
 
-      // ✅ Fundamentals flattened back to top level
       lastPrice: quote.regularMarketPrice ?? null,
       marketCap: quote.marketCap ?? null,
       sharesOutstanding: quote.sharesOutstanding ?? null,
@@ -488,6 +509,9 @@ if (!fraudImages || fraudImages.length === 0) {
       exchange: quote.fullExchangeName || "Unknown",
       country,
       countrySource,
+
+      // ✅ Profile merged
+      companyProfile,
 
       history,
       intraday,
@@ -504,13 +528,20 @@ if (!fraudImages || fraudImages.length === 0) {
 
       sudden_volume_spike,
       sudden_price_spike,
-      dilution_offering: filings.some((f) => f.title.includes("S-1") || f.title.includes("424B")),
-      promoted_stock: promotions.length > 0 && promotions[0].type !== "Manual Check",
-      fraud_evidence: fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"),
+      dilution_offering: filings.some(
+        (f) => f.title.includes("S-1") || f.title.includes("424B")
+      ),
+      promoted_stock:
+        promotions.length > 0 && promotions[0].type !== "Manual Check",
+      fraud_evidence:
+        fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"),
       risky_country: RISKY.has(country),
     });
   } catch (err: any) {
     console.error("scan route failed:", err?.message || err);
-    return NextResponse.json({ error: err?.message || "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message || "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

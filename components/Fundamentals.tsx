@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { countryInfo } from "@/utils/countryToFlag";
 import { formatNumber } from "@/utils/formatNumber";
 
@@ -9,6 +10,7 @@ export default function Fundamentals({ result }: Props) {
   if (!result) return null;
 
   const { flag, isRisky } = countryInfo(result.country);
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div className="p-6 border rounded-lg bg-white dark:bg-gray-800 shadow">
@@ -61,6 +63,58 @@ export default function Fundamentals({ result }: Props) {
         <li className={isRisky ? "text-red-500 font-semibold" : ""}>
           <strong>Country:</strong> {flag} {result.country ?? "Unknown"}
         </li>
+
+{/* ✅ Company Profile Section */}
+{result.companyProfile && (
+  <>
+    {/* Divider */}
+    <li className="col-span-2">
+      <hr className="my-2 border-gray-300 dark:border-gray-700" />
+    </li>
+
+    <li className="col-span-2">
+      <strong>Sector:</strong> {result.companyProfile.sector ?? "N/A"}
+    </li>
+    <li className="col-span-2">
+      <strong>Industry:</strong> {result.companyProfile.industry ?? "N/A"}
+    </li>
+    <li className="col-span-2">
+      <strong>Employees:</strong>{" "}
+      {result.companyProfile.employees
+        ? result.companyProfile.employees.toLocaleString()
+        : "N/A"}
+    </li>
+    <li className="col-span-2">
+      <strong>Website:</strong>{" "}
+      {result.companyProfile.website ? (
+        <a
+          href={result.companyProfile.website}
+          target="_blank"
+          rel="noreferrer"
+          className="text-blue-600 underline"
+        >
+          {result.companyProfile.website}
+        </a>
+      ) : (
+        "N/A"
+      )}
+    </li>
+    {result.companyProfile.summary && (
+      <li className="col-span-2 text-gray-700 dark:text-gray-300 text-sm">
+        <div className={expanded ? "" : "line-clamp-3"}>
+          {result.companyProfile.summary}
+        </div>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-blue-600 text-xs mt-1"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      </li>
+    )}
+  </>
+)}
+
       </ul>
     </div>
   );
