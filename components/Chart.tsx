@@ -10,6 +10,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
+import { formatNumber } from "@/utils/formatNumber";
 
 export default function Chart({ result }: { result: any }) {
   const chartData =
@@ -59,6 +60,8 @@ export default function Chart({ result }: { result: any }) {
               tickFormatter={(v) => `$${v}`}
             />
 
+import { formatNumber } from "@/utils/formatNumber";
+
 <Tooltip
   contentStyle={{
     backgroundColor: "#1f2937", // dark gray background (Tailwind gray-800)
@@ -66,15 +69,15 @@ export default function Chart({ result }: { result: any }) {
     color: "#f9fafb",           // default text (Tailwind gray-50)
   }}
   labelStyle={{
-    color: "#f9fafb",           // ✅ tooltip date will now be light in dark mode
+    color: "#f9fafb",           // ✅ tooltip date is now light in dark mode
     fontWeight: "500",
   }}
   formatter={(value: any, _name: string, item: any) => {
     if (item?.dataKey === "price") {
-      return [`$${Number(value).toFixed(2)}`, "Price"];
+      return [formatNumber(value, true), "Price"]; // 💵 formatted like $119.40, $6.83B, etc.
     }
     if (item?.dataKey === "volume") {
-      return [Number(value).toLocaleString(), "Volume"];
+      return [formatNumber(value), "Volume"];      // 📊 formatted like 3.68M, 773.30K
     }
     return [value, _name];
   }}
@@ -88,6 +91,7 @@ export default function Chart({ result }: { result: any }) {
     });
   }}
 />
+
 
 
             <Legend

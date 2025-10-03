@@ -136,7 +136,9 @@ export default function BorrowDeskCard({
                       tick={{ fontSize: 10, fill: "currentColor" }}
                       tickFormatter={(v) => `${v}%`}
                     />
-         <Tooltip
+import { formatNumber } from "@/utils/formatNumber";
+
+<Tooltip
   contentStyle={{
     backgroundColor: "#1f2937", // dark background
     borderColor: "#374151",     // subtle border
@@ -151,7 +153,7 @@ export default function BorrowDeskCard({
       return [`${Number(value).toFixed(2)}%`, "Fee"];
     }
     if (name === "Available") {
-      return [Number(value).toLocaleString(), "Available"];
+      return [formatNumber(value), "Available"]; // 🔥 uses M/B/K formatting
     }
     return [value, name];
   }}
@@ -165,6 +167,7 @@ export default function BorrowDeskCard({
     });
   }}
 />
+
 
                     <Legend
                       verticalAlign="top"

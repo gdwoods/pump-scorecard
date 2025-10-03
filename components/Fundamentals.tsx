@@ -1,25 +1,9 @@
-// components/Fundamentals.tsx
 "use client";
 
 import { countryInfo } from "@/utils/countryToFlag";
+import { formatNumber } from "@/utils/formatNumber";
 
 type Props = { result: any };
-
-function formatNumber(value: number | null | undefined, isMoney = false): string {
-  if (value == null || isNaN(value)) return "N/A";
-  let num = value;
-  let suffix = "";
-
-  if (num >= 1_000_000_000) {
-    num = num / 1_000_000_000;
-    suffix = "B";
-  } else if (num >= 1_000_000) {
-    num = num / 1_000_000;
-    suffix = "M";
-  }
-
-  return (isMoney ? "$" : "") + num.toFixed(2) + suffix;
-}
 
 export default function Fundamentals({ result }: Props) {
   if (!result) return null;

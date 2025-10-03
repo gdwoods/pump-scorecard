@@ -1,7 +1,10 @@
 // utils/formatNumber.ts
-
-export function formatNumber(value: number | null | undefined, isMoney = false): string {
+export function formatNumber(
+  value: number | null | undefined,
+  isMoney = false
+): string {
   if (value == null || isNaN(value)) return "N/A";
+
   let num = value;
   let suffix = "";
 
@@ -11,7 +14,13 @@ export function formatNumber(value: number | null | undefined, isMoney = false):
   } else if (num >= 1_000_000) {
     num = num / 1_000_000;
     suffix = "M";
+  } else if (num >= 1_000) {
+    num = num / 1_000;
+    suffix = "K";
   }
 
-  return (isMoney ? "$" : "") + num.toFixed(2) + suffix;
+  // decide decimals
+  const decimals = isMoney ? 2 : suffix ? 2 : 0;
+
+  return (isMoney ? "$" : "") + num.toFixed(decimals) + suffix;
 }
