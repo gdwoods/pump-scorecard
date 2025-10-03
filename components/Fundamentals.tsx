@@ -1,83 +1,81 @@
+// components/Fundamentals.tsx
 "use client";
 
-import React from "react";
 import { countryInfo } from "@/utils/countryToFlag";
 
-type FundamentalsProps = {
-  ticker: string;
-  result: {
-    lastPrice?: number | null;
-    marketCap?: number | null;
-    sharesOutstanding?: number | null;
-    floatShares?: number | null;
-    avgVolume?: number | null;
-    latestVolume?: number | null;
-    shortFloat?: number | null;
-    insiderOwnership?: number | null;
-    institutionalOwnership?: number | null;
-    country?: string | null;
-  };
-};
+type Props = { result: any };
 
-function formatNumber(num?: number | null): string {
-  if (num == null) return "N/A";
-  if (Math.abs(num) >= 1e9) return (num / 1e9).toFixed(2) + "B";
-  if (Math.abs(num) >= 1e6) return (num / 1e6).toFixed(2) + "M";
-  if (Math.abs(num) >= 1e3) return (num / 1e3).toFixed(2) + "K";
-  return num.toString();
+function formatNumber(value: number | null | undefined, isMoney = false): string {
+  if (value == null || isNaN(value)) return "N/A";
+  let num = value;
+  let suffix = "";
+
+  if (num >= 1_000_000_000) {
+    num = num / 1_000_000_000;
+    suffix = "B";
+  } else if (num >= 1_000_000) {
+    num = num / 1_000_000;
+    suffix = "M";
+  }
+
+  return (isMoney ? "$" : "") + num.toFixed(2) + suffix;
 }
 
-function formatPercent(num?: number | null): string {
-  if (num == null) return "N/A";
-  return num.toFixed(1) + "%";
-}
+export default function Fundamentals({ result }: Props) {
+  if (!result) return null;
 
-export default function Fundamentals({ ticker, result }: FundamentalsProps) {
   const { flag, isRisky } = countryInfo(result.country);
 
   return (
-    <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow-sm transition-colors">
-      <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-        📊 {ticker} Fundamentals
-      </h2>
+    <div className="p-6 border rounded-lg bg-white dark:bg-gray-800 shadow">
+      <h2 className="text-lg font-semibold mb-4">📊 Fundamentals</h2>
 
-      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
+      <ul className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
         <li>
           <strong>Last Price:</strong>{" "}
           {result.lastPrice != null ? `$${result.lastPrice.toFixed(2)}` : "N/A"}
         </li>
         <li>
-          <strong>Market Cap:</strong> {formatNumber(result.marketCap)}
+          <strong>Market Cap:</strong>{" "}
+          {formatNumber(result.marketCap, true)}
         </li>
         <li>
           <strong>Shares Outstanding:</strong>{" "}
           {formatNumber(result.sharesOutstanding)}
         </li>
         <li>
-          <strong>Float Shares:</strong> {formatNumber(result.floatShares)}
+          <strong>Float:</strong>{" "}
+          {formatNumber(result.floatShares)}
         </li>
         <li>
-          <strong>Avg Daily Volume:</strong> {formatNumber(result.avgVolume)}
+          <strong>Average Volume:</strong>{" "}
+          {formatNumber(result.avgVolume)}
         </li>
         <li>
-          <strong>Latest Volume:</strong> {formatNumber(result.latestVolume)}
+          <strong>Latest Volume:</strong>{" "}
+          {formatNumber(result.latestVolume)}
         </li>
         <li>
-          <strong>Short Float:</strong> {formatPercent(result.shortFloat)}
+          <strong>Short Float:</strong>{" "}
+          {result.shortFloat != null ? `${result.shortFloat.toFixed(1)}%` : "N/A"}
         </li>
         <li>
           <strong>Insider Ownership:</strong>{" "}
-          {formatPercent(result.insiderOwnership)}
+          {result.insiderOwnership != null
+            ? `${result.insiderOwnership.toFixed(1)}%`
+            : "N/A"}
         </li>
         <li>
           <strong>Institutional Ownership:</strong>{" "}
-          {formatPercent(result.institutionalOwnership)}
+          {result.institutionalOwnership != null
+            ? `${result.institutionalOwnership.toFixed(1)}%`
+            : "N/A"}
         </li>
         <li>
-          <strong>Country:</strong>{" "}
-          <span className={isRisky ? "text-red-600 font-semibold" : ""}>
-            {flag} {result.country || "N/A"}
-          </span>
+          <strong>Exchange:</strong> {result.exchange ?? "N/A"}
+        </li>
+        <li className={isRisky ? "text-red-500 font-semibold" : ""}>
+          <strong>Country:</strong> {flag} {result.country ?? "Unknown"}
         </li>
       </ul>
     </div>

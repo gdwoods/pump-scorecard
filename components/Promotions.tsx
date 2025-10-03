@@ -1,46 +1,61 @@
 "use client";
-import CollapsibleCard from "./CollapsibleCard";
+
+import CardTitle from "./CardTitle";
 
 type Promotion = {
-  type: string;
   date: string;
+  type: string;
   url: string;
 };
+
+function formatDate(iso: string): string {
+  if (!iso) return "N/A";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.valueOf())) return iso; // fallback to raw if invalid
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
 
 export default function Promotions({
   ticker,
   promotions,
 }: {
   ticker: string;
-  promotions: Promotion[];
+  promotions?: Promotion[];
 }) {
-  const items = promotions || [];
+  const items = Array.isArray(promotions) ? promotions : [];
 
   return (
-    <CollapsibleCard title={`📢 ${ticker} Promotions`} defaultOpen={true}>
-      {items.length === 0 ||
-      (items.length === 1 && items[0].type === "Manual Check") ? (
+    <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow-sm">
+      <CardTitle icon="📢" ticker={ticker} label="Promotions" />
+
+      {items.length === 0 ? (
         <p className="text-sm text-gray-700 dark:text-gray-300">
-          No promotions found — please manually check{" "}
+          <strong>No promotions found for this ticker</strong>. Please also
+          manually check{" "}
           <a
-            href="https://www.stockpromotiontracker.com/"
+            href="https://seekingalpha.com/market-news/promotions"
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="text-blue-600 dark:text-blue-400 underline"
           >
-            stockpromotiontracker.com
-          </a>
+            promotions feeds
+          </a>.
         </p>
       ) : (
-        <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+        <ul className="space-y-2 mt-2 text-sm text-gray-700 dark:text-gray-300">
           {items.map((p, i) => (
             <li key={i}>
-              {p.date}: {p.type}{" "}
+              <span className="font-medium">{formatDate(p.date)}</span>:{" "}
+              {p.type}{" "}
               <a
                 href={p.url}
                 target="_blank"
-                rel="noreferrer"
-                className="text-blue-600 dark:text-blue-400 underline"
+                rel="noopener noreferrer"
+                className="text-blue-500 underline"
               >
                 link
               </a>
@@ -48,6 +63,6 @@ export default function Promotions({
           ))}
         </ul>
       )}
-    </CollapsibleCard>
+    </div>
   );
 }

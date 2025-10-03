@@ -81,3 +81,8 @@ export function countryInfo(country?: string | null): CountryInfo {
 
   return { flag, isRisky: RISKY.has(code) };
 }
+
+// ✅ Named export (so you can keep using { countryToFlag } in Fundamentals.tsx)
+export function countryToFlag(country?: string | null): string {
+  return countryInfo(country).flag;
+}
