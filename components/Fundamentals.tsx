@@ -14,36 +14,44 @@ export default function Fundamentals({ result }: Props) {
 
   return (
     <div className="p-6 border rounded-lg bg-white dark:bg-gray-800 shadow">
-      <h2 className="text-lg font-semibold mb-4">📊 Fundamentals</h2>
+      <h2 className="text-lg font-semibold mb-4">
+        📊 Fundamentals{result?.ticker ? ` — ${result.ticker}` : ""}
+      </h2>
 
       <ul className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-        {/* ✅ Country first */}
-        <li className={isRisky ? "text-red-500 font-semibold" : ""}>
+        {/* ✅ Country on top */}
+        <li className={isRisky ? "text-red-500 font-semibold col-span-2" : "col-span-2"}>
           <strong>Country:</strong> {flag} {result.country ?? "Unknown"}
+        </li>
+
+        <li>
+          <strong>Shares Outstanding:</strong>{" "}
+          {formatNumber(result.sharesOutstanding)}
         </li>
         <li>
           <strong>Market Cap:</strong>{" "}
           {formatNumber(result.marketCap, true)}
         </li>
         <li>
-          <strong>Shares Outstanding:</strong>{" "}
-          {formatNumber(result.sharesOutstanding)}
-        </li>
-        <li>
-          <strong>Float:</strong> {formatNumber(result.floatShares)}
-        </li>
-        <li>
           <strong>Average Volume:</strong>{" "}
           {formatNumber(result.avgVolume)}
+        </li>
+        <li>
+          <strong>Float:</strong>{" "}
+          {formatNumber(result.floatShares)}
+        </li>
+        <li>
+          <strong>Short Float:</strong>{" "}
+          {result.shortFloat != null ? `${result.shortFloat.toFixed(1)}%` : "N/A"}
         </li>
         <li>
           <strong>Latest Volume:</strong>{" "}
           {formatNumber(result.latestVolume)}
         </li>
         <li>
-          <strong>Short Float:</strong>{" "}
-          {result.shortFloat != null
-            ? `${result.shortFloat.toFixed(1)}%`
+          <strong>Institutional Ownership:</strong>{" "}
+          {result.institutionalOwnership != null
+            ? `${result.institutionalOwnership.toFixed(1)}%`
             : "N/A"}
         </li>
         <li>
@@ -53,36 +61,24 @@ export default function Fundamentals({ result }: Props) {
             : "N/A"}
         </li>
         <li>
-          <strong>Institutional Ownership:</strong>{" "}
-          {result.institutionalOwnership != null
-            ? `${result.institutionalOwnership.toFixed(1)}%`
-            : "N/A"}
-        </li>
-        <li>
           <strong>Exchange:</strong> {result.exchange ?? "N/A"}
         </li>
 
-        {/* ✅ Move Last Price + 52 Week High/Low together */}
+        {/* ✅ Group last price with 52-week range */}
         <li>
           <strong>Last Price:</strong>{" "}
-          {result.lastPrice != null
-            ? `$${result.lastPrice.toFixed(2)}`
-            : "N/A"}
+          {result.lastPrice != null ? `$${result.lastPrice.toFixed(2)}` : "N/A"}
         </li>
         <li>
           <strong>52-Week High:</strong>{" "}
-          {result.high52Week != null
-            ? `$${result.high52Week.toFixed(2)}`
-            : "N/A"}
+          {result.high52Week != null ? `$${result.high52Week.toFixed(2)}` : "N/A"}
         </li>
         <li>
           <strong>52-Week Low:</strong>{" "}
-          {result.low52Week != null
-            ? `$${result.low52Week.toFixed(2)}`
-            : "N/A"}
+          {result.low52Week != null ? `$${result.low52Week.toFixed(2)}` : "N/A"}
         </li>
 
-        {/* ✅ Splits Section */}
+        {/* ✅ Splits */}
         {result.splits && result.splits.length > 0 && (
           <li className="col-span-2">
             <strong>Recent Splits:</strong>
@@ -101,7 +97,7 @@ export default function Fundamentals({ result }: Props) {
           </li>
         )}
 
-        {/* ✅ Company Profile Section */}
+        {/* ✅ Company Profile */}
         {result.companyProfile && (
           <>
             <li className="col-span-2">

@@ -29,7 +29,7 @@ export default function Chart({ result }: { result: any }) {
   return (
     <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow">
       <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-        📈 Price & Volume
+        📈 Price & Volume{result?.ticker ? ` — ${result.ticker}` : ""}
       </h2>
 
       <div className="h-80">
