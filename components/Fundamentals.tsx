@@ -17,9 +17,9 @@ export default function Fundamentals({ result }: Props) {
       <h2 className="text-lg font-semibold mb-4">📊 Fundamentals</h2>
 
       <ul className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-        <li>
-          <strong>Last Price:</strong>{" "}
-          {result.lastPrice != null ? `$${result.lastPrice.toFixed(2)}` : "N/A"}
+        {/* ✅ Country first */}
+        <li className={isRisky ? "text-red-500 font-semibold" : ""}>
+          <strong>Country:</strong> {flag} {result.country ?? "Unknown"}
         </li>
         <li>
           <strong>Market Cap:</strong>{" "}
@@ -30,8 +30,7 @@ export default function Fundamentals({ result }: Props) {
           {formatNumber(result.sharesOutstanding)}
         </li>
         <li>
-          <strong>Float:</strong>{" "}
-          {formatNumber(result.floatShares)}
+          <strong>Float:</strong> {formatNumber(result.floatShares)}
         </li>
         <li>
           <strong>Average Volume:</strong>{" "}
@@ -43,7 +42,9 @@ export default function Fundamentals({ result }: Props) {
         </li>
         <li>
           <strong>Short Float:</strong>{" "}
-          {result.shortFloat != null ? `${result.shortFloat.toFixed(1)}%` : "N/A"}
+          {result.shortFloat != null
+            ? `${result.shortFloat.toFixed(1)}%`
+            : "N/A"}
         </li>
         <li>
           <strong>Insider Ownership:</strong>{" "}
@@ -60,61 +61,91 @@ export default function Fundamentals({ result }: Props) {
         <li>
           <strong>Exchange:</strong> {result.exchange ?? "N/A"}
         </li>
-        <li className={isRisky ? "text-red-500 font-semibold" : ""}>
-          <strong>Country:</strong> {flag} {result.country ?? "Unknown"}
+
+        {/* ✅ Move Last Price + 52 Week High/Low together */}
+        <li>
+          <strong>Last Price:</strong>{" "}
+          {result.lastPrice != null
+            ? `$${result.lastPrice.toFixed(2)}`
+            : "N/A"}
+        </li>
+        <li>
+          <strong>52-Week High:</strong>{" "}
+          {result.high52Week != null
+            ? `$${result.high52Week.toFixed(2)}`
+            : "N/A"}
+        </li>
+        <li>
+          <strong>52-Week Low:</strong>{" "}
+          {result.low52Week != null
+            ? `$${result.low52Week.toFixed(2)}`
+            : "N/A"}
         </li>
 
-{/* ✅ Company Profile Section */}
-{result.companyProfile && (
-  <>
-    {/* Divider */}
-    <li className="col-span-2">
-      <hr className="my-2 border-gray-300 dark:border-gray-700" />
-    </li>
+        {/* ✅ Splits Section */}
+        {result.splits && result.splits.length > 0 && (
+          <li className="col-span-2">
+            <strong>Recent Splits:</strong>
+            <ul className="ml-4 list-disc text-sm">
+              {result.splits.map((s: any, i: number) => (
+                <li key={i}>
+                  {s.ratio} on{" "}
+                  {new Date(s.date).toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </li>
+              ))}
+            </ul>
+          </li>
+        )}
 
-    <li className="col-span-2">
-      <strong>Sector:</strong> {result.companyProfile.sector ?? "N/A"}
-    </li>
-    <li className="col-span-2">
-      <strong>Industry:</strong> {result.companyProfile.industry ?? "N/A"}
-    </li>
-    <li className="col-span-2">
-      <strong>Employees:</strong>{" "}
-      {result.companyProfile.employees
-        ? result.companyProfile.employees.toLocaleString()
-        : "N/A"}
-    </li>
-    <li className="col-span-2">
-      <strong>Website:</strong>{" "}
-      {result.companyProfile.website ? (
-        <a
-          href={result.companyProfile.website}
-          target="_blank"
-          rel="noreferrer"
-          className="text-blue-600 underline"
-        >
-          {result.companyProfile.website}
-        </a>
-      ) : (
-        "N/A"
-      )}
-    </li>
-    {result.companyProfile.summary && (
-      <li className="col-span-2 text-gray-700 dark:text-gray-300 text-sm">
-        <div className={expanded ? "" : "line-clamp-3"}>
-          {result.companyProfile.summary}
-        </div>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-blue-600 text-xs mt-1"
-        >
-          {expanded ? "Show less" : "Show more"}
-        </button>
-      </li>
-    )}
-  </>
-)}
-
+        {/* ✅ Company Profile Section */}
+        {result.companyProfile && (
+          <>
+            <li className="col-span-2">
+              <strong>Sector:</strong> {result.companyProfile.sector ?? "N/A"}
+            </li>
+            <li className="col-span-2">
+              <strong>Industry:</strong> {result.companyProfile.industry ?? "N/A"}
+            </li>
+            <li className="col-span-2">
+              <strong>Employees:</strong>{" "}
+              {result.companyProfile.employees
+                ? result.companyProfile.employees.toLocaleString()
+                : "N/A"}
+            </li>
+            <li className="col-span-2">
+              <strong>Website:</strong>{" "}
+              {result.companyProfile.website ? (
+                <a
+                  href={result.companyProfile.website}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  {result.companyProfile.website}
+                </a>
+              ) : (
+                "N/A"
+              )}
+            </li>
+            {result.companyProfile.summary && (
+              <li className="col-span-2 text-gray-700 dark:text-gray-300 text-sm">
+                <div className={expanded ? "" : "line-clamp-3"}>
+                  {result.companyProfile.summary}
+                </div>
+                <button
+                  onClick={() => setExpanded(!expanded)}
+                  className="text-blue-600 text-xs mt-1"
+                >
+                  {expanded ? "Show less" : "Show more"}
+                </button>
+              </li>
+            )}
+          </>
+        )}
       </ul>
     </div>
   );

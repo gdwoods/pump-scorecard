@@ -4,7 +4,6 @@ import yahooFinance from "yahoo-finance2";
 import { parseSecAddress } from "@/utils/normalizeCountry";
 import { fetchBorrowDesk } from "@/utils/fetchBorrowDesk";
 import * as cheerio from "cheerio";
-
 export const runtime = "nodejs";
 
 type HistoryPoint = { date: string; close: number; volume: number };
@@ -171,6 +170,53 @@ export async function GET(
           volume: q.volume,
         })) || [];
     } catch {}
+// ---------- Splits & 52-week High/Low ----------
+let splits: { date: string; ratio: string }[] = [];
+let high52Week: number | null = null;
+let low52Week: number | null = null;
+
+try {
+  // 52-week high/low
+  const TWO_YEARS = 1000 * 60 * 60 * 24 * 730;
+  const chartHist = await yahooFinance.chart(upperTicker, {
+    period1: new Date(Date.now() - TWO_YEARS),
+    period2: new Date(),
+    interval: "1d",
+  });
+
+  const closes = chartHist.quotes?.map((q: any) => q.close).filter(Boolean) || [];
+  if (closes.length > 0) {
+    const lastYear = closes.slice(-252); // ~1 year of trading days
+    high52Week = Math.max(...lastYear);
+    low52Week = Math.min(...lastYear);
+  }
+
+  // ✅ Polygon splits (query param, not path param)
+  const polygonKey = process.env.POLYGON_API_KEY;
+  if (polygonKey) {
+    let url: string | null = `https://api.polygon.io/v3/reference/splits?ticker=${upperTicker}&apiKey=${polygonKey}`;
+    let allSplits: any[] = [];
+
+    while (url) {
+      const splitRes = await fetch(url);
+      if (!splitRes.ok) break;
+      const splitJson = await splitRes.json();
+      allSplits.push(...(splitJson.results || []));
+      url = splitJson.next_url ? `${splitJson.next_url}&apiKey=${polygonKey}` : null;
+    }
+
+    const THREE_YEARS = 1000 * 60 * 60 * 24 * 365 * 3;
+    splits = allSplits
+      .map((s: any) => ({
+        date: s.execution_date,
+        ratio: `${s.split_to}-for-${s.split_from}`,
+      }))
+      .filter((s) => new Date(s.date).getTime() > Date.now() - THREE_YEARS);
+  }
+} catch (err) {
+  console.error("Splits/52-week fetch failed:", err);
+}
+
 
     // ---------- Polygon Meta ----------
     let polyMeta: any = {};
@@ -509,10 +555,10 @@ export async function GET(
       exchange: quote.fullExchangeName || "Unknown",
       country,
       countrySource,
-
-      // ✅ Profile merged
+      splits,
+      high52Week,
+      low52Week,
       companyProfile,
-
       history,
       intraday,
       filings,
@@ -521,11 +567,9 @@ export async function GET(
       droppinessScore,
       droppinessDetail,
       borrowData,
-
       weightedRiskScore,
       summaryVerdict,
       summaryText,
-
       sudden_volume_spike,
       sudden_price_spike,
       dilution_offering: filings.some(
