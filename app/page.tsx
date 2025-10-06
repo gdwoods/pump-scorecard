@@ -20,6 +20,9 @@ export default function Page() {
   const [result, setResult] = useState<any>(null);
   const [manualFlags, setManualFlags] = useState<Record<string, boolean>>({});
 
+  // ---------------------
+  // SCAN FUNCTION
+  // ---------------------
   const scan = async () => {
     if (!ticker) return;
     try {
@@ -27,7 +30,7 @@ export default function Page() {
       if (!res.ok) throw new Error(`Scan failed: ${res.status}`);
       const json = await res.json();
 
-      // ✅ Enhance summary with last spike info
+      // ✅ Append droppiness commentary for human-readable feedback
       if (json.droppinessDetail && json.droppinessDetail.length > 0) {
         const lastSpike = json.droppinessDetail.at(-1);
         if (lastSpike) {
@@ -37,7 +40,7 @@ export default function Page() {
         }
       }
 
-      // ✅ Add droppiness verdict
+      // ✅ Add droppiness verdict (now based on 18 months)
       if (
         json.droppinessScore === 0 &&
         (!json.droppinessDetail || json.droppinessDetail.length === 0)
@@ -55,13 +58,34 @@ export default function Page() {
           "Mixed behavior — some spikes retraced quickly, while others held their gains.";
       }
 
+      // ✅ Separate promotions into “Recent” (<30 days) and “Older”
+      if (Array.isArray(json.promotions)) {
+        const now = Date.now();
+        const THIRTY_DAYS_MS = 1000 * 60 * 60 * 24 * 30;
+
+        json.recentPromotions = json.promotions.filter((p: any) => {
+          if (!p.date) return false;
+          const dateMs = new Date(p.date).getTime();
+          return now - dateMs < THIRTY_DAYS_MS;
+        });
+
+        json.olderPromotions = json.promotions.filter((p: any) => {
+          if (!p.date) return false;
+          const dateMs = new Date(p.date).getTime();
+          return now - dateMs >= THIRTY_DAYS_MS;
+        });
+      }
+
       setResult(json);
-      setManualFlags({});
+      setManualFlags({}); // reset for each scan
     } catch (err) {
       console.error("❌ Scan error:", err);
     }
   };
 
+  // ---------------------
+  // EXPORT PDF
+  // ---------------------
   const exportPDF = async () => {
     if (!result) return;
     try {
@@ -83,83 +107,89 @@ export default function Page() {
     }
   };
 
+  // ---------------------
+  // MANUAL FLAGS
+  // ---------------------
   const toggleManualFlag = (key: string) => {
     setManualFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // ✅ Combine backend score with fundamentals + manual flags
+  // ---------------------
+  // SCORE CALCULATION LOGIC
+  // ---------------------
   let adjustedScore = result?.weightedRiskScore ?? 0;
 
+  // --- Auto fundamentals
   if (result?.marketCap && result.marketCap < 50_000_000) adjustedScore += 10;
   if (result?.shortFloat && result.shortFloat > 20) adjustedScore += 10;
-  if (result?.insiderOwnership && result.insiderOwnership > 50) adjustedScore += 5;
+  if (result?.insiderOwnership && result.insiderOwnership > 50)
+    adjustedScore += 5;
+
+  // --- Droppiness weighting
+  // Add +10 if spikes *hold up* (risky behavior),
+  // subtract −5 if spikes fade quickly (less risky).
+  if (result?.droppinessScore < 40) adjustedScore += 10;
+  else if (result?.droppinessScore > 70) adjustedScore -= 5;
+
+  // --- Manual flags
   if (manualFlags.pumpSuspicion) adjustedScore += 15;
   if (manualFlags.thinFloat) adjustedScore += 10;
   if (manualFlags.insiders) adjustedScore += 10;
   if (manualFlags.other) adjustedScore += 5;
-  if (adjustedScore > 100) adjustedScore = 100;
 
-  // ✅ Unified weighting map
-  const WEIGHT = {
-    sudden_volume_spike: 20,
-    sudden_price_spike: 20,
-    dilution_offering: 20,
-    promoted_stock: 15,
-    fraud_evidence: 20,
-    risky_country: 15,
-    microcap: 10,
-    high_short_float: 10,
-    high_insider_ownership: 5,
-    manual_pump: 15,
-    manual_thin_float: 10,
-    manual_insiders: 10,
-    manual_other: 5,
-  };
+  // --- Promotions (only count if <30 days)
+  if (result?.recentPromotions?.length > 0) adjustedScore += 15;
 
-  // ✅ Build breakdown
-  let breakdown: { key: string; label: string; value: number }[] = [];
+  // Clamp score between 0–100
+  adjustedScore = Math.max(0, Math.min(adjustedScore, 100));
 
-  // Backend risk factors
+  // ---------------------
+  // SCORE BREAKDOWN (displayed to user)
+  // ---------------------
+  const breakdown: { label: string; value: number }[] = [];
+
   if (result?.sudden_volume_spike)
-    breakdown.push({ key: "sudden_volume_spike", label: "Sudden volume spike", value: WEIGHT.sudden_volume_spike });
+    breakdown.push({ label: "Sudden volume spike", value: 10 });
   if (result?.sudden_price_spike)
-    breakdown.push({ key: "sudden_price_spike", label: "Sudden price spike", value: WEIGHT.sudden_price_spike });
+    breakdown.push({ label: "Sudden price spike", value: 10 });
   if (result?.dilution_offering)
-    breakdown.push({ key: "dilution_offering", label: "Dilution / offering (S-1 / 424B)", value: WEIGHT.dilution_offering });
-  if (result?.promoted_stock)
-    breakdown.push({ key: "promoted_stock", label: "Promoted stock", value: WEIGHT.promoted_stock });
+    breakdown.push({ label: "Dilution / offering (S-1 / 424B)", value: 20 });
+  if (result?.recentPromotions?.length > 0)
+    breakdown.push({
+      label: "Recent stock promotion (<30d)",
+      value: 15,
+    });
   if (result?.fraud_evidence)
-    breakdown.push({ key: "fraud_evidence", label: "Fraud evidence posted online", value: WEIGHT.fraud_evidence });
+    breakdown.push({ label: "Fraud evidence posted online", value: 20 });
   if (result?.risky_country)
-    breakdown.push({ key: "risky_country", label: "Risky country", value: WEIGHT.risky_country });
-
-  // Fundamentals
+    breakdown.push({ label: "Risky country / jurisdiction", value: 15 });
   if (result?.marketCap && result.marketCap < 50_000_000)
-    breakdown.push({ key: "microcap", label: "Microcap (<$50M)", value: WEIGHT.microcap });
+    breakdown.push({ label: "Microcap (<$50M)", value: 10 });
   if (result?.shortFloat && result.shortFloat > 20)
-    breakdown.push({ key: "high_short_float", label: "High short float >20%", value: WEIGHT.high_short_float });
+    breakdown.push({ label: "High short float >20%", value: 10 });
   if (result?.insiderOwnership && result.insiderOwnership > 50)
-    breakdown.push({ key: "high_insider_ownership", label: "High insider ownership >50%", value: WEIGHT.high_insider_ownership });
+    breakdown.push({ label: "High insider ownership >50%", value: 5 });
 
-  // Manual flags
   if (manualFlags.pumpSuspicion)
-    breakdown.push({ key: "manual_pump", label: "Pump suspicion", value: WEIGHT.manual_pump });
+    breakdown.push({ label: "Pump suspicion (manual)", value: 15 });
   if (manualFlags.thinFloat)
-    breakdown.push({ key: "manual_thin_float", label: "Thin float risk", value: WEIGHT.manual_thin_float });
+    breakdown.push({ label: "Thin float (manual)", value: 10 });
   if (manualFlags.insiders)
-    breakdown.push({ key: "manual_insiders", label: "Shady insiders", value: WEIGHT.manual_insiders });
+    breakdown.push({ label: "Shady insiders (manual)", value: 10 });
   if (manualFlags.other)
-    breakdown.push({ key: "manual_other", label: "Other red flag", value: WEIGHT.manual_other });
+    breakdown.push({ label: "Other red flag (manual)", value: 5 });
 
-  // ✅ De-dupe by key
-  breakdown = Array.from(new Map(breakdown.map((i) => [i.key, i])).values());
+  // Key risk drivers (top 3 highest)
+  const drivers = [...breakdown]
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 3);
 
-  // ✅ Top 3 risk drivers
-  const drivers = [...breakdown].sort((a, b) => b.value - a.value).slice(0, 3);
-
+  // ---------------------
+  // RENDER
+  // ---------------------
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
+      {/* HEADER */}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold flex items-center gap-2 text-blue-600">
           <img src="/logo.png" alt="Pump Scorecard Logo" className="h-8 w-8" />
@@ -167,11 +197,16 @@ export default function Page() {
         </h1>
 
         <div className="flex gap-2">
-          <button onClick={exportPDF} className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700">
+          <button
+            onClick={exportPDF}
+            className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
+          >
             Export PDF
           </button>
           <button
-            onClick={() => document.documentElement.classList.toggle("dark")}
+            onClick={() =>
+              document.documentElement.classList.toggle("dark")
+            }
             className="px-4 py-2 border rounded"
           >
             🌓 Toggle Dark Mode
@@ -179,7 +214,7 @@ export default function Page() {
         </div>
       </div>
 
-      {/* Ticker Input */}
+      {/* TICKER INPUT */}
       <div className="flex gap-2">
         <input
           value={ticker}
@@ -187,12 +222,15 @@ export default function Page() {
           placeholder="Enter ticker symbol"
           className="border px-3 py-2 rounded flex-1"
         />
-        <button onClick={scan} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500">
+        <button
+          onClick={scan}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500"
+        >
           Scan
         </button>
       </div>
 
-      {/* Results */}
+      {/* MAIN CONTENT */}
       {result && (
         <div className="space-y-6">
           <FinalVerdict
@@ -204,7 +242,7 @@ export default function Page() {
             drivers={drivers}
           />
 
-          {/* Score Breakdown + Chart */}
+          {/* Score Breakdown & Chart */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ScoreBreakdown
               ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
@@ -214,13 +252,18 @@ export default function Page() {
             <Chart result={result} />
           </div>
 
-          {/* Criteria + Fundamentals */}
+          {/* Criteria & Fundamentals */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Criteria ticker={ticker} result={result} manualFlags={manualFlags} toggleManualFlag={toggleManualFlag} />
+            <Criteria
+              ticker={ticker}
+              result={result}
+              manualFlags={manualFlags}
+              toggleManualFlag={toggleManualFlag}
+            />
             <Fundamentals ticker={result.ticker} result={result} />
           </div>
 
-          {/* Droppiness */}
+          {/* Droppiness Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <DroppinessCard
               ticker={result.ticker}
@@ -231,17 +274,29 @@ export default function Page() {
             <DroppinessScatter detail={result.droppinessDetail || []} />
           </div>
 
-          {/* Promotions + Fraud + SEC */}
+          {/* Promotions, Fraud, SEC Filings */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Promotions ticker={result.ticker} promotions={result.promotions} />
-            <FraudEvidence ticker={result.ticker} fraudImages={result.fraudImages || []} />
+            <Promotions
+              ticker={result.ticker}
+              recentPromotions={result.recentPromotions || []}
+              olderPromotions={result.olderPromotions || []}
+            />
+            <FraudEvidence
+              ticker={result.ticker}
+              fraudImages={result.fraudImages || []}
+            />
             <SecFilings ticker={result.ticker} filings={result.filings} />
           </div>
 
+          {/* Borrow Desk */}
           {result.borrowData && (
-            <BorrowDeskCard ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()} borrowData={result.borrowData} />
+            <BorrowDeskCard
+              ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
+              borrowData={result.borrowData}
+            />
           )}
 
+          {/* News */}
           <NewsSection ticker={result.ticker} items={result.news || []} />
         </div>
       )}

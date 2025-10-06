@@ -1,0 +1,17 @@
+{
+  "suddenVolumeSpike": 20,
+  "suddenPriceSpike": 20,
+  "dilutionOffering": 20,
+  "promotedStock": 15,
+  "fraudEvidence": 20,
+  "riskyCountry": 15,
+  "microcap": 10,
+  "highShortFloat": 10,
+  "highInsiderOwnership": 5,
+  "manual": {
+    "pumpSuspicion": 15,
+    "thinFloat": 10,
+    "insiders": 10,
+    "other": 5
+  }
+}

@@ -17,6 +17,7 @@ export default function FinalVerdict({
   droppinessVerdict,
   drivers = [],
 }: Props) {
+  // Dynamic colors
   const color =
     verdict === "High risk"
       ? "bg-red-600"
@@ -30,6 +31,22 @@ export default function FinalVerdict({
       : verdict === "Moderate risk"
       ? "bg-yellow-100 text-yellow-800"
       : "bg-green-100 text-green-800";
+
+  // 🧠 Descriptive commentary based on score
+  let description = "";
+  if (score <= 25) {
+    description =
+      "No major pump indicators. Price and volume appear organic with limited speculative activity.";
+  } else if (score <= 50) {
+    description =
+      "Some speculative activity detected, but not excessive. Worth watching for signs of acceleration or promotion.";
+  } else if (score <= 75) {
+    description =
+      "Several pump-like risk factors are present — such as volume spikes, dilution filings, or promotions. Exercise caution.";
+  } else {
+    description =
+      "Multiple red flags detected — high dilution, aggressive promotions, and abnormal trading patterns suggest elevated pump-and-dump risk.";
+  }
 
   return (
     <div className="p-6 border rounded-lg bg-white dark:bg-gray-800 shadow">
@@ -51,8 +68,13 @@ export default function FinalVerdict({
         </p>
       </div>
 
-      {/* Summary */}
-      <p className="mt-4 text-gray-800 dark:text-gray-200 text-sm">{summary}</p>
+      {/* Description */}
+      <p className="mt-4 text-gray-800 dark:text-gray-200 text-sm">
+        {description}
+      </p>
+
+      {/* Summary (backend insight) */}
+      <p className="mt-2 text-gray-700 dark:text-gray-300 text-sm">{summary}</p>
 
       {/* Droppiness Verdict */}
       <p className="mt-2 text-gray-600 dark:text-gray-400 text-sm italic">
