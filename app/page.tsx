@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+
 import FinalVerdict from "@/components/FinalVerdict";
 import Chart from "@/components/Chart";
 import Criteria from "@/components/Criteria";
@@ -42,7 +43,7 @@ export default function Page() {
         (!json.droppinessDetail || json.droppinessDetail.length === 0)
       ) {
         json.droppinessVerdict =
-          "No qualifying spikes were detected in the last 24 months — the stock has not shown pump-like behavior recently.";
+          "No qualifying spikes were detected in the last 18 months — the stock has not shown pump-like behavior recently.";
       } else if (json.droppinessScore >= 70) {
         json.droppinessVerdict =
           "Spikes usually fade quickly — most large moves retraced within a few sessions.";
@@ -55,7 +56,7 @@ export default function Page() {
       }
 
       setResult(json);
-      setManualFlags({}); // reset flags for new ticker
+      setManualFlags({});
     } catch (err) {
       console.error("❌ Scan error:", err);
     }
@@ -89,68 +90,72 @@ export default function Page() {
   // ✅ Combine backend score with fundamentals + manual flags
   let adjustedScore = result?.weightedRiskScore ?? 0;
 
-  // --- Fundamentals auto-risks ---
-  if (result?.marketCap && result.marketCap < 50_000_000) {
-    adjustedScore += 10; // microcap risk
-  }
-  if (result?.shortFloat && result.shortFloat > 20) {
-    adjustedScore += 10; // high short interest
-  }
-  if (result?.insiderOwnership && result.insiderOwnership > 50) {
-    adjustedScore += 5; // insider-heavy
-  }
-
-  // --- Manual toggles ---
+  if (result?.marketCap && result.marketCap < 50_000_000) adjustedScore += 10;
+  if (result?.shortFloat && result.shortFloat > 20) adjustedScore += 10;
+  if (result?.insiderOwnership && result.insiderOwnership > 50) adjustedScore += 5;
   if (manualFlags.pumpSuspicion) adjustedScore += 15;
   if (manualFlags.thinFloat) adjustedScore += 10;
   if (manualFlags.insiders) adjustedScore += 10;
   if (manualFlags.other) adjustedScore += 5;
-
   if (adjustedScore > 100) adjustedScore = 100;
 
-  // ✅ Build score breakdown array
-  const breakdown: { label: string; value: number }[] = [];
+  // ✅ Unified weighting map
+  const WEIGHT = {
+    sudden_volume_spike: 20,
+    sudden_price_spike: 20,
+    dilution_offering: 20,
+    promoted_stock: 15,
+    fraud_evidence: 20,
+    risky_country: 15,
+    microcap: 10,
+    high_short_float: 10,
+    high_insider_ownership: 5,
+    manual_pump: 15,
+    manual_thin_float: 10,
+    manual_insiders: 10,
+    manual_other: 5,
+  };
 
-  // Backend flags
-  if (result?.dilution_offering) {
-    breakdown.push({ label: "Dilution / offering (S-1 / 424B)", value: 20 });
-  }
-  if (result?.fraud_evidence) {
-    breakdown.push({ label: "Fraud evidence posted online", value: 20 });
-  }
-  if (result?.risky_country) {
-    breakdown.push({ label: "Risky country", value: 15 });
-  }
+  // ✅ Build breakdown
+  let breakdown: { key: string; label: string; value: number }[] = [];
 
-  // --- Fundamentals breakdown entries ---
-  if (result?.marketCap && result.marketCap < 50_000_000) {
-    breakdown.push({ label: "Microcap (<$50M)", value: 10 });
-  }
-  if (result?.shortFloat && result.shortFloat > 20) {
-    breakdown.push({ label: "High short float >20%", value: 10 });
-  }
-  if (result?.insiderOwnership && result.insiderOwnership > 50) {
-    breakdown.push({ label: "High insider ownership >50%", value: 5 });
-  }
+  // Backend risk factors
+  if (result?.sudden_volume_spike)
+    breakdown.push({ key: "sudden_volume_spike", label: "Sudden volume spike", value: WEIGHT.sudden_volume_spike });
+  if (result?.sudden_price_spike)
+    breakdown.push({ key: "sudden_price_spike", label: "Sudden price spike", value: WEIGHT.sudden_price_spike });
+  if (result?.dilution_offering)
+    breakdown.push({ key: "dilution_offering", label: "Dilution / offering (S-1 / 424B)", value: WEIGHT.dilution_offering });
+  if (result?.promoted_stock)
+    breakdown.push({ key: "promoted_stock", label: "Promoted stock", value: WEIGHT.promoted_stock });
+  if (result?.fraud_evidence)
+    breakdown.push({ key: "fraud_evidence", label: "Fraud evidence posted online", value: WEIGHT.fraud_evidence });
+  if (result?.risky_country)
+    breakdown.push({ key: "risky_country", label: "Risky country", value: WEIGHT.risky_country });
 
-  // Manual overrides
-  if (manualFlags.pumpSuspicion) {
-    breakdown.push({ label: "Pump suspicion", value: 15 });
-  }
-  if (manualFlags.thinFloat) {
-    breakdown.push({ label: "Thin float risk", value: 10 });
-  }
-  if (manualFlags.insiders) {
-    breakdown.push({ label: "Shady insiders", value: 10 });
-  }
-  if (manualFlags.other) {
-    breakdown.push({ label: "Other red flag", value: 5 });
-  }
+  // Fundamentals
+  if (result?.marketCap && result.marketCap < 50_000_000)
+    breakdown.push({ key: "microcap", label: "Microcap (<$50M)", value: WEIGHT.microcap });
+  if (result?.shortFloat && result.shortFloat > 20)
+    breakdown.push({ key: "high_short_float", label: "High short float >20%", value: WEIGHT.high_short_float });
+  if (result?.insiderOwnership && result.insiderOwnership > 50)
+    breakdown.push({ key: "high_insider_ownership", label: "High insider ownership >50%", value: WEIGHT.high_insider_ownership });
 
-  // ✅ Top 3 drivers for FinalVerdict
-  const drivers = [...breakdown]
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 3);
+  // Manual flags
+  if (manualFlags.pumpSuspicion)
+    breakdown.push({ key: "manual_pump", label: "Pump suspicion", value: WEIGHT.manual_pump });
+  if (manualFlags.thinFloat)
+    breakdown.push({ key: "manual_thin_float", label: "Thin float risk", value: WEIGHT.manual_thin_float });
+  if (manualFlags.insiders)
+    breakdown.push({ key: "manual_insiders", label: "Shady insiders", value: WEIGHT.manual_insiders });
+  if (manualFlags.other)
+    breakdown.push({ key: "manual_other", label: "Other red flag", value: WEIGHT.manual_other });
+
+  // ✅ De-dupe by key
+  breakdown = Array.from(new Map(breakdown.map((i) => [i.key, i])).values());
+
+  // ✅ Top 3 risk drivers
+  const drivers = [...breakdown].sort((a, b) => b.value - a.value).slice(0, 3);
 
   return (
     <div className="p-6 space-y-6">
@@ -162,16 +167,11 @@ export default function Page() {
         </h1>
 
         <div className="flex gap-2">
-          <button
-            onClick={exportPDF}
-            className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
-          >
+          <button onClick={exportPDF} className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700">
             Export PDF
           </button>
           <button
-            onClick={() =>
-              document.documentElement.classList.toggle("dark")
-            }
+            onClick={() => document.documentElement.classList.toggle("dark")}
             className="px-4 py-2 border rounded"
           >
             🌓 Toggle Dark Mode
@@ -187,17 +187,14 @@ export default function Page() {
           placeholder="Enter ticker symbol"
           className="border px-3 py-2 rounded flex-1"
         />
-        <button
-          onClick={scan}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500"
-        >
+        <button onClick={scan} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500">
           Scan
         </button>
       </div>
 
+      {/* Results */}
       {result && (
         <div className="space-y-6">
-          {/* Final verdict */}
           <FinalVerdict
             verdict={result.summaryVerdict}
             summary={result.summaryText}
@@ -207,7 +204,7 @@ export default function Page() {
             drivers={drivers}
           />
 
-          {/* Score + Chart */}
+          {/* Score Breakdown + Chart */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ScoreBreakdown
               ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
@@ -219,12 +216,7 @@ export default function Page() {
 
           {/* Criteria + Fundamentals */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Criteria
-              ticker={ticker}
-              result={result}
-              manualFlags={manualFlags}
-              toggleManualFlag={toggleManualFlag}
-            />
+            <Criteria ticker={ticker} result={result} manualFlags={manualFlags} toggleManualFlag={toggleManualFlag} />
             <Fundamentals ticker={result.ticker} result={result} />
           </div>
 
@@ -242,21 +234,14 @@ export default function Page() {
           {/* Promotions + Fraud + SEC */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Promotions ticker={result.ticker} promotions={result.promotions} />
-            <FraudEvidence
-              ticker={result.ticker}
-              fraudImages={result.fraudImages || []}
-            />
+            <FraudEvidence ticker={result.ticker} fraudImages={result.fraudImages || []} />
             <SecFilings ticker={result.ticker} filings={result.filings} />
           </div>
 
           {result.borrowData && (
-            <BorrowDeskCard
-              ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
-              borrowData={result.borrowData}
-            />
+            <BorrowDeskCard ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()} borrowData={result.borrowData} />
           )}
 
-          {/* News full width */}
           <NewsSection ticker={result.ticker} items={result.news || []} />
         </div>
       )}

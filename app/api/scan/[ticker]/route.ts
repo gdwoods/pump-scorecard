@@ -381,97 +381,106 @@ try {
       ];
     }
 
-    // ---------- Droppiness ----------
-    let droppinessScore = 0;
-    let droppinessDetail: Array<{ date: string; spikePct: number; retraced: boolean }> = [];
-    let intraday: IntradayCandle[] = [];
-    try {
-      const TWENTYFOUR_MONTHS_MS = 1000 * 60 * 60 * 24 * 730;
-      const startDate = new Date(Date.now() - TWENTYFOUR_MONTHS_MS);
-      const endDate = new Date();
-      const startDateStr = startDate.toISOString().slice(0, 10);
-      const endDateStr = endDate.toISOString().slice(0, 10);
-      let oneMinBars: any[] = [];
-      const polygonKey = process.env.POLYGON_API_KEY;
-      if (polygonKey) {
-        let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
-        while (url) {
-          const res = await fetch(url);
-          if (!res.ok) break;
-          const json = await res.json();
-          if (json.results?.length) {
-            oneMinBars.push(
-              ...json.results.map((c: any) => ({
-                date: new Date(c.t),
-                open: c.o,
-                high: c.h,
-                low: c.l,
-                close: c.c,
-                volume: c.v,
-              }))
-            );
-          }
-          if (json.next_url) {
-            const next = new URL(json.next_url);
-            if (!next.searchParams.has("apiKey")) {
-              next.searchParams.set("apiKey", polygonKey);
-            }
-            url = next.toString();
-          } else {
-            url = null;
-          }
-        }
-      }
-      const candles: IntradayCandle[] = [];
-      if (oneMinBars.length > 0) {
-        const bucketMs = 1000 * 60 * 60 * 4;
-        let bucket: any = null;
-        for (const bar of oneMinBars) {
-          const bucketTime = Math.floor(bar.date.getTime() / bucketMs) * bucketMs;
-          if (!bucket || bucket.bucketTime !== bucketTime) {
-            if (bucket) candles.push(bucket);
-            bucket = {
-              bucketTime,
-              date: new Date(bucketTime),
-              open: bar.open,
-              high: bar.high,
-              low: bar.low,
-              close: bar.close,
-              volume: bar.volume,
-            };
-          } else {
-            bucket.high = Math.max(bucket.high, bar.high);
-            bucket.low = Math.min(bucket.low, bar.low);
-            bucket.close = bar.close;
-            bucket.volume += bar.volume;
-          }
-        }
-        if (bucket) candles.push(bucket);
-      }
-      intraday = candles;
+// ---------- Droppiness ----------
+let droppinessScore = 0;
+let droppinessDetail: Array<{ date: string; spikePct: number; retraced: boolean }> = [];
+let intraday: IntradayCandle[] = [];
 
-      let spikeCount = 0;
-      let retraceCount = 0;
-      for (let i = 1; i < candles.length; i++) {
-        const prev = candles[i - 1];
-        const cur = candles[i];
-        if (!prev.close || !cur.close || !cur.high) continue;
-        const spikePct = (cur.high - prev.close) / prev.close;
-        if (spikePct > 0.2) {
-          spikeCount++;
-          let retraced = false;
-          if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
-          if (!retraceCount && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) retraced = true;
-          if (retraced) retraceCount++;
-          droppinessDetail.push({
-            date: cur.date.toISOString(),
-            spikePct: +(spikePct * 100).toFixed(1),
-            retraced,
-          });
-        }
+try {
+  // ⏱ Shorter lookback: 18 months instead of 24
+  const EIGHTEEN_MONTHS_MS = 1000 * 60 * 60 * 24 * 547;
+  const startDate = new Date(Date.now() - EIGHTEEN_MONTHS_MS);
+  const endDate = new Date();
+  const startDateStr = startDate.toISOString().slice(0, 10);
+  const endDateStr = endDate.toISOString().slice(0, 10);
+  const polygonKey = process.env.POLYGON_API_KEY;
+
+  let oneMinBars: any[] = [];
+  if (polygonKey) {
+    let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
+    let pageCount = 0;
+
+    while (url && pageCount < 10) { // limit pagination to avoid 100k+ bars
+      const res = await fetch(url);
+      if (!res.ok) break;
+      const json = await res.json();
+      if (json.results?.length) {
+        oneMinBars.push(
+          ...json.results.map((c: any) => ({
+            t: c.t,
+            o: c.o,
+            h: c.h,
+            l: c.l,
+            c: c.c,
+            v: c.v,
+          }))
+        );
       }
-      droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
-    } catch {}
+      url = json.next_url ? `${json.next_url}&apiKey=${polygonKey}` : null;
+      pageCount++;
+    }
+  }
+
+  // 📉 Aggregate into 8-hour buckets instead of 4
+  const bucketMs = 1000 * 60 * 60 * 8;
+  const candles: IntradayCandle[] = [];
+  let bucket: any = null;
+
+  for (const bar of oneMinBars) {
+    const barTime = new Date(bar.t);
+    const bucketTime = Math.floor(barTime.getTime() / bucketMs) * bucketMs;
+
+    if (!bucket || bucket.bucketTime !== bucketTime) {
+      if (bucket) candles.push(bucket);
+      bucket = {
+        bucketTime,
+        date: new Date(bucketTime),
+        open: bar.o,
+        high: bar.h,
+        low: bar.l,
+        close: bar.c,
+        volume: bar.v,
+      };
+    } else {
+      bucket.high = Math.max(bucket.high, bar.h);
+      bucket.low = Math.min(bucket.low, bar.l);
+      bucket.close = bar.c;
+      bucket.volume += bar.v;
+    }
+  }
+  if (bucket) candles.push(bucket);
+
+  intraday = candles;
+
+  // 🧮 Droppiness scoring logic (unchanged)
+  let spikeCount = 0;
+  let retraceCount = 0;
+  for (let i = 1; i < candles.length; i++) {
+    const prev = candles[i - 1];
+    const cur = candles[i];
+    if (!prev.close || !cur.close || !cur.high) continue;
+
+    const spikePct = (cur.high - prev.close) / prev.close;
+    if (spikePct > 0.2) {
+      spikeCount++;
+      let retraced = false;
+      if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
+      if (!retraceCount && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) retraced = true;
+
+      if (retraced) retraceCount++;
+      droppinessDetail.push({
+        date: cur.date.toISOString(),
+        spikePct: +(spikePct * 100).toFixed(1),
+        retraced,
+      });
+    }
+  }
+
+  droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
+
+} catch (err) {
+  console.error("Droppiness fetch failed:", err);
+}
 
     // ---------- Country ----------
     let country = "Unknown";

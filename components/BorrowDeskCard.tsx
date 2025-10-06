@@ -57,7 +57,6 @@ export default function BorrowDeskCard({
   const latestFee = Number(borrowData.fee);
   const risk = isNaN(latestFee) ? null : classifyRisk(latestFee);
 
-  // Dynamic fee color logic
   const feeColor = (fee: number) => {
     if (fee < 50) return "#16a34a"; // green-600
     if (fee < 250) return "#f59e0b"; // amber-500
@@ -136,39 +135,35 @@ export default function BorrowDeskCard({
                       tick={{ fontSize: 10, fill: "currentColor" }}
                       tickFormatter={(v) => `${v}%`}
                     />
-import { formatNumber } from "@/utils/formatNumber";
-
-<Tooltip
-  contentStyle={{
-    backgroundColor: "#1f2937", // dark background
-    borderColor: "#374151",     // subtle border
-    color: "#f9fafb",           // default text
-  }}
-  labelStyle={{
-    color: "#f9fafb",           // ✅ date is now readable in dark mode
-    fontWeight: "500",
-  }}
-  formatter={(value: any, name: string) => {
-    if (name === "Fee %") {
-      return [`${Number(value).toFixed(2)}%`, "Fee"];
-    }
-    if (name === "Available") {
-      return [formatNumber(value), "Available"]; // 🔥 uses M/B/K formatting
-    }
-    return [value, name];
-  }}
-  labelFormatter={(label) => {
-    const d = new Date(label);
-    if (Number.isNaN(d.valueOf())) return label;
-    return d.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  }}
-/>
-
-
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        borderColor: "#374151",
+                        color: "#f9fafb",
+                      }}
+                      labelStyle={{
+                        color: "#f9fafb",
+                        fontWeight: "500",
+                      }}
+                      formatter={(value: any, name: string) => {
+                        if (name === "Fee %") {
+                          return [`${Number(value).toFixed(2)}%`, "Fee"];
+                        }
+                        if (name === "Available") {
+                          return [formatNumber(value), "Available"];
+                        }
+                        return [value, name];
+                      }}
+                      labelFormatter={(label) => {
+                        const d = new Date(label);
+                        if (Number.isNaN(d.valueOf())) return label;
+                        return d.toLocaleDateString(undefined, {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        });
+                      }}
+                    />
                     <Legend
                       verticalAlign="top"
                       wrapperStyle={{ fontSize: "12px", color: "currentColor" }}
@@ -181,53 +176,48 @@ import { formatNumber } from "@/utils/formatNumber";
                       barSize={20}
                       opacity={0.7}
                     />
-<Line
-  yAxisId="right"
-  type="monotone"
-  dataKey="fee"
-  name="Fee %"
-  stroke="#6b7280" // keep line neutral
-  strokeWidth={1.5}
-  dot={(props: any) => {
-    const { cx, cy, value, index } = props;
-    let fill = "#16a34a"; // green
-    if (value >= 50 && value < 250) fill = "#f59e0b"; // orange
-    if (value >= 250) fill = "#dc2626"; // red
-
-    return (
-      <circle
-        key={`dot-${index}`}
-        cx={cx}
-        cy={cy}
-        r={3}
-        fill={fill}
-        stroke="white"
-        strokeWidth={1}
-      />
-    );
-  }}
-  activeDot={(props: any) => {
-    const { cx, cy, value, index } = props;
-    let fill = "#16a34a";
-    if (value >= 50 && value < 250) fill = "#f59e0b";
-    if (value >= 250) fill = "#dc2626";
-
-    return (
-      <circle
-        key={`active-dot-${index}`}
-        cx={cx}
-        cy={cy}
-        r={5}
-        fill={fill}
-        stroke="white"
-        strokeWidth={2}
-      />
-    );
-  }}
-/>
-
-
-
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="fee"
+                      name="Fee %"
+                      stroke="#6b7280"
+                      strokeWidth={1.5}
+                      dot={(props: any) => {
+                        const { cx, cy, value, index } = props;
+                        let fill = "#16a34a";
+                        if (value >= 50 && value < 250) fill = "#f59e0b";
+                        if (value >= 250) fill = "#dc2626";
+                        return (
+                          <circle
+                            key={`dot-${index}`}
+                            cx={cx}
+                            cy={cy}
+                            r={3}
+                            fill={fill}
+                            stroke="white"
+                            strokeWidth={1}
+                          />
+                        );
+                      }}
+                      activeDot={(props: any) => {
+                        const { cx, cy, value, index } = props;
+                        let fill = "#16a34a";
+                        if (value >= 50 && value < 250) fill = "#f59e0b";
+                        if (value >= 250) fill = "#dc2626";
+                        return (
+                          <circle
+                            key={`active-dot-${index}`}
+                            cx={cx}
+                            cy={cy}
+                            r={5}
+                            fill={fill}
+                            stroke="white"
+                            strokeWidth={2}
+                          />
+                        );
+                      }}
+                    />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
