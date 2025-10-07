@@ -217,18 +217,46 @@ try {
   console.error("Splits/52-week fetch failed:", err);
 }
 
+// ---------- Polygon Meta ----------
+let polyMeta: any = {};
+let hasOptions = false; // define once here — do NOT redeclare later
 
-    // ---------- Polygon Meta ----------
-    let polyMeta: any = {};
-    try {
-      const polygonKey = process.env.POLYGON_API_KEY;
-      if (polygonKey) {
-        const polyRes = await fetch(
-          `https://api.polygon.io/v3/reference/tickers/${upperTicker}?apiKey=${polygonKey}`
-        );
-        if (polyRes.ok) polyMeta = await polyRes.json();
+try {
+  const polygonKey = process.env.POLYGON_API_KEY;
+
+  if (polygonKey) {
+    // ✅ Fetch base ticker meta
+    const metaRes = await fetch(
+      `https://api.polygon.io/v3/reference/tickers/${upperTicker}?apiKey=${polygonKey}`
+    );
+    if (metaRes.ok) polyMeta = await metaRes.json();
+
+    // ✅ Check for options availability (Polygon paid endpoint)
+    const optRes = await fetch(
+      `https://api.polygon.io/v3/reference/options/contracts?ticker=${upperTicker}&limit=1&apiKey=${polygonKey}`
+    );
+    if (optRes.ok) {
+      const optJson = await optRes.json();
+      if (Array.isArray(optJson.results) && optJson.results.length > 0) {
+        hasOptions = true;
       }
-    } catch {}
+    }
+  }
+
+  // 🔄 Fallback — use Yahoo Finance if Polygon returns nothing
+  if (!hasOptions) {
+    try {
+      const yOpt = await yahooFinance.options(upperTicker);
+      if (yOpt?.options?.length > 0) {
+        hasOptions = true;
+      }
+    } catch {
+      // yahooFinance.options sometimes throws for tickers with no chain — safe to ignore
+    }
+  }
+} catch (err) {
+  console.error("Options detection failed:", err);
+}
 
     // ---------- SEC Filings ----------
     let filings: Filing[] = [];
@@ -548,48 +576,51 @@ try {
     const borrowData = await fetchBorrowDesk(upperTicker);
 
     // ---------- Return ----------
-    return NextResponse.json({
-      ticker: upperTicker,
-      companyName: quote.longName || quote.shortName || upperTicker,
+return NextResponse.json({
+  ticker: upperTicker,
+  companyName: quote.longName || quote.shortName || upperTicker,
 
-      lastPrice: quote.regularMarketPrice ?? null,
-      marketCap: quote.marketCap ?? null,
-      sharesOutstanding: quote.sharesOutstanding ?? null,
-      floatShares: quote.floatShares ?? quote.sharesOutstanding ?? null,
-      avgVolume: quote.averageDailyVolume3Month ?? null,
-      latestVolume: quote.regularMarketVolume ?? null,
-      shortFloat: toPercent(shortFloat),
-      insiderOwnership: toPercent(insiderOwnership),
-      institutionalOwnership: toPercent(institutionalOwnership),
-      exchange: quote.fullExchangeName || "Unknown",
-      country,
-      countrySource,
-      splits,
-      high52Week,
-      low52Week,
-      companyProfile,
-      history,
-      intraday,
-      filings,
-      promotions,
-      fraudImages,
-      droppinessScore,
-      droppinessDetail,
-      borrowData,
-      weightedRiskScore,
-      summaryVerdict,
-      summaryText,
-      sudden_volume_spike,
-      sudden_price_spike,
-      dilution_offering: filings.some(
-        (f) => f.title.includes("S-1") || f.title.includes("424B")
-      ),
-      promoted_stock:
-        promotions.length > 0 && promotions[0].type !== "Manual Check",
-      fraud_evidence:
-        fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"),
-      risky_country: RISKY.has(country),
-    });
+  lastPrice: quote.regularMarketPrice ?? null,
+  marketCap: quote.marketCap ?? null,
+  sharesOutstanding: quote.sharesOutstanding ?? null,
+  floatShares: quote.floatShares ?? quote.sharesOutstanding ?? null,
+  avgVolume: quote.averageDailyVolume3Month ?? null,
+  latestVolume: quote.regularMarketVolume ?? null,
+  shortFloat: toPercent(shortFloat),
+  insiderOwnership: toPercent(insiderOwnership),
+  institutionalOwnership: toPercent(institutionalOwnership),
+  exchange: quote.fullExchangeName || "Unknown",
+  country,
+  countrySource,
+  splits,
+  high52Week,
+  low52Week,
+  companyProfile,
+  history,
+  intraday,
+  filings,
+  promotions,
+  fraudImages,
+  droppinessScore,
+  droppinessDetail,
+  borrowData,
+  weightedRiskScore,
+  summaryVerdict,
+  summaryText,
+  sudden_volume_spike,
+  sudden_price_spike,
+  dilution_offering: filings.some(
+    (f) => f.title.includes("S-1") || f.title.includes("424B")
+  ),
+  promoted_stock:
+    promotions.length > 0 && promotions[0].type !== "Manual Check",
+  fraud_evidence:
+    fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"),
+  risky_country: RISKY.has(country),
+hasOptions, // true if options exist
+
+});
+
   } catch (err: any) {
     console.error("scan route failed:", err?.message || err);
     return NextResponse.json(
