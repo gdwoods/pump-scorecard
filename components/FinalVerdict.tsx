@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 type Props = {
   verdict: "Low risk" | "Moderate risk" | "High risk";
   summary: string;
@@ -7,6 +9,8 @@ type Props = {
   manualFlags: Record<string, boolean>;
   droppinessVerdict: string;
   drivers?: { label: string; value: number }[];
+  scoreLog?: { label: string; value: number }[];
+  baseScore?: number; // base model contribution
 };
 
 export default function FinalVerdict({
@@ -16,8 +20,11 @@ export default function FinalVerdict({
   manualFlags,
   droppinessVerdict,
   drivers = [],
+  scoreLog = [],
+  baseScore = 0,
 }: Props) {
-  // Dynamic colors
+  const [showComposition, setShowComposition] = useState(false);
+
   const color =
     verdict === "High risk"
       ? "bg-red-600"
@@ -25,37 +32,21 @@ export default function FinalVerdict({
       ? "bg-yellow-500"
       : "bg-green-600";
 
-  const badgeColor =
-    verdict === "High risk"
-      ? "bg-red-100 text-red-800"
-      : verdict === "Moderate risk"
-      ? "bg-yellow-100 text-yellow-800"
-      : "bg-green-100 text-green-800";
+  // ✅ Filter out any accidental duplicate "Base model risk"
+  const filteredLog = scoreLog.filter(
+    (item) => !/base model/i.test(item.label)
+  );
 
-  // 🧠 Descriptive commentary based on score
-  let description = "";
-  if (score <= 25) {
-    description =
-      "No major pump indicators. Price and volume appear organic with limited speculative activity.";
-  } else if (score <= 50) {
-    description =
-      "Some speculative activity detected, but not excessive. Worth watching for signs of acceleration or promotion.";
-  } else if (score <= 75) {
-    description =
-      "Several pump-like risk factors are present — such as volume spikes, dilution filings, or promotions. Exercise caution.";
-  } else {
-    description =
-      "Multiple red flags detected — high dilution, aggressive promotions, and abnormal trading patterns suggest elevated pump-and-dump risk.";
-  }
+  const totalScore = baseScore + filteredLog.reduce((a, b) => a + b.value, 0);
 
   return (
     <div className="p-6 border rounded-lg bg-white dark:bg-gray-800 shadow">
-      {/* Verdict Banner */}
+      {/* 🟩 Verdict Banner */}
       <div className={`text-white text-lg font-semibold px-4 py-2 rounded ${color}`}>
         {verdict}
       </div>
 
-      {/* Score Gauge */}
+      {/* 📊 Score Gauge */}
       <div className="mt-4">
         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
           <div
@@ -68,20 +59,88 @@ export default function FinalVerdict({
         </p>
       </div>
 
-      {/* Description */}
-      <p className="mt-4 text-gray-800 dark:text-gray-200 text-sm">
-        {description}
-      </p>
+      {/* 🔍 Score Composition */}
+      <div className="mt-3">
+        <button
+          onClick={() => setShowComposition((s) => !s)}
+          className="text-xs text-blue-500 hover:underline"
+        >
+          {showComposition ? "▾ Hide score composition" : "▸ Show score composition"}
+        </button>
 
-      {/* Summary (backend insight) */}
-      <p className="mt-2 text-gray-700 dark:text-gray-300 text-sm">{summary}</p>
+        {showComposition && (
+          <div className="mt-2 text-xs rounded-lg p-3 bg-gray-100 dark:bg-gray-900 border border-gray-700">
+            <p className="italic text-gray-500 mb-2">
+              <span className="text-red-400">Red</span> = adds risk,{" "}
+              <span className="text-green-400">Green</span> = reduces risk.
+            </p>
 
-      {/* Droppiness Verdict */}
+            <table className="w-full text-gray-200 text-[13px]">
+              <tbody>
+                {/* ✅ Base model row */}
+                <tr>
+                  <td className="text-gray-400">Base model risk</td>
+                  <td className="text-right text-blue-400 font-semibold">
+                    +{baseScore}
+                  </td>
+                </tr>
+
+                {/* ✅ Score modifiers */}
+                {filteredLog.map((item, i) => (
+                  <tr key={i}>
+                    <td
+                      className={`${
+                        item.value > 0
+                          ? "text-red-400"
+                          : item.value < 0
+                          ? "text-green-400"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      {item.label}
+                    </td>
+                    <td
+                      className={`text-right font-semibold ${
+                        item.value > 0
+                          ? "text-red-400"
+                          : item.value < 0
+                          ? "text-green-400"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      {item.value > 0 ? `+${item.value}` : item.value}
+                    </td>
+                  </tr>
+                ))}
+
+                {/* ✅ Final score total */}
+                <tr>
+                  <td className="text-gray-300 pt-1 border-t border-gray-700 font-semibold">
+                    Final adjusted score
+                  </td>
+                  <td className="text-right pt-1 border-t border-gray-700 text-blue-400 font-bold">
+                    {totalScore}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <p className="text-[11px] text-gray-500 mt-2 italic">
+              Baseline model risk plus individual modifiers equals final adjusted score.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* 🧾 Summary */}
+      <p className="mt-4 text-gray-800 dark:text-gray-200 text-sm">{summary}</p>
+
+      {/* 💧 Droppiness Verdict */}
       <p className="mt-2 text-gray-600 dark:text-gray-400 text-sm italic">
         {droppinessVerdict}
       </p>
 
-      {/* ✅ Key Risk Drivers */}
+      {/* ⚡ Key Risk Drivers */}
       {drivers.length > 0 ? (
         <div className="mt-4">
           <h3 className="text-sm font-semibold mb-1">Key Risk Drivers</h3>
@@ -89,7 +148,10 @@ export default function FinalVerdict({
             {drivers.map((d, i) => (
               <li key={i}>
                 {d.label}{" "}
-                <span className="text-red-500 font-medium">(+{d.value})</span>
+                <span className="text-red-500 font-medium">
+                  ({d.value > 0 ? "+" : ""}
+                  {d.value})
+                </span>
               </li>
             ))}
           </ul>
@@ -100,7 +162,7 @@ export default function FinalVerdict({
         </p>
       )}
 
-      {/* Manual Flags */}
+      {/* 🏁 Manual Flags */}
       {Object.keys(manualFlags).some((k) => manualFlags[k]) && (
         <div className="mt-4">
           <h3 className="text-sm font-semibold mb-1">Manual Flags</h3>
