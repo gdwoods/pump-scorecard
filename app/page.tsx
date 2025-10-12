@@ -21,12 +21,14 @@ export default function Page() {
   const [manualFlags, setManualFlags] = useState<Record<string, boolean>>({});
   const [scoreLog, setScoreLog] = useState<{ label: string; value: number }[]>([]);
   const [adjustedScore, setAdjustedScore] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
   // ---------------------
   // SCAN FUNCTION
   // ---------------------
   const scan = async () => {
     if (!ticker) return;
+    setIsLoading(true);
     try {
       const res = await fetch(`/api/scan/${ticker}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`Scan failed: ${res.status}`);
@@ -75,6 +77,8 @@ export default function Page() {
       setManualFlags({});
     } catch (err) {
       console.error("❌ Scan error:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -273,9 +277,10 @@ useEffect(() => {
         />
         <button
           onClick={scan}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500"
+          disabled={isLoading}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          Scan
+          {isLoading ? "Scanning..." : "Scan"}
         </button>
       </div>
 
@@ -295,7 +300,7 @@ useEffect(() => {
           {/* Score Breakdown uses same data to ensure consistency */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ScoreBreakdown
-              ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
+              ticker={ticker.toUpperCase()}
               breakdown={scoreLog}
               total={adjustedScore}
             />
@@ -309,12 +314,12 @@ useEffect(() => {
               manualFlags={manualFlags}
               toggleManualFlag={toggleManualFlag}
             />
-            <Fundamentals ticker={result.ticker} result={result} />
+            <Fundamentals ticker={ticker} result={result} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <DroppinessCard
-              ticker={result.ticker}
+              ticker={ticker}
               score={result.droppinessScore}
               detail={result.droppinessDetail || []}
               verdict={result.droppinessVerdict}
@@ -324,25 +329,25 @@ useEffect(() => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Promotions
-              ticker={result.ticker}
+              ticker={ticker}
               recentPromotions={result.recentPromotions || []}
               olderPromotions={result.olderPromotions || []}
             />
             <FraudEvidence
-              ticker={result.ticker}
+              ticker={ticker}
               fraudImages={result.fraudImages || []}
             />
-            <SecFilings ticker={result.ticker} filings={result.filings} />
+            <SecFilings ticker={ticker} filings={result.filings} />
           </div>
 
           {result.borrowData && (
             <BorrowDeskCard
-              ticker={result.ticker?.toUpperCase() || ticker.toUpperCase()}
+              ticker={ticker.toUpperCase()}
               borrowData={result.borrowData}
             />
           )}
 
-          <NewsSection ticker={result.ticker} items={result.news || []} />
+          <NewsSection ticker={ticker} items={result.news || []} />
         </div>
       )}
     </div>
