@@ -5,7 +5,8 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import FinalVerdict from "@/components/FinalVerdict";
 import { saveScanToHistory, getHistory, HISTORY_STORAGE_KEY } from "@/lib/history";
 import { tickerCache, getTickerCacheKey, isCacheValid, getCachedData, setCachedData } from "@/lib/cache";
-import Chart from "@/components/Chart";
+import ProperCandlestickChart from "@/components/ProperCandlestickChart";
+import VolumeProfileChart from "@/components/VolumeProfileChart";
 import Criteria from "@/components/Criteria";
 import Fundamentals from "@/components/Fundamentals";
 import Promotions from "@/components/Promotions";
@@ -397,7 +398,7 @@ useEffect(() => {
               breakdown={scoreLog}
               total={adjustedScore}
             />
-            <Chart result={result} />
+            <ProperCandlestickChart result={result} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -407,7 +408,7 @@ useEffect(() => {
               manualFlags={manualFlags}
               toggleManualFlag={toggleManualFlag}
             />
-            <Fundamentals ticker={ticker} result={result} />
+            <Fundamentals result={result} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -417,8 +418,11 @@ useEffect(() => {
               detail={result.droppinessDetail || []}
               verdict={result.droppinessVerdict}
             />
-            <DroppinessScatter detail={result.droppinessDetail || []} />
+            <DroppinessScatter detail={result.droppinessDetail || []} ticker={ticker} />
           </div>
+
+          {/* Volume Profile Chart */}
+          <VolumeProfileChart result={result} />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Promotions

@@ -166,6 +166,9 @@ export async function GET(
       history =
         chart.quotes?.map((q: any) => ({
           date: q.date?.toISOString().split("T")[0] || "",
+          open: q.open,
+          high: q.high,
+          low: q.low,
           close: q.close,
           volume: q.volume,
         })) || [];
