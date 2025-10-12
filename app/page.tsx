@@ -24,6 +24,7 @@ export default function Page() {
   const [scoreLog, setScoreLog] = useState<{ label: string; value: number }[]>([]);
   const [adjustedScore, setAdjustedScore] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
 
   // ---------------------
   // SCAN FUNCTION
@@ -80,7 +81,7 @@ export default function Page() {
 
       // Save to history
       saveScanToHistory({
-        ticker: upperTicker,
+        ticker: ticker.toUpperCase(),
         score: json.weightedRiskScore || 0,
         baseScore: json.weightedRiskScore || 0,
         adjustedScore: json.weightedRiskScore || 0, // Will be updated by useEffect
@@ -95,6 +96,9 @@ export default function Page() {
         promotions: json.promoted_stock,
         riskyCountry: json.risky_country,
       });
+      
+      // Trigger history refresh
+      setHistoryRefreshTrigger(prev => prev + 1);
     } catch (err) {
       console.error("❌ Scan error:", err);
     } finally {
@@ -387,11 +391,11 @@ useEffect(() => {
           )}
 
           <NewsSection ticker={ticker} items={result.news || []} />
-
-          {/* Historical Analysis */}
-          <HistoryCard ticker={ticker} />
         </div>
       )}
+
+      {/* Historical Analysis - Show even when no current result */}
+      {ticker && <HistoryCard ticker={ticker} refreshTrigger={historyRefreshTrigger} />}
     </div>
   );
 }

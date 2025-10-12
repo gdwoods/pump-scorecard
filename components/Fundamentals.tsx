@@ -17,29 +17,13 @@ export default function Fundamentals({ result }: Props) {
   const { flag, isRisky } = countryInfo(result.country);
   const [expanded, setExpanded] = useState(false);
   const [hasOptions, setHasOptions] = useState<boolean | null>(null);
-  const [loadingOptions, setLoadingOptions] = useState(false);
 
-  // ✅ Corrected options check using Polygon’s `underlying_ticker`
+  // ✅ Use the hasOptions value from the API result instead of client-side check
   useEffect(() => {
-    async function checkOptionsAvailability() {
-      if (!result?.ticker) return;
-      setLoadingOptions(true);
-      try {
-        const response = await fetch(
-          `https://api.polygon.io/v3/reference/options/contracts?underlying_ticker=${result.ticker}&limit=1&apiKey=${process.env.NEXT_PUBLIC_POLYGON_KEY}`
-        );
-        const data = await response.json();
-setHasOptions(!(data.results && data.results.length > 0) ? false : true);
-      } catch (err) {
-        console.error("Error checking options availability:", err);
-        setHasOptions(null);
-      } finally {
-        setLoadingOptions(false);
-      }
+    if (result?.hasOptions !== undefined) {
+      setHasOptions(result.hasOptions);
     }
-
-    checkOptionsAvailability();
-  }, [result?.ticker]);
+  }, [result?.hasOptions]);
 
   return (
     <div className="p-6 border rounded-lg bg-white dark:bg-gray-800 shadow">
@@ -116,18 +100,22 @@ setHasOptions(!(data.results && data.results.length > 0) ? false : true);
         </li>
 
         {/* ✅ Options Availability */}
-<li className="col-span-2">
-  <strong>Options Available:</strong>{" "}
-  {result.hasOptions ? (
-    <span className="text-red-500 font-semibold">
-      ❌ Yes (avoid)
-    </span>
-  ) : (
-    <span className="text-green-500 font-semibold">
-      ✅ No (clean)
-    </span>
-  )}
-</li>
+        <li className="col-span-2">
+          <strong>Options Available:</strong>{" "}
+          {hasOptions === true ? (
+            <span className="text-red-500 font-semibold">
+              ❌ Yes (avoid)
+            </span>
+          ) : hasOptions === false ? (
+            <span className="text-green-500 font-semibold">
+              ✅ No (clean)
+            </span>
+          ) : (
+            <span className="text-gray-500">
+              Loading...
+            </span>
+          )}
+        </li>
 
 
         {/* ✅ Splits */}

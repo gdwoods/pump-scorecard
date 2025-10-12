@@ -7,9 +7,10 @@ import { formatNumber } from "@/utils/formatNumber";
 
 interface HistoryCardProps {
   ticker: string;
+  refreshTrigger?: number; // Add this to trigger refresh
 }
 
-export default function HistoryCard({ ticker }: HistoryCardProps) {
+export default function HistoryCard({ ticker, refreshTrigger }: HistoryCardProps) {
   const [tickerHistory, setTickerHistory] = useState<TickerHistory | null>(null);
   const [allTickers, setAllTickers] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
@@ -18,7 +19,7 @@ export default function HistoryCard({ ticker }: HistoryCardProps) {
     const history = getTickerHistory(ticker);
     setTickerHistory(history);
     setAllTickers(getAllTickers());
-  }, [ticker]);
+  }, [ticker, refreshTrigger]);
 
   if (!tickerHistory) {
     return (
