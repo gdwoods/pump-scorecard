@@ -318,9 +318,10 @@ useEffect(() => {
   // ---------------------
   // RENDER
   // ---------------------
-  if (isLoading && !result) {
-    return <FullPageSkeleton />;
-  }
+  // Don't show full page skeleton - always show input
+  // if (isLoading && !result) {
+  //   return <FullPageSkeleton />;
+  // }
 
   return (
     <div className="p-6 space-y-6">
