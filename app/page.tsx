@@ -263,6 +263,11 @@ useEffect(() => {
         <input
           value={ticker}
           onChange={(e) => setTicker(e.target.value.toUpperCase())}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              scan();
+            }
+          }}
           placeholder="Enter ticker symbol"
           className="border px-3 py-2 rounded flex-1"
         />
