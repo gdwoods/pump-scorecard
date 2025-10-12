@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 
 import FinalVerdict from "@/components/FinalVerdict";
+import { saveScanToHistory, getHistory, HISTORY_STORAGE_KEY } from "@/lib/history";
 import Chart from "@/components/Chart";
 import Criteria from "@/components/Criteria";
 import Fundamentals from "@/components/Fundamentals";
@@ -14,6 +15,7 @@ import DroppinessCard from "@/components/DroppinessCard";
 import DroppinessScatter from "@/components/DroppinessChart";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
+import HistoryCard from "@/components/HistoryCard";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
@@ -75,6 +77,24 @@ export default function Page() {
 
       setResult(json);
       setManualFlags({});
+
+      // Save to history
+      saveScanToHistory({
+        ticker: upperTicker,
+        score: json.weightedRiskScore || 0,
+        baseScore: json.weightedRiskScore || 0,
+        adjustedScore: json.weightedRiskScore || 0, // Will be updated by useEffect
+        verdict: json.summaryVerdict,
+        summary: json.summaryText,
+        factors: [], // Will be populated by useEffect
+        marketCap: json.marketCap,
+        price: json.lastPrice,
+        volume: json.latestVolume,
+        droppinessScore: json.droppinessScore,
+        fraudEvidence: json.fraud_evidence,
+        promotions: json.promoted_stock,
+        riskyCountry: json.risky_country,
+      });
     } catch (err) {
       console.error("❌ Scan error:", err);
     } finally {
@@ -229,7 +249,26 @@ useEffect(() => {
 
   setAdjustedScore(score);
   setScoreLog(log);
-}, [result, manualFlags]);
+
+  // Update the most recent scan in history with final adjusted score and factors
+  if (result && log.length > 0) {
+    try {
+      const history = getHistory();
+      const mostRecentScan = history.find(scan => 
+        scan.ticker.toUpperCase() === ticker.toUpperCase() && 
+        Date.now() - scan.timestamp < 30000 // Within last 30 seconds
+      );
+      
+      if (mostRecentScan) {
+        mostRecentScan.adjustedScore = score;
+        mostRecentScan.factors = log;
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+      }
+    } catch (error) {
+      console.error('Failed to update scan history:', error);
+    }
+  }
+}, [result, manualFlags, ticker]);
 
 
   // ---------------------
@@ -348,6 +387,9 @@ useEffect(() => {
           )}
 
           <NewsSection ticker={ticker} items={result.news || []} />
+
+          {/* Historical Analysis */}
+          <HistoryCard ticker={ticker} />
         </div>
       )}
     </div>
