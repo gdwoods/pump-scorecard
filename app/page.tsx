@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 
 import FinalVerdict from "@/components/FinalVerdict";
 import { saveScanToHistory, getHistory, HISTORY_STORAGE_KEY } from "@/lib/history";
+import { tickerCache, getTickerCacheKey, isCacheValid, getCachedData, setCachedData } from "@/lib/cache";
 import Chart from "@/components/Chart";
 import Criteria from "@/components/Criteria";
 import Fundamentals from "@/components/Fundamentals";
@@ -16,6 +17,8 @@ import DroppinessScatter from "@/components/DroppinessChart";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import HistoryCard from "@/components/HistoryCard";
+import { FullPageSkeleton } from "@/components/LoadingSkeleton";
+import PerformanceMonitor from "@/components/PerformanceMonitor";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
@@ -27,12 +30,45 @@ export default function Page() {
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
 
   // ---------------------
+  // DEBOUNCED SEARCH
+  // ---------------------
+  const debouncedScan = useMemo(
+    () => {
+      let timeoutId: NodeJS.Timeout;
+      return (ticker: string) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          if (ticker.trim()) {
+            scan();
+          }
+        }, 500); // 500ms delay
+      };
+    },
+    []
+  );
+
+  // ---------------------
   // SCAN FUNCTION
   // ---------------------
-  const scan = async () => {
+  const scan = useCallback(async () => {
     if (!ticker) return;
+    
+    const cacheKey = getTickerCacheKey(ticker);
+    
+    // Check cache first
+    if (isCacheValid(tickerCache, cacheKey)) {
+      const cachedData = getCachedData(tickerCache, cacheKey);
+      if (cachedData) {
+        console.log('🚀 Using cached data for', ticker);
+        setResult(cachedData);
+        setManualFlags({});
+        return;
+      }
+    }
+    
     setIsLoading(true);
     try {
+      console.log('🌐 Fetching fresh data for', ticker);
       const res = await fetch(`/api/scan/${ticker}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`Scan failed: ${res.status}`);
       const json = await res.json();
@@ -79,6 +115,9 @@ export default function Page() {
       setResult(json);
       setManualFlags({});
 
+      // Cache the result
+      setCachedData(tickerCache, cacheKey, json);
+
       // Save to history
       saveScanToHistory({
         ticker: ticker.toUpperCase(),
@@ -104,7 +143,7 @@ export default function Page() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [ticker]);
 
   // ---------------------
   // EXPORT PDF
@@ -278,6 +317,10 @@ useEffect(() => {
   // ---------------------
   // RENDER
   // ---------------------
+  if (isLoading && !result) {
+    return <FullPageSkeleton />;
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Header restored */}
@@ -309,13 +352,20 @@ useEffect(() => {
       <div className="flex gap-2">
         <input
           value={ticker}
-          onChange={(e) => setTicker(e.target.value.toUpperCase())}
+          onChange={(e) => {
+            const value = e.target.value.toUpperCase();
+            setTicker(value);
+            // Auto-scan after typing (debounced)
+            if (value.length >= 1) {
+              debouncedScan(value);
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               scan();
             }
           }}
-          placeholder="Enter ticker symbol"
+          placeholder="Enter ticker symbol (auto-scans as you type)"
           className="border px-3 py-2 rounded flex-1"
         />
         <button
@@ -396,6 +446,9 @@ useEffect(() => {
 
       {/* Historical Analysis - Show even when no current result */}
       {ticker && <HistoryCard ticker={ticker} refreshTrigger={historyRefreshTrigger} />}
+      
+      {/* Performance Monitor */}
+      <PerformanceMonitor />
     </div>
   );
 }
