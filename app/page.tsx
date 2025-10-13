@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import FinalVerdict from "@/components/FinalVerdict";
 import { saveScanToHistory, getHistory, HISTORY_STORAGE_KEY } from "@/lib/history";
 import { tickerCache, getTickerCacheKey, isCacheValid, getCachedData, setCachedData } from "@/lib/cache";
+import Chart from "@/components/Chart";
 import ProperCandlestickChart from "@/components/ProperCandlestickChart";
 import VolumeProfileChart from "@/components/VolumeProfileChart";
 import Criteria from "@/components/Criteria";
@@ -392,14 +393,14 @@ useEffect(() => {
             baseScore={result.weightedRiskScore || 0}
           />
 
-          {/* Score Breakdown uses same data to ensure consistency */}
+          {/* Score Breakdown and Price & Volume Chart */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ScoreBreakdown
               ticker={ticker.toUpperCase()}
               breakdown={scoreLog}
               total={adjustedScore}
             />
-            <ProperCandlestickChart result={result} />
+            <Chart result={result} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -422,8 +423,6 @@ useEffect(() => {
             <DroppinessScatter detail={result.droppinessDetail || []} ticker={ticker} />
           </div>
 
-          {/* Volume Profile Chart */}
-          <VolumeProfileChart result={result} />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Promotions

@@ -97,9 +97,9 @@ export default function DroppinessCard({
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
               Recent spikes:
             </h3>
-            <ul className="text-sm text-gray-600 dark:text-gray-400 max-h-32 overflow-y-auto">
-              {detail.slice(0, 5).map((d, i) => (
-                <li key={i}>
+            <ul className="text-sm text-gray-600 dark:text-gray-400 max-h-40 overflow-y-auto space-y-0.5">
+              {detail.slice().reverse().slice(0, 10).map((d, i) => (
+                <li key={i} className="py-0.5">
                   {new Date(d.date).toLocaleDateString()} — {d.spikePct.toFixed(1)}%{" "}
                   {d.retraced ? "(retraced)" : "(held)"}
                 </li>
