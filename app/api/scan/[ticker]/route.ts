@@ -533,7 +533,7 @@ try {
       countrySource = "Yahoo";
     }
 
-    const overrides: Record<string, string> = { UOKA: "China", MBX: "Singapore" };
+    const overrides: Record<string, string> = { UOKA: "China", MBX: "Singapore", JDZG: "China" };
     if (overrides[upperTicker]) {
       country = overrides[upperTicker];
       countrySource = "Manual Override";
