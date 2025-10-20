@@ -72,7 +72,7 @@ export default function HistoryCard({ ticker, refreshTrigger }: HistoryCardProps
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{totalScans}</div>
             <div className="text-xs text-gray-600 dark:text-gray-400">Total Scans</div>
@@ -88,6 +88,12 @@ export default function HistoryCard({ ticker, refreshTrigger }: HistoryCardProps
           <div className="text-center">
             <div className="text-2xl font-bold text-red-600">{worstScore}%</div>
             <div className="text-xs text-gray-600 dark:text-gray-400">Worst Score</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-purple-600">
+              {scans.length > 0 ? scans[scans.length - 1].droppinessScore || 'N/A' : 'N/A'}
+            </div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">Droppiness</div>
           </div>
         </div>
 
@@ -123,6 +129,9 @@ export default function HistoryCard({ ticker, refreshTrigger }: HistoryCardProps
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className="font-medium">{scan.adjustedScore}%</span>
+                    {scan.droppinessScore !== undefined && (
+                      <span className="text-purple-600 font-medium">{scan.droppinessScore}%</span>
+                    )}
                     {scan.price && (
                       <span className="text-gray-500">${scan.price.toFixed(2)}</span>
                     )}
