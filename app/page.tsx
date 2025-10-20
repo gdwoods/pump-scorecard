@@ -419,6 +419,10 @@ useEffect(() => {
               manualFlags={manualFlags}
               toggleManualFlag={toggleManualFlag}
             />
+            <Fundamentals result={result} />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <DroppinessScatter detail={result.droppinessDetail || []} ticker={ticker} />
           </div>
 
