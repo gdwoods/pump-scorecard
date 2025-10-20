@@ -88,6 +88,11 @@ export default function DroppinessCard({
           </ResponsiveContainer>
         </div>
 
+        {/* Date and time stamp */}
+        <p className="text-xs text-gray-500 dark:text-gray-500 text-center mt-1">
+          {new Date().toLocaleString()}
+        </p>
+
         <p className="text-sm mt-2 text-gray-700 dark:text-gray-300 text-center italic">
           {verdict}
         </p>

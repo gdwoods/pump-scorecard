@@ -382,16 +382,25 @@ useEffect(() => {
 
       {result && (
         <div className="space-y-6">
-          <FinalVerdict
-            verdict={result.summaryVerdict}
-            summary={result.summaryText}
-            score={adjustedScore}
-            manualFlags={manualFlags}
-            droppinessVerdict={result.droppinessVerdict}
-            drivers={scoreLog}
-            scoreLog={scoreLog}
-            baseScore={result.weightedRiskScore || 0}
-          />
+          {/* Risk Card and Droppiness Card */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FinalVerdict
+              verdict={result.summaryVerdict}
+              summary={result.summaryText}
+              score={adjustedScore}
+              manualFlags={manualFlags}
+              droppinessVerdict={result.droppinessVerdict}
+              drivers={scoreLog}
+              scoreLog={scoreLog}
+              baseScore={result.weightedRiskScore || 0}
+            />
+            <DroppinessCard
+              ticker={ticker}
+              score={result.droppinessScore}
+              detail={result.droppinessDetail || []}
+              verdict={result.droppinessVerdict}
+            />
+          </div>
 
           {/* Score Breakdown and Price & Volume Chart */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -409,16 +418,6 @@ useEffect(() => {
               result={result}
               manualFlags={manualFlags}
               toggleManualFlag={toggleManualFlag}
-            />
-            <Fundamentals result={result} />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <DroppinessCard
-              ticker={ticker}
-              score={result.droppinessScore}
-              detail={result.droppinessDetail || []}
-              verdict={result.droppinessVerdict}
             />
             <DroppinessScatter detail={result.droppinessDetail || []} ticker={ticker} />
           </div>
