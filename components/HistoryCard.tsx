@@ -55,15 +55,6 @@ export default function HistoryCard({ ticker, refreshTrigger }: HistoryCardProps
   };
 
   const recentScans = scans.slice(-5).reverse(); // Last 5 scans, most recent first
-  
-  // Debug: Log scan data to see what's available
-  if (recentScans.length > 0) {
-    console.log('Recent scans data:', recentScans.map(scan => ({
-      date: scan.date,
-      timestamp: scan.timestamp,
-      timeString: scan.timestamp ? new Date(scan.timestamp).toLocaleTimeString() : 'No timestamp'
-    })));
-  }
 
   return (
     <Card className="p-4 bg-white dark:bg-gray-800 shadow-sm rounded-xl">
