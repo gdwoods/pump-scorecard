@@ -118,7 +118,12 @@ export default function HistoryCard({ ticker, refreshTrigger }: HistoryCardProps
                   className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded text-sm"
                 >
                   <div className="flex items-center space-x-3">
-                    <span className="text-gray-500">{scan.date}</span>
+                    <div className="flex flex-col">
+                      <span className="text-gray-500 text-xs">{scan.date}</span>
+                      <span className="text-gray-400 text-xs">
+                        {new Date(scan.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
                       scan.verdict === 'High risk' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
                       scan.verdict === 'Moderate risk' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
