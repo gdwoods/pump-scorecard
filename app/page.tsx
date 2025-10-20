@@ -402,14 +402,14 @@ useEffect(() => {
             />
           </div>
 
-          {/* Score Breakdown and Price & Volume Chart */}
+          {/* Score Breakdown and Fundamentals */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ScoreBreakdown
               ticker={ticker.toUpperCase()}
               breakdown={scoreLog}
               total={adjustedScore}
             />
-            <Chart result={result} />
+            <Fundamentals result={result} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -419,10 +419,11 @@ useEffect(() => {
               manualFlags={manualFlags}
               toggleManualFlag={toggleManualFlag}
             />
-            <Fundamentals result={result} />
+            <NewsSection ticker={ticker} items={result.news || []} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Chart result={result} />
             <DroppinessScatter detail={result.droppinessDetail || []} ticker={ticker} />
           </div>
 
@@ -446,8 +447,6 @@ useEffect(() => {
               borrowData={result.borrowData}
             />
           )}
-
-          <NewsSection ticker={ticker} items={result.news || []} />
         </div>
       )}
 
