@@ -134,13 +134,15 @@ function extractAtmShelfStatus(text: string): string | undefined {
   // IMPORTANT: Use special markers so getOfferingColor can respect DT's explicit tags
   
   // Try multiple patterns to catch different OCR formats
+  // IMPORTANT: DT shows "High/Medium/Low" but also uses color tags "Red/Yellow/Green"
+  // We need to catch both formats
   const offeringAbilityPatterns = [
-    /offering\s*ability[:\s=]+(red|yellow|medium|green)/i,
-    /offering\s*ability\s+(red|yellow|medium|green)/i,
-    /(?:ability|offering)[:\s=]+(red|yellow|medium|green)/i,
-    // More flexible: "Offering" and "Medium" within 50 chars of each other
-    /offering[^\n]{0,50}?(medium|yellow|red|green)/i,
-    /ability[^\n]{0,50}?(medium|yellow|red|green)/i,
+    /offering\s*ability[:\s=]+(red|yellow|medium|green|high|low)/i,
+    /offering\s*ability\s+(red|yellow|medium|green|high|low)/i,
+    /(?:ability|offering)[:\s=]+(red|yellow|medium|green|high|low)/i,
+    // More flexible: "Offering" and status within 50 chars of each other
+    /offering[^\n]{0,50}?(medium|yellow|red|green|high|low)/i,
+    /ability[^\n]{0,50}?(medium|yellow|red|green|high|low)/i,
   ];
   
   for (const pattern of offeringAbilityPatterns) {
@@ -151,32 +153,52 @@ function extractAtmShelfStatus(text: string): string | undefined {
       // The "DT:" prefix ensures getOfferingColor respects the tag and doesn't override it
       // CRITICAL: Return immediately here - do NOT continue with keyword detection
       console.log('✅ DT Offering Ability tag detected:', tag, '-> mapping to DT tag');
-      if (tag === 'red') {
-        return 'DT:Red'; // Special marker for DT Red tag
+      if (tag === 'red' || tag === 'high') {
+        return 'DT:Red'; // High = Red = +25 points
       } else if (tag === 'medium' || tag === 'yellow') {
         // Medium/Yellow = S-1 Filed but not necessarily active - MUST stay Yellow
         console.log('✅ DT Medium tag -> DT:Medium (should score +10, not +25)');
         return 'DT:Medium'; // Special marker for DT Medium tag - should score +10, not +25
-      } else if (tag === 'green') {
-        return 'DT:Green'; // Special marker for DT Green tag
+      } else if (tag === 'green' || tag === 'low') {
+        return 'DT:Green'; // Low = Green
       }
     }
   }
   
-  // Fallback: Check if "medium" appears near "offering" or "ability" (case-insensitive)
+  // Fallback: Check if status keywords appear near "offering" or "ability" (case-insensitive)
   // This handles cases where OCR might split words or format differently
   const offeringIndex = lower.indexOf('offering');
   const abilityIndex = lower.indexOf('ability');
+  
+  // Check for "high", "medium", or "low" near "offering" or "ability"
+  const highIndex = lower.indexOf('high');
   const mediumIndex = lower.indexOf('medium');
+  const lowIndex = lower.indexOf('low');
+  
+  if (highIndex !== -1 && (offeringIndex !== -1 || abilityIndex !== -1)) {
+    const nearOffering = offeringIndex !== -1 && Math.abs(highIndex - offeringIndex) < 100;
+    const nearAbility = abilityIndex !== -1 && Math.abs(highIndex - abilityIndex) < 100;
+    if (nearOffering || nearAbility) {
+      console.log('✅ DT High detected via proximity check (near offering/ability) -> DT:Red');
+      return 'DT:Red'; // High = Red
+    }
+  }
   
   if (mediumIndex !== -1 && (offeringIndex !== -1 || abilityIndex !== -1)) {
-    // Check if "medium" is within 100 chars of "offering" or "ability"
     const nearOffering = offeringIndex !== -1 && Math.abs(mediumIndex - offeringIndex) < 100;
     const nearAbility = abilityIndex !== -1 && Math.abs(mediumIndex - abilityIndex) < 100;
-    
     if (nearOffering || nearAbility) {
       console.log('✅ DT Medium detected via proximity check (near offering/ability) -> DT:Medium');
       return 'DT:Medium'; // DT says Medium, trust that over keyword detection
+    }
+  }
+  
+  if (lowIndex !== -1 && (offeringIndex !== -1 || abilityIndex !== -1)) {
+    const nearOffering = offeringIndex !== -1 && Math.abs(lowIndex - offeringIndex) < 100;
+    const nearAbility = abilityIndex !== -1 && Math.abs(lowIndex - abilityIndex) < 100;
+    if (nearOffering || nearAbility) {
+      console.log('✅ DT Low detected via proximity check (near offering/ability) -> DT:Green');
+      return 'DT:Green'; // Low = Green
     }
   }
   
@@ -302,16 +324,32 @@ function extractDTStatus(text: string, metricName: string): string | undefined {
     const mediumIndex = lower.indexOf('medium', metricIndex);
     const highIndex = lower.indexOf('high', metricIndex);
     const lowIndex = lower.indexOf('low', metricIndex);
+    const redIndex = lower.indexOf('red', metricIndex);
+    const yellowIndex = lower.indexOf('yellow', metricIndex);
+    const greenIndex = lower.indexOf('green', metricIndex);
     
     const searchWindow = 100;
-    if (mediumIndex !== -1 && mediumIndex - metricIndex < searchWindow) {
-      return 'DT:Yellow';
-    }
-    if (highIndex !== -1 && highIndex - metricIndex < searchWindow) {
+    
+    // Check color tags first (more specific)
+    if (redIndex !== -1 && redIndex - metricIndex < searchWindow) {
       return 'DT:Red';
     }
-    if (lowIndex !== -1 && lowIndex - metricIndex < searchWindow) {
+    if (yellowIndex !== -1 && yellowIndex - metricIndex < searchWindow) {
+      return 'DT:Yellow';
+    }
+    if (greenIndex !== -1 && greenIndex - metricIndex < searchWindow) {
       return 'DT:Green';
+    }
+    
+    // Then check text labels
+    if (highIndex !== -1 && highIndex - metricIndex < searchWindow) {
+      return 'DT:Red'; // High = Red
+    }
+    if (mediumIndex !== -1 && mediumIndex - metricIndex < searchWindow) {
+      return 'DT:Yellow'; // Medium = Yellow
+    }
+    if (lowIndex !== -1 && lowIndex - metricIndex < searchWindow) {
+      return 'DT:Green'; // Low = Green
     }
   }
   
@@ -320,13 +358,15 @@ function extractDTStatus(text: string, metricName: string): string | undefined {
 
 /**
  * Map DT tag text to standardized DT tag format
+ * Handles both color tags (red/yellow/green) and text labels (high/medium/low)
  */
 function mapDTTag(tag: string): string {
-  if (tag === 'high' || tag === 'red') {
+  const normalized = tag.toLowerCase().trim();
+  if (normalized === 'high' || normalized === 'red') {
     return 'DT:Red';
-  } else if (tag === 'medium' || tag === 'yellow') {
+  } else if (normalized === 'medium' || normalized === 'yellow') {
     return 'DT:Yellow';
-  } else if (tag === 'low' || tag === 'green') {
+  } else if (normalized === 'low' || normalized === 'green') {
     return 'DT:Green';
   }
   return undefined as any;

@@ -74,14 +74,18 @@ function getOfferingColor(atmShelfStatus: string | undefined, outstandingShares?
   if (status.startsWith('dt:')) {
     const dtTag = status.substring(3).trim(); // Extract tag after "dt:"
     if (process.env.NODE_ENV === 'development') {
-      console.log('getOfferingColor: DT tag detected:', dtTag, '-> returning Yellow for Medium');
+      console.log('getOfferingColor: DT tag detected:', dtTag);
     }
-    if (dtTag === 'red') return 'Red';
+    if (dtTag === 'red' || dtTag === 'high') {
+      return 'Red'; // High = Red = +25 points (via matrix)
+    }
     if (dtTag === 'medium' || dtTag === 'yellow') {
       // DT Medium = Yellow = +10 points (NOT Red = +25 points)
       return 'Yellow';
     }
-    if (dtTag === 'green') return 'Green';
+    if (dtTag === 'green' || dtTag === 'low') {
+      return 'Green'; // Low = Green
+    }
     // If unrecognized DT tag, fall through to normal logic
   }
   
@@ -277,12 +281,20 @@ function scoreOfferingAbility(
   float: number | undefined,
   overheadSupplyStatus?: string | undefined
 ): number {
-  // CRITICAL: If DT explicitly says "Medium" for Offering Ability, trust DT's overall assessment
-  // DT's "Medium" tag is an expert assessment that considers all factors, so we should
-  // respect it fully rather than calculating Overhead separately
-  if (atmShelfStatus && atmShelfStatus.toLowerCase() === 'dt:medium') {
-    console.log('DT:Medium tag detected for Offering Ability - using DT assessment: +10 points (overriding matrix calculation)');
-    return 10; // DT says Medium = +10 points total
+  // CRITICAL: If DT provides explicit tags, respect them fully
+  // DT:Red (High) = +25 points, DT:Medium = +10 points
+  if (atmShelfStatus && atmShelfStatus.toLowerCase().startsWith('dt:')) {
+    const dtTag = atmShelfStatus.toLowerCase().substring(3).trim();
+    if (dtTag === 'red' || dtTag === 'high') {
+      console.log('DT:Red/High tag detected for Offering Ability - using DT assessment: will calculate via matrix (Red)');
+      // Continue to matrix calculation with Red offering
+    } else if (dtTag === 'medium' || dtTag === 'yellow') {
+      console.log('DT:Medium tag detected for Offering Ability - using DT assessment: +10 points (overriding matrix calculation)');
+      return 10; // DT says Medium = +10 points total
+    } else if (dtTag === 'green' || dtTag === 'low') {
+      console.log('DT:Green/Low tag detected for Offering Ability - using DT assessment: will calculate via matrix (Green)');
+      // Continue to matrix calculation with Green offering
+    }
   }
   
   const offering = getOfferingColor(atmShelfStatus, outstandingShares, float);

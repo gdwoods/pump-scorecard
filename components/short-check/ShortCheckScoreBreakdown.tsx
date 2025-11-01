@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { ScoreBreakdown } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
@@ -12,12 +13,16 @@ interface ShortCheckScoreBreakdownProps {
   data: ExtractedData;
 }
 
+type SortOption = "default" | "score-desc" | "score-asc" | "alphabetical";
+
 export default function ShortCheckScoreBreakdown({
   breakdown,
   total,
   data,
 }: ShortCheckScoreBreakdownProps) {
-  const items = [
+  const [sortBy, setSortBy] = useState<SortOption>("default");
+
+  const defaultItems = [
     { label: "Cash Need", value: breakdown.cashNeed, max: 25, actualValue: breakdown.actualValues?.cashNeed },
     { label: "Cash Runway", value: breakdown.cashRunway, max: 15, min: -10, actualValue: breakdown.actualValues?.cashRunway },
     { label: "Offering Ability", value: breakdown.offeringAbility, max: 25, min: -30, actualValue: breakdown.actualValues?.offeringAbility },
@@ -30,6 +35,20 @@ export default function ShortCheckScoreBreakdown({
     { label: "Price Spike", value: breakdown.priceSpike, max: 10, actualValue: breakdown.actualValues?.priceSpike },
     { label: "Debt/Cash Ratio", value: breakdown.debtToCash, max: 10, actualValue: breakdown.actualValues?.debtToCash },
   ];
+
+  // Sort items based on selected option
+  const items = [...defaultItems].sort((a, b) => {
+    switch (sortBy) {
+      case "score-desc":
+        return b.value - a.value; // Highest score first
+      case "score-asc":
+        return a.value - b.value; // Lowest score first
+      case "alphabetical":
+        return a.label.localeCompare(b.label);
+      default:
+        return 0; // Keep original order
+    }
+  });
 
   const valueColor = (value: number, max: number, min?: number) => {
     // Handle negative values
@@ -52,9 +71,21 @@ export default function ShortCheckScoreBreakdown({
 
   return (
     <Card className="p-4 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 rounded-xl">
-      <h2 className="text-lg font-semibold mb-4 flex items-center">
-        <span className="mr-2">📊</span> Score Breakdown
-      </h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg font-semibold flex items-center">
+          <span className="mr-2">📊</span> Score Breakdown
+        </h2>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortOption)}
+          className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+        >
+          <option value="default">Default Order</option>
+          <option value="score-desc">Score: High to Low</option>
+          <option value="score-asc">Score: Low to High</option>
+          <option value="alphabetical">Alphabetical</option>
+        </select>
+      </div>
 
       <div className="divide-y divide-gray-200 dark:divide-gray-700">
         {items.map((item, i) => {

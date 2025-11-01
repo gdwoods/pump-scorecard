@@ -60,20 +60,63 @@ export default function ShortCheckResults({
   const getQuickStats = () => {
     if (!extractedData) return null;
     const stats = [];
-    if (extractedData.cashRunway !== undefined) {
-      stats.push({ label: "Runway", value: `${extractedData.cashRunway.toFixed(1)}mo` });
+    
+    // Match DT's order: Overall Risk, Offering Ability, Overhead Supply, Historical, Cash Need
+    // 1. Overall Risk
+    if (extractedData.overallRiskStatus) {
+      const status = extractedData.overallRiskStatus.replace('DT:', '').toLowerCase();
+      const label = status === 'red' || status === 'high' ? 'High' : status === 'yellow' || status === 'medium' ? 'Medium' : 'Low';
+      const color = status === 'red' || status === 'high' ? 'text-red-600 dark:text-red-400' : status === 'yellow' || status === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
+      stats.push({ label: "Overall Risk", value: label, color });
     }
-    if (extractedData.float !== undefined) {
-      const float = extractedData.float < 1000 ? extractedData.float * 1_000_000 : extractedData.float;
-      stats.push({ label: "Float", value: `${(float / 1_000_000).toFixed(1)}M` });
+    
+    // 2. Offering Ability
+    if (extractedData.atmShelfStatus) {
+      const status = extractedData.atmShelfStatus.replace('DT:', '').toLowerCase();
+      let label = status;
+      if (status.includes('red') || status.includes('high') || status.includes('active')) {
+        label = 'High';
+      } else if (status.includes('yellow') || status.includes('medium')) {
+        label = 'Medium';
+      } else if (status.includes('green') || status.includes('low')) {
+        label = 'Low';
+      } else {
+        // Fallback: check if it contains active dilution indicators
+        if (status.includes('atm') || status.includes('s-1') || status.includes('equity line') || status.includes('convertible')) {
+          label = 'High';
+        } else {
+          label = 'Low';
+        }
+      }
+      const color = label === 'High' ? 'text-red-600 dark:text-red-400' : label === 'Medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
+      stats.push({ label: "Offering Ability", value: label, color });
     }
-    if (extractedData.institutionalOwnership !== undefined) {
-      stats.push({ label: "Inst Own", value: `${extractedData.institutionalOwnership.toFixed(1)}%` });
+    
+    // 3. Overhead Supply
+    if (extractedData.overheadSupplyStatus) {
+      const status = extractedData.overheadSupplyStatus.replace('DT:', '').toLowerCase();
+      const label = status === 'red' || status === 'high' ? 'High' : status === 'yellow' || status === 'medium' ? 'Medium' : 'Low';
+      const color = status === 'red' || status === 'high' ? 'text-red-600 dark:text-red-400' : status === 'yellow' || status === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
+      stats.push({ label: "Overhead Supply", value: label, color });
     }
-    if (extractedData.shortInterest !== undefined) {
-      stats.push({ label: "Short Int", value: `${extractedData.shortInterest.toFixed(1)}%` });
+    
+    // 4. Historical (Dilution)
+    if (extractedData.historicalDilutionStatus) {
+      const status = extractedData.historicalDilutionStatus.replace('DT:', '').toLowerCase();
+      const label = status === 'red' || status === 'high' ? 'High' : status === 'yellow' || status === 'medium' ? 'Medium' : 'Low';
+      const color = status === 'red' || status === 'high' ? 'text-red-600 dark:text-red-400' : status === 'yellow' || status === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
+      stats.push({ label: "Historical", value: label, color });
     }
-    return stats;
+    
+    // 5. Cash Need
+    if (extractedData.cashNeedStatus) {
+      const status = extractedData.cashNeedStatus.replace('DT:', '').toLowerCase();
+      const label = status === 'red' || status === 'high' ? 'High' : status === 'yellow' || status === 'medium' ? 'Medium' : 'Low';
+      const color = status === 'red' || status === 'high' ? 'text-red-600 dark:text-red-400' : status === 'yellow' || status === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
+      stats.push({ label: "Cash Need", value: label, color });
+    }
+    
+    return stats.length > 0 ? stats : null;
   };
 
   return (
@@ -128,14 +171,16 @@ export default function ShortCheckResults({
         )}
       </Card>
 
-      {/* Quick Stats */}
+      {/* Quick Stats - DT Card Values */}
       {extractedData && getQuickStats() && (
         <Card className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {getQuickStats()?.map((stat, i) => (
               <div key={i} className="text-center">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{stat.label}</div>
-                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{stat.value}</div>
+                <div className={`text-lg font-semibold ${stat.color || 'text-gray-900 dark:text-gray-100'}`}>
+                  {stat.value}
+                </div>
               </div>
             ))}
           </div>

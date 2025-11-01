@@ -178,7 +178,7 @@ export default function CombinedPumpRiskCard({
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-            📊 Pump Risk Scorecard
+            📊 {ticker.toUpperCase()} Pump Risk Scorecard
           </h2>
         </div>
         <p className="text-sm text-gray-600 dark:text-gray-400">
