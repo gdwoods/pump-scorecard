@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pump Scorecard",
-  description: "Booker Mastermind — Pump Scorecard",
+  title: "Short Check",
+  description: "Analyze dilution tracker screenshots for short trade opportunities",
   icons: {
     icon: "/lemon-favicon.svg",
     shortcut: "/lemon-favicon.svg",

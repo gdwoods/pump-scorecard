@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google-cloud/vision": "^5.3.4",
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "cheerio": "^1.1.2",
@@ -26,6 +27,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "recharts": "^3.2.0",
+    "sharp": "^0.33.5",
     "tailwind-merge": "^3.3.1",
     "yahoo-finance2": "^2.13.3"
   },

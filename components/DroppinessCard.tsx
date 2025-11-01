@@ -46,6 +46,11 @@ export default function DroppinessCard({
           sessions, based on price and volume patterns from the{" "}
           <strong>last 18 months</strong>.
         </p>
+        
+        <div className="text-xs text-gray-500 dark:text-gray-500 space-y-1">
+          <p><strong>Calculation:</strong> Uses Bayesian shrinkage toward 50% to avoid overconfidence from small sample sizes. Recent spikes are weighted more heavily than older ones.</p>
+          <p><strong>Higher scores</strong> = more consistent retraces (better for short sellers). <strong>Lower scores</strong> = spikes tend to hold (riskier for shorts).</p>
+        </div>
 
         {/* --- Gauge Chart --- */}
         <div className="flex items-center justify-center mt-4 h-48">

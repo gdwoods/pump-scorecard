@@ -1,11 +1,21 @@
 import * as React from "react";
 
-export const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(
-  ({ className = "", children, ...props }, ref) => {
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "default" | "outline";
+}
+
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className = "", variant = "default", children, ...props }, ref) => {
+    const baseClasses = "px-4 py-2 rounded-xl font-medium shadow disabled:opacity-50 transition-colors";
+    const variantClasses = 
+      variant === "outline"
+        ? "bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+        : "bg-blue-600 text-white hover:bg-blue-700";
+    
     return (
       <button
         ref={ref}
-        className={`px-4 py-2 rounded-xl bg-blue-600 text-white font-medium shadow hover:bg-blue-700 disabled:opacity-50 ${className}`}
+        className={`${baseClasses} ${variantClasses} ${className}`}
         {...props}
       >
         {children}

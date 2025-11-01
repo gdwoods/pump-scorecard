@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 interface BreakdownItem {
   label: string;
   value: number;
+  actualValue?: string | number;
 }
 
 interface Props {
@@ -52,13 +53,20 @@ export default function ScoreBreakdown({ ticker, breakdown, total }: Props) {
           breakdown.map((item, i) => (
             <div
               key={i}
-              className="flex justify-between py-2 text-sm"
+              className="flex justify-between items-center py-2 text-sm"
             >
               <span className={labelColor}>{item.label}</span>
-              <span className={`${valueColor(item.value)} font-medium`}>
-                {item.value > 0 ? "+" : ""}
-                {item.value}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`${valueColor(item.value)} font-medium`}>
+                  {item.value > 0 ? "+" : ""}
+                  {item.value}
+                </span>
+                {item.actualValue !== undefined && (
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">
+                    ({item.actualValue})
+                  </span>
+                )}
+              </div>
             </div>
           ))
         ) : (

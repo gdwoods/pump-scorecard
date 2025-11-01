@@ -483,9 +483,12 @@ try {
 
   intraday = candles;
 
-  // 🧮 Droppiness scoring logic (unchanged)
+  // 🧮 Droppiness scoring logic (v1 default, v2 behind flag)
   let spikeCount = 0;
   let retraceCount = 0;
+  const spikesForV2: Array<{ ageDays: number; retraced: boolean }> = [];
+  const nowMs = Date.now();
+
   for (let i = 1; i < candles.length; i++) {
     const prev = candles[i - 1];
     const cur = candles[i];
@@ -504,10 +507,34 @@ try {
         spikePct: +(spikePct * 100).toFixed(1),
         retraced,
       });
+
+      // collect for v2 (recency-weighted)
+      const ageDays = Math.max(0, (nowMs - cur.date.getTime()) / (1000 * 60 * 60 * 24));
+      spikesForV2.push({ ageDays, retraced });
     }
   }
 
-  droppinessScore = spikeCount > 0 ? Math.round((retraceCount / spikeCount) * 100) : 0;
+  // Bayesian shrinkage toward neutral prior with recency-weighted effective N
+  const tauDays = 365; // recency horizon
+  const priorStrength = 3; // k
+  const priorMean = 0.5; // p0 (neutral)
+
+  let weightedSum = 0;
+  let weightTotal = 0;
+  for (const s of spikesForV2) {
+    const w = Math.exp(-s.ageDays / tauDays);
+    weightedSum += w * (s.retraced ? 1 : 0);
+    weightTotal += w;
+  }
+
+  const nEff = weightTotal; // effective sample size
+  const pHat = weightTotal > 0 ? weightedSum / weightTotal : 0.5;
+  const pAdj = (nEff * pHat + priorStrength * priorMean) / (nEff + priorStrength);
+
+  // Cap to avoid 100% from a single spike
+  let scoreV2 = Math.round(Math.max(0, Math.min(1, pAdj)) * 100);
+  if (spikeCount < 2) scoreV2 = Math.min(scoreV2, 85);
+  droppinessScore = scoreV2;
 
 } catch (err) {
   console.error("Droppiness fetch failed:", err);
