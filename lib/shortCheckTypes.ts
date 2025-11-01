@@ -24,6 +24,7 @@ export interface ExtractedData {
   priceSpike?: boolean; // indicator from chart context
   priceSpikePct?: number; // percentage change from DT screenshot (e.g., 18.18%, 20.51%)
   recentNews?: string; // news headline or "None"
+  recentNewsDate?: string; // ISO date string for recency weighting
   confidence: number; // overall confidence score (0-1)
 }
 

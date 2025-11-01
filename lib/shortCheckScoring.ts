@@ -447,13 +447,18 @@ function scoreShortInterest(shortInt: number | undefined): number {
 }
 
 /**
- * Calculate News Catalyst score (0-15 points, can be negative)
- * Rules: No news = +15, Fluff/speculative = +10, Moderately relevant = +5, Strong = -10
+ * Calculate News Catalyst score based on deterministic keyword matching
+ * Rules (updated for API-based news):
+ * - +0: Bullish terms (partnership, approval, contract, revenue growth, strategic) within 7 days
+ * - +5: Neutral headline (earnings, launch, Q1-Q4, financials, presentation)
+ * - +10: Dilution-linked filing (S-1, ATM, 424B, convertible)
+ * - +15: No news found in last 10-14 days (default)
  * 
- * IMPORTANT: Mechanical/share count updates (e.g., "Holders", share count changes) 
- * are NOT bullish catalysts and should score +15 (no news), not +5.
+ * IMPORTANT: This function now expects a news headline string from API fetch,
+ * not from OCR. If news is from OCR (old flow), it still works but will default to +15
+ * since OCR typically doesn't capture news.
  */
-function scoreNewsCatalyst(news: string | undefined): number {
+function scoreNewsCatalyst(news: string | undefined, newsDate?: string): number {
   // Empty string, undefined, or "none" = no news = +15
   if (!news || news.trim() === '' || news.toLowerCase().includes('none')) {
     return 15; // No news
@@ -461,8 +466,82 @@ function scoreNewsCatalyst(news: string | undefined): number {
   
   const lowerNews = news.toLowerCase().trim();
   
-  // Mechanical/share administrative updates are NOT bullish catalysts
-  // These are neutral and should score as "no news" (+15)
+  // Check if news is recent (within 7 days for bullish penalty)
+  const isRecent = newsDate ? (() => {
+    const newsTime = new Date(newsDate).getTime();
+    const now = Date.now();
+    const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
+    return newsTime >= sevenDaysAgo;
+  })() : true; // If no date, assume recent
+  
+  // +0: Strong bullish terms (within 7 days)
+  // These are walk-away flags when recent
+  if (isRecent) {
+    const bullishKeywords = [
+      'partnership',
+      'approval',
+      'fda approval',
+      'contract',
+      'major contract',
+      'revenue growth',
+      'strategic',
+      'strategic partnership',
+      'breakthrough',
+      'acquisition',
+      'merger',
+      'deal',
+      'profit',
+      'earnings beat',
+      'guidance raise',
+      'positive',
+      'expands',
+    ];
+    if (bullishKeywords.some(keyword => lowerNews.includes(keyword))) {
+      return 0; // Recent bullish news = walk-away (score 0, will trigger flag)
+    }
+  }
+  
+  // +10: Dilution-linked filings (these are GOOD for shorts)
+  const dilutionKeywords = [
+    's-1',
+    'atm',
+    '424b',
+    '424b5',
+    '424(b)',
+    'convertible',
+    'convertible preferred',
+    'warrants',
+    'equity line',
+    'share purchase agreement',
+    'shelf offering',
+    'public offering',
+    'follow-on',
+  ];
+  if (dilutionKeywords.some(keyword => lowerNews.includes(keyword))) {
+    return 10; // Dilution news = good for shorts
+  }
+  
+  // +5: Neutral headlines (earnings, financials, presentations)
+  const neutralKeywords = [
+    'earnings',
+    'launch',
+    'q1',
+    'q2',
+    'q3',
+    'q4',
+    'quarter',
+    'financials',
+    'financial results',
+    'presentation',
+    'conference',
+    'webcast',
+    'announces',
+  ];
+  if (neutralKeywords.some(keyword => lowerNews.includes(keyword))) {
+    return 5; // Neutral news
+  }
+  
+  // Mechanical/share administrative updates score as "no news" (+15)
   const mechanicalKeywords = [
     'holders',
     'share count',
@@ -481,34 +560,16 @@ function scoreNewsCatalyst(news: string | undefined): number {
     'reverse split',
     'dividend',
     'ex-dividend',
+    'files 10-',
+    'files 8-',
+    'files form',
   ];
   if (mechanicalKeywords.some(keyword => lowerNews.includes(keyword))) {
-    console.log('News is mechanical/administrative - treating as no news (+15)');
-    return 15; // Mechanical updates = no bullish catalyst = +15
+    return 15; // Mechanical = no bullish catalyst
   }
   
-  // Strong/substantive positive news (walk-away)
-  const strongPositiveKeywords = [
-    'fda approval',
-    'approval',
-    'breakthrough',
-    'major contract',
-    'partnership',
-    'acquisition',
-    'merger',
-    'deal',
-    'revenue growth',
-    'profit',
-    'earnings beat',
-    'guidance raise',
-  ];
-  if (strongPositiveKeywords.some(keyword => lowerNews.includes(keyword))) {
-    return -10; // Walk-away flag
-  }
-  
-  // Fluff/speculative news
+  // Fluff/speculative news (old logic, kept for compatibility)
   const fluffKeywords = [
-    'announces',
     'exploring',
     'considering',
     'potential',
@@ -518,12 +579,11 @@ function scoreNewsCatalyst(news: string | undefined): number {
     'speculation',
   ];
   if (fluffKeywords.some(keyword => lowerNews.includes(keyword))) {
-    return 10; // Fluff/speculative
+    return 10; // Fluff = moderate
   }
   
-  // If we can't categorize it clearly, default to +15 (no bullish catalyst)
-  // This is conservative for short scoring - unclear news shouldn't reduce risk score
-  return 15; // Default to "no news" unless clearly bullish
+  // Default to +15 (no bullish catalyst) - conservative for short scoring
+  return 15;
 }
 
 /**
@@ -717,18 +777,37 @@ function checkWalkAwayFlags(data: ExtractedData): string[] {
     flags.push('Institutional ownership exceeds 75%');
   }
   
-  // Strong positive news catalyst
-  if (data.recentNews) {
+  // Strong positive news catalyst (recent bullish news scores 0, which triggers walk-away)
+  if (data.recentNews && data.recentNewsDate) {
     const lowerNews = data.recentNews.toLowerCase();
-    const strongPositiveKeywords = [
-      'fda approval',
-      'approval',
-      'breakthrough',
-      'major contract',
-      'partnership',
-    ];
-    if (strongPositiveKeywords.some(keyword => lowerNews.includes(keyword))) {
-      flags.push('Strong positive news catalyst detected');
+    const newsTime = new Date(data.recentNewsDate).getTime();
+    const now = Date.now();
+    const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
+    
+    // Check if news is recent (within 7 days) and contains bullish terms
+    if (newsTime >= sevenDaysAgo) {
+      const bullishKeywords = [
+        'partnership',
+        'approval',
+        'fda approval',
+        'contract',
+        'major contract',
+        'revenue growth',
+        'strategic',
+        'strategic partnership',
+        'breakthrough',
+        'acquisition',
+        'merger',
+        'deal',
+        'profit',
+        'earnings beat',
+        'guidance raise',
+        'positive',
+        'expands',
+      ];
+      if (bullishKeywords.some(keyword => lowerNews.includes(keyword))) {
+        flags.push('Strong positive news catalyst detected (recent)');
+      }
     }
   }
   
@@ -980,7 +1059,7 @@ export function calculateShortRating(data: ExtractedData): ShortCheckResult {
     ),
     institutionalOwnership: scoreInstitutionalOwnership(data.institutionalOwnership, data.marketCap),
     shortInterest: scoreShortInterest(data.shortInterest),
-    newsCatalyst: scoreNewsCatalyst(data.recentNews),
+    newsCatalyst: scoreNewsCatalyst(data.recentNews, data.recentNewsDate),
     float: scoreFloat(data.float, offeringColor),
     overallRisk: scoreOverallRisk(data),
     priceSpike: scorePriceSpike(data.priceSpike, data.priceSpikePct),

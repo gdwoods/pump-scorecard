@@ -4,6 +4,7 @@ import { extractDataFromImage } from '@/lib/ocrParser';
 import { calculateShortRating } from '@/lib/shortCheckScoring';
 import { fetchDebtCashFromYahoo } from '@/utils/fetchDebtCash';
 import { fetchHistoricalOS } from '@/utils/fetchHistoricalOS';
+import { fetchRecentNews, getNewsForScoring } from '@/utils/fetchNews';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // OCR can take time
@@ -102,6 +103,32 @@ export async function POST(req: NextRequest) {
         } catch (error) {
           console.error('Short check API: Failed to fetch historical O/S:', error);
           // Continue without historical data - scoring will use default
+        }
+      }
+      
+      // Fetch recent news headlines (past 14 days) for News Catalyst scoring
+      // This replaces OCR-based news extraction since Dilution Tracker screenshots typically don't include news
+      if (extractedData.ticker) {
+        console.log(`Short check API: Fetching recent news for ${extractedData.ticker}...`);
+        try {
+          const newsItems = await fetchRecentNews(extractedData.ticker);
+          const newsHeadline = getNewsForScoring(newsItems);
+          
+          // If we found news via API, use it (overrides any OCR-extracted news)
+          if (newsHeadline) {
+            extractedData.recentNews = newsHeadline;
+            // Store the news date for recency weighting in scoring
+            if (newsItems.length > 0 && newsItems[0].date) {
+              extractedData.recentNewsDate = newsItems[0].date;
+            }
+            console.log(`Short check API: Found news headline: ${newsHeadline.substring(0, 100)}... (date: ${extractedData.recentNewsDate || 'unknown'})`);
+          } else {
+            console.log(`Short check API: No recent news found (last 14 days)`);
+            // extractedData.recentNews remains undefined, which scores as +15 (no news)
+          }
+        } catch (error) {
+          console.error('Short check API: Failed to fetch news:', error);
+          // Continue without news - scoring will default to +15 (no news)
         }
       }
       

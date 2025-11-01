@@ -605,6 +605,16 @@ try {
     // ---------- BorrowDesk ----------
     const borrowData = await fetchBorrowDesk(upperTicker);
 
+    // ---------- News ----------
+    let news: any[] = [];
+    try {
+      const { fetchRecentNews, formatNewsForSection } = await import('@/utils/fetchNews');
+      const newsItems = await fetchRecentNews(upperTicker);
+      news = formatNewsForSection(newsItems);
+    } catch (err) {
+      console.error('News fetch failed:', err);
+    }
+
     // ---------- Return ----------
 return NextResponse.json({
   ticker: upperTicker,
@@ -647,7 +657,8 @@ return NextResponse.json({
   fraud_evidence:
     fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual"),
   risky_country: RISKY.has(country),
-hasOptions, // true if options exist
+  hasOptions, // true if options exist
+  news, // Recent news headlines from Finnhub/Yahoo
 
 });
 

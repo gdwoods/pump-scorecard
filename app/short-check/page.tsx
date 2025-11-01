@@ -183,75 +183,89 @@ export default function ShortCheckPage() {
           </div>
         )}
 
-        {/* Ticker Input for Quick Analysis */}
-        {!result && !hasAnalyzedTicker && (
-          <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700">
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold">Quick Ticker Analysis</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Enter a ticker symbol to view Droppiness and Pump Risk analysis
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={ticker}
-                  onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && ticker.trim()) {
-                      setHasAnalyzedTicker(true);
-                      setLoadingPumpData(true);
-                      fetch(`/api/scan/${ticker}`)
-                        .then((res) => res.json())
-                        .then((data) => {
-                          setPumpScorecardData(data);
-                        })
-                        .catch((err) => {
-                          console.error("Failed to load Pump Scorecard data:", err);
-                        })
-                        .finally(() => {
-                          setLoadingPumpData(false);
-                        });
-                    }
-                  }}
-                  placeholder="Enter ticker (e.g., AAPL)"
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                />
-                <button
-                  onClick={() => {
-                    if (ticker.trim()) {
-                      setHasAnalyzedTicker(true);
-                      setLoadingPumpData(true);
-                      fetch(`/api/scan/${ticker}`)
-                        .then((res) => res.json())
-                        .then((data) => {
-                          setPumpScorecardData(data);
-                        })
-                        .catch((err) => {
-                          console.error("Failed to load Pump Scorecard data:", err);
-                        })
-                        .finally(() => {
-                          setLoadingPumpData(false);
-                        });
-                    }
-                  }}
-                  disabled={!ticker.trim()}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Analyze
-                </button>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {/* Upload Component */}
+        {/* Upload Component - Primary method */}
         {!result && (
-          <ShortCheckUpload
-            onUpload={handleUpload}
-            isLoading={isLoading}
-            extractedData={extractedData || undefined}
-            onManualSubmit={handleManualSubmit}
-          />
+          <>
+            <ShortCheckUpload
+              onUpload={handleUpload}
+              isLoading={isLoading}
+              extractedData={extractedData || undefined}
+              onManualSubmit={handleManualSubmit}
+            />
+            
+            {/* Divider with "OR" text */}
+            <div className="relative flex items-center py-4">
+              <div className="flex-1 border-t border-gray-300 dark:border-gray-600"></div>
+              <span className="px-4 text-sm font-medium text-gray-500 dark:text-gray-400">OR</span>
+              <div className="flex-1 border-t border-gray-300 dark:border-gray-600"></div>
+            </div>
+
+            {/* Ticker Input for Quick Analysis - Alternative method */}
+            {!hasAnalyzedTicker && (
+              <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700">
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-xl font-semibold mb-2">Quick Ticker Analysis</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      <strong>Don't have a screenshot?</strong> Enter a ticker symbol to view Droppiness and Pump Risk analysis without uploading an image.
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 italic">
+                      This option provides comprehensive market analysis but does not include Short Check scoring (which requires dilution tracker data from a screenshot).
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={ticker}
+                      onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && ticker.trim()) {
+                          setHasAnalyzedTicker(true);
+                          setLoadingPumpData(true);
+                          fetch(`/api/scan/${ticker}`)
+                            .then((res) => res.json())
+                            .then((data) => {
+                              setPumpScorecardData(data);
+                            })
+                            .catch((err) => {
+                              console.error("Failed to load Pump Scorecard data:", err);
+                            })
+                            .finally(() => {
+                              setLoadingPumpData(false);
+                            });
+                        }
+                      }}
+                      placeholder="Enter ticker (e.g., AAPL)"
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                    <button
+                      onClick={() => {
+                        if (ticker.trim()) {
+                          setHasAnalyzedTicker(true);
+                          setLoadingPumpData(true);
+                          fetch(`/api/scan/${ticker}`)
+                            .then((res) => res.json())
+                            .then((data) => {
+                              setPumpScorecardData(data);
+                            })
+                            .catch((err) => {
+                              console.error("Failed to load Pump Scorecard data:", err);
+                            })
+                            .finally(() => {
+                              setLoadingPumpData(false);
+                            });
+                        }
+                      }}
+                      disabled={!ticker.trim()}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Analyze
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </>
         )}
 
         {/* Short Check Results - Only show if we have a result */}
