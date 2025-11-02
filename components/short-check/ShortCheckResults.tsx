@@ -28,8 +28,8 @@ export default function ShortCheckResults({
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copiedShare, setCopiedShare] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
-  const [copyingSummary, setCopyingSummary] = useState<'quick' | 'full' | null>(null);
-  const [copiedSummaryFormat, setCopiedSummaryFormat] = useState<'quick' | 'full' | null>(null);
+  const [copyingSummary, setCopyingSummary] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
   const categoryColors = {
     "High-Priority Short Candidate": "bg-red-500 text-white",
     "Moderate Short Candidate": "bg-yellow-500 text-white",
@@ -196,29 +196,29 @@ export default function ShortCheckResults({
     }
   };
 
-  const handleCopySummary = async (format: 'quick' | 'full') => {
+  const handleCopySummary = async () => {
     if (!ticker || !result) return;
 
-    setCopyingSummary(format);
+    setCopyingSummary(true);
     try {
       const summary = generateFormattedSummary({
         ticker,
         result,
         extractedData,
         pumpScorecardData,
-        format,
+        format: 'full',
       });
 
       await navigator.clipboard.writeText(summary);
-      setCopiedSummaryFormat(format);
+      setCopiedSummary(true);
       setTimeout(() => {
-        setCopiedSummaryFormat(null);
-        setCopyingSummary(null);
+        setCopiedSummary(false);
+        setCopyingSummary(false);
       }, 2000);
     } catch (error) {
       console.error("Error copying summary:", error);
       alert("Failed to copy summary. Please try again.");
-      setCopyingSummary(null);
+      setCopyingSummary(false);
     }
   };
 
@@ -297,54 +297,29 @@ export default function ShortCheckResults({
                 </>
               )}
             </button>
-            <div className="inline-flex items-center gap-2">
-              <button
-                onClick={() => handleCopySummary('quick')}
-                disabled={!!copyingSummary}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
-                title="Copy quick summary (key highlights)"
-              >
-                {copyingSummary === 'quick' ? (
-                  <>
-                    <span className="animate-spin">⏳</span>
-                    Copying...
-                  </>
-                ) : copiedSummaryFormat === 'quick' ? (
-                  <>
-                    <span>✅</span>
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <span>⚡</span>
-                    Quick Summary
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => handleCopySummary('full')}
-                disabled={!!copyingSummary}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
-                title="Copy full summary (all data)"
-              >
-                {copyingSummary === 'full' ? (
-                  <>
-                    <span className="animate-spin">⏳</span>
-                    Copying...
-                  </>
-                ) : copiedSummaryFormat === 'full' ? (
-                  <>
-                    <span>✅</span>
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <span>📝</span>
-                    Full Summary
-                  </>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={handleCopySummary}
+              disabled={copyingSummary}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
+              title="Copy complete analysis summary to clipboard"
+            >
+              {copyingSummary ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  Copying...
+                </>
+              ) : copiedSummary ? (
+                <>
+                  <span>✅</span>
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <span>📋</span>
+                  Copy Summary
+                </>
+              )}
+            </button>
           </div>
           {shareUrl && (
             <div className="mt-3 p-2 bg-white dark:bg-gray-900 rounded border border-gray-300 dark:border-gray-600">
