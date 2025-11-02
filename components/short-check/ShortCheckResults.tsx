@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import ShortCheckScoreBreakdown from "./ShortCheckScoreBreakdown";
+import ScoringGuideModal from "./ScoringGuideModal";
 import { ShortCheckResult } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { generateRiskSynopsis } from "@/lib/shortCheckHelpers";
@@ -18,6 +20,7 @@ export default function ShortCheckResults({
   ticker,
   extractedData,
 }: ShortCheckResultsProps) {
+  const [showScoringGuide, setShowScoringGuide] = useState(false);
   const categoryColors = {
     "High-Priority Short Candidate": "bg-red-500 text-white",
     "Moderate Short Candidate": "bg-yellow-500 text-white",
@@ -126,9 +129,19 @@ export default function ShortCheckResults({
         className={`p-4 md:p-6 shadow-lg border-2 ${categoryBgColors[result.category]}`}
       >
         <div className="text-center">
-          <h2 className="text-xl md:text-2xl font-bold mb-2">
-            {ticker ? `${ticker} — ` : ""}Short Rating
-          </h2>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <h2 className="text-xl md:text-2xl font-bold">
+              {ticker ? `${ticker} — ` : ""}Short Rating
+            </h2>
+            <button
+              onClick={() => setShowScoringGuide(true)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+              aria-label="How scoring works"
+              title="How scoring works"
+            >
+              <span className="text-lg">ℹ️</span>
+            </button>
+          </div>
           <div className="flex items-center justify-center gap-3 mb-4 flex-wrap">
             <div className="text-5xl md:text-6xl font-bold">{result.rating.toFixed(1)}%</div>
             {result.alertLabels && result.alertLabels.length > 0 && (
@@ -156,6 +169,27 @@ export default function ShortCheckResults({
             {result.category}
           </div>
         </div>
+
+        {/* Risk Synopsis - Combined into top card */}
+        {extractedData && (
+          <div className="mt-6 p-4 bg-white/50 dark:bg-black/20 border border-current/20 rounded-lg">
+            <div className="flex justify-between items-start mb-2">
+              <h3 className="text-base font-semibold opacity-90">
+                📋 Risk Synopsis
+              </h3>
+              <Button
+                onClick={() => copyToClipboard(generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData), "Risk Synopsis")}
+                className="text-xs h-7 px-2"
+                variant="outline"
+              >
+                📋 Copy
+              </Button>
+            </div>
+            <p className="text-sm leading-relaxed opacity-80">
+              {generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData)}
+            </p>
+          </div>
+        )}
 
         {result.walkAwayFlags.length > 0 && (
           <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -187,27 +221,6 @@ export default function ShortCheckResults({
         </Card>
       )}
 
-      {/* Risk Synopsis */}
-      {extractedData && (
-        <Card className="p-4 md:p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-          <div className="flex justify-between items-start mb-2">
-            <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-300">
-              📋 Risk Synopsis
-            </h3>
-            <Button
-              onClick={() => copyToClipboard(generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData), "Risk Synopsis")}
-              className="text-xs h-7 px-2"
-              variant="outline"
-            >
-              📋 Copy
-            </Button>
-          </div>
-          <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
-            {generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData)}
-          </p>
-        </Card>
-      )}
-
       {/* Score Breakdown */}
       <ShortCheckScoreBreakdown
         breakdown={result.scoreBreakdown}
@@ -236,6 +249,12 @@ export default function ShortCheckResults({
           {result.alertCard}
         </div>
       </Card>
+
+      {/* Scoring Guide Modal */}
+      <ScoringGuideModal
+        isOpen={showScoringGuide}
+        onClose={() => setShowScoringGuide(false)}
+      />
     </div>
   );
 }

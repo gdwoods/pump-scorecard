@@ -16,7 +16,7 @@ import FraudEvidence from "@/components/FraudEvidence";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
-import { ShortCheckResult } from "@/lib/shortCheckScoring";
+import { ShortCheckResult, calculateShortRating } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 
 export default function ShortCheckPage() {
@@ -37,6 +37,7 @@ export default function ShortCheckPage() {
     setError(null);
     setResult(null);
     setExtractedData(null);
+    setPumpScorecardData(null); // Reset pump data for new upload
 
     try {
       const formData = new FormData();
@@ -121,21 +122,41 @@ export default function ShortCheckPage() {
   };
 
   // Fetch Pump Scorecard data when ticker is available
+  // Also recalculate Short Check score when droppiness becomes available
   useEffect(() => {
-    if (ticker && result) {
+    if (ticker && result && !loadingPumpData && !pumpScorecardData) {
+      // Only fetch if we don't already have the data and aren't currently loading
+      console.log('Fetching Pump Scorecard data for ticker:', ticker);
       setLoadingPumpData(true);
       fetch(`/api/scan/${ticker}`)
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          return res.json();
+        })
         .then((data) => {
+          console.log('Pump Scorecard data received:', Object.keys(data));
           setPumpScorecardData(data);
+          
+          // Recalculate Short Check score with droppiness if available
+          if (extractedData && data.droppinessScore !== undefined) {
+            console.log('Recalculating Short Check score with droppiness:', data.droppinessScore);
+            const updatedResult = calculateShortRating(extractedData, data.droppinessScore);
+            setResult(updatedResult);
+          }
         })
         .catch((err) => {
           console.error("Failed to load Pump Scorecard data:", err);
+          // Set error state so user knows something failed
         })
         .finally(() => {
           setLoadingPumpData(false);
         });
     }
+    // Only re-run when ticker or result changes, not when extractedData changes
+    // extractedData is set once from OCR and shouldn't trigger re-fetches
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, result]);
 
   const toggleManualFlag = (key: string) => {
@@ -156,6 +177,24 @@ export default function ShortCheckPage() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+            {result && (
+              <button
+                onClick={() => {
+                  setResult(null);
+                  setExtractedData(null);
+                  setTicker("");
+                  setError(null);
+                  setPumpScorecardData(null);
+                  setManualFlags({});
+                  setHasAnalyzedTicker(false);
+                  // Scroll to top to show upload component
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+              >
+                📄 Analyze Another Screenshot
+              </button>
+            )}
             <button
               onClick={() =>
                 document.documentElement.classList.toggle("dark")

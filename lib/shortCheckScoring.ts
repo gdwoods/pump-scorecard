@@ -13,6 +13,7 @@ export interface ScoreBreakdown {
   overallRisk: number;
   priceSpike: number;
   debtToCash: number;
+  droppiness: number;
   // Actual values for display
   actualValues?: {
     cashNeed?: string; // e.g., "$3.5M burn, 2.1 mo runway"
@@ -26,6 +27,7 @@ export interface ScoreBreakdown {
     overallRisk?: string; // e.g., "3 risk indicators"
     priceSpike?: string; // e.g., "20.51%" or "No spike"
     debtToCash?: string; // e.g., "Debt: $5M, Cash: $2M"
+    droppiness?: string; // e.g., "75 (spikes fade quickly)"
   };
 }
 
@@ -769,6 +771,40 @@ function scoreDebtToCash(debt: number | undefined, cash: number | undefined, has
 }
 
 /**
+ * Calculate Droppiness score (-8 to +12 points)
+ * 
+ * Droppiness measures how quickly price spikes fade after major moves.
+ * High droppiness (70+) = spikes fade quickly = favorable for shorting (+12)
+ * Low droppiness (<40) = spikes hold = risky for shorting (-8)
+ * Medium (40-70) = neutral to moderate positive (+3 to +5)
+ * 
+ * For short sellers: We want stocks that spike and then fade, indicating weak support.
+ */
+function scoreDroppiness(droppinessScore: number | undefined): number {
+  if (droppinessScore === undefined || droppinessScore === null) {
+    return 0; // No droppiness data available
+  }
+  
+  // High droppiness (70-100) = spikes fade quickly = very favorable for shorting
+  if (droppinessScore >= 70) {
+    return 12;
+  }
+  
+  // Moderate-high droppiness (50-69) = spikes usually fade = favorable
+  if (droppinessScore >= 50) {
+    return 5;
+  }
+  
+  // Neutral droppiness (40-49) = mixed behavior = neutral
+  if (droppinessScore >= 40) {
+    return 0;
+  }
+  
+  // Low droppiness (<40) = spikes hold = risky for shorting (penalty)
+  return -8;
+}
+
+/**
  * Check for walk-away disqualifiers
  */
 function checkWalkAwayFlags(data: ExtractedData): string[] {
@@ -983,8 +1019,10 @@ function generateAlertCard(
 
 /**
  * Main scoring function
+ * @param data - Extracted data from OCR or manual entry
+ * @param droppinessScore - Optional droppiness score (0-100) from Pump Scorecard analysis
  */
-export function calculateShortRating(data: ExtractedData): ShortCheckResult {
+export function calculateShortRating(data: ExtractedData, droppinessScore?: number): ShortCheckResult {
   // Determine offering color for float adjustment (pass O/S and float for better detection)
   const offeringColor = getOfferingColor(data.atmShelfStatus, data.outstandingShares, data.float);
   
@@ -1054,6 +1092,9 @@ export function calculateShortRating(data: ExtractedData): ShortCheckResult {
     return `${shares.toFixed(0)} shares`;
   };
 
+  // Calculate droppiness score (optional, defaults to 0 if not provided)
+  const droppiness = scoreDroppiness(droppinessScore);
+  
   // Calculate individual scores (use effectiveRunway for both cashNeed and cashRunway)
   const breakdown: ScoreBreakdown = {
     cashNeed: scoreCashNeed(effectiveRunway, data.quarterlyBurnRate, data.cashOnHand, data.cashNeedStatus),
@@ -1076,6 +1117,7 @@ export function calculateShortRating(data: ExtractedData): ShortCheckResult {
     overallRisk: scoreOverallRisk(data),
     priceSpike: scorePriceSpike(data.priceSpike, data.priceSpikePct),
     debtToCash: scoreDebtToCash(data.debt, data.cashOnHand, data.hasActualDebtData),
+    droppiness: droppiness,
     actualValues: {
       cashNeed: (() => {
         const parts: string[] = [];
@@ -1112,7 +1154,11 @@ export function calculateShortRating(data: ExtractedData): ShortCheckResult {
       })(),
       institutionalOwnership: data.institutionalOwnership !== undefined ? `${data.institutionalOwnership.toFixed(1)}%` : undefined,
       shortInterest: data.shortInterest !== undefined ? `${data.shortInterest.toFixed(1)}%` : undefined,
-      newsCatalyst: data.recentNews && data.recentNews.toLowerCase() !== 'none' ? 'Recent news found' : undefined,
+      newsCatalyst: data.recentNews && data.recentNews.toLowerCase() !== 'none' 
+        ? data.recentNews.length > 80 
+          ? `${data.recentNews.substring(0, 80)}...` 
+          : data.recentNews
+        : undefined,
       float: data.float !== undefined ? formatShares(data.float) : undefined,
       overallRisk: (() => {
         const indicators: string[] = [];
@@ -1150,6 +1196,12 @@ export function calculateShortRating(data: ExtractedData): ShortCheckResult {
         
         return parts.length > 0 ? parts.join(', ') + sourceNote : undefined;
       })(),
+      droppiness: droppinessScore !== undefined ? (() => {
+        if (droppinessScore >= 70) return `${droppinessScore.toFixed(0)} (spikes fade quickly)`;
+        if (droppinessScore >= 50) return `${droppinessScore.toFixed(0)} (spikes usually fade)`;
+        if (droppinessScore >= 40) return `${droppinessScore.toFixed(0)} (mixed behavior)`;
+        return `${droppinessScore.toFixed(0)} (spikes hold)`;
+      })() : undefined,
     },
   };
   
@@ -1158,13 +1210,13 @@ export function calculateShortRating(data: ExtractedData): ShortCheckResult {
   const totalScore = breakdown.cashNeed + breakdown.cashRunway + breakdown.offeringAbility +
     breakdown.historicalDilution + breakdown.institutionalOwnership + breakdown.shortInterest +
     breakdown.newsCatalyst + breakdown.float + breakdown.overallRisk + breakdown.priceSpike +
-    breakdown.debtToCash;
+    breakdown.debtToCash + breakdown.droppiness;
   
   // Calculate max possible score, adjusting for walk-away disqualifications
   // Base max components (all count toward rating):
   // Cash Need (25) + Cash Runway (15) + Offering (25) + Historical Dilution (10) +
   // Inst Own (5) + Short Int (15) + News (15) + Float (10) + Overall Risk (10) +
-  // Price Spike (10) + Debt/Cash (10) = 160
+  // Price Spike (10) + Debt/Cash (10) + Droppiness (12 max) = 172
   // 
   // When Cash Runway is disqualified (positive cash flow):
   // - Cash Runway contributes -10 to totalScore (penalty)
@@ -1195,17 +1247,18 @@ export function calculateShortRating(data: ExtractedData): ShortCheckResult {
   // - For SCNX (negative burn): max = 150 (excludes Price Spike + Debt/Cash = 160 - 10 - 10)
   // - For NIVF (positive cash flow): max = 113 (excludes Cash Runway + Price Spike + Debt/Cash)
   //
-  // Standard max (negative burn rate): 150 (excludes Price Spike and Debt/Cash from denominator)
-  // Adjusted max (positive cash flow): 113 (further excludes Cash Runway)
-  let maxPossibleScore = 150; // Default max excluding Price Spike (10) and Debt/Cash (10)
+  // Standard max (negative burn rate): 162 (excludes Price Spike and Debt/Cash from denominator, includes Droppiness max of 12)
+  // Adjusted max (positive cash flow): 125 (further excludes Cash Runway)
+  // Note: Droppiness is included in max if provided, otherwise it contributes 0
+  const droppinessMax = droppinessScore !== undefined ? 12 : 0;
+  let maxPossibleScore = 150 + droppinessMax; // Base 150 + Droppiness max (12) = 162
   
   // If Cash Runway is disqualified (positive cash flow), further exclude it from max denominator
-  // This aligns with GPT's calculation: 113 max when positive cash flow
+  // This aligns with GPT's calculation: 113 max when positive cash flow (before droppiness)
   const cashRunwayDisqualified = data.quarterlyBurnRate !== undefined && data.quarterlyBurnRate >= 0;
   if (cashRunwayDisqualified) {
-    // GPT uses 113 for positive cash flow cases (like NIVF)
-    // This is: 150 - 15 (Cash Runway) - 22? Actually GPT explicitly states 113, so use that
-    maxPossibleScore = 113; // Positive cash flow: max = 113
+    // Base 113 + Droppiness max (12) = 125
+    maxPossibleScore = 113 + droppinessMax;
   }
   
   // Debug: Log score breakdown for troubleshooting

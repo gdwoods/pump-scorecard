@@ -186,13 +186,14 @@ export async function fetchRecentNews(ticker: string): Promise<NewsItem[]> {
 /**
  * Extract the most relevant news headline for scoring
  * Returns the most recent headline, or undefined if none found
+ * Filters out mechanical/administrative headlines (same keywords as scoring logic)
  */
 export function getNewsForScoring(newsItems: NewsItem[]): string | undefined {
   if (!newsItems || newsItems.length === 0) {
     return undefined;
   }
 
-  // Filter out generic/mechanical headlines
+  // Filter out generic/mechanical headlines (should match scoring logic)
   const filtered = newsItems.filter(item => {
     const headline = item.headline.toLowerCase();
     const genericPatterns = [
@@ -204,13 +205,35 @@ export function getNewsForScoring(newsItems: NewsItem[]): string | undefined {
       'market data',
       'trading halted',
       'delayed quote',
+      // Mechanical keywords that score as +15 (no bullish catalyst)
+      'holders',
+      'shareholder',
+      'share count',
+      'shares outstanding',
+      'outstanding shares',
+      'float',
+      'filing',
+      'form',
+      'register',
+      'delisted',
+      'listed',
+      'symbol',
+      'ticker',
+      'split',
+      'reverse split',
+      'dividend',
+      'ex-dividend',
     ];
     
     return !genericPatterns.some(pattern => headline.includes(pattern));
   });
 
-  // Return the most recent non-generic headline, or fall back to most recent
-  const mostRecent = filtered.length > 0 ? filtered[0] : newsItems[0];
-  return mostRecent?.headline;
+  // Return the most recent non-generic headline
+  // If all headlines are mechanical, return undefined (no news = +15)
+  if (filtered.length === 0) {
+    return undefined;
+  }
+
+  return filtered[0].headline;
 }
 

@@ -246,6 +246,11 @@ export function getCategoryExplanation(category: string): CategoryExplanation {
       explanation:
         'High debt relative to cash increases financial stress and the likelihood of dilutive capital raises to meet obligations.',
     },
+    'Droppiness': {
+      title: 'Droppiness',
+      explanation:
+        'Measures how quickly price spikes fade after major moves. High droppiness (70+) indicates spikes fade quickly, which is favorable for short sellers as it shows weak support and tendency to revert. Low droppiness (<40) means spikes hold, indicating stronger support and higher risk for short positions.',
+    },
   };
 
   return explanations[category] || {
