@@ -8,6 +8,7 @@ import ScoringGuideModal from "./ScoringGuideModal";
 import { ShortCheckResult } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { generateRiskSynopsis } from "@/lib/shortCheckHelpers";
+import { generateFormattedSummary } from "@/lib/summaryGenerator";
 
 interface ShortCheckResultsProps {
   result: ShortCheckResult;
@@ -25,8 +26,10 @@ export default function ShortCheckResults({
   const [showScoringGuide, setShowScoringGuide] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
+  const [copyingSummary, setCopyingSummary] = useState<'quick' | 'full' | null>(null);
+  const [copiedSummary, setCopiedSummary] = useState(false);
   const categoryColors = {
     "High-Priority Short Candidate": "bg-red-500 text-white",
     "Moderate Short Candidate": "bg-yellow-500 text-white",
@@ -143,8 +146,8 @@ export default function ShortCheckResults({
 
       // Copy to clipboard
       await navigator.clipboard.writeText(data.shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 3000);
     } catch (error) {
       console.error("Error sharing:", error);
       alert("Failed to generate share link. Please try again.");
@@ -190,6 +193,32 @@ export default function ShortCheckResults({
       alert("Failed to export PDF. Please try again.");
     } finally {
       setExportingPDF(false);
+    }
+  };
+
+  const handleCopySummary = async (format: 'quick' | 'full') => {
+    if (!ticker || !result) return;
+
+    setCopyingSummary(format);
+    try {
+      const summary = generateFormattedSummary({
+        ticker,
+        result,
+        extractedData,
+        pumpScorecardData,
+        format,
+      });
+
+      await navigator.clipboard.writeText(summary);
+      setCopiedSummary(true);
+      setTimeout(() => {
+        setCopiedSummary(false);
+        setCopyingSummary(null);
+      }, 2000);
+    } catch (error) {
+      console.error("Error copying summary:", error);
+      alert("Failed to copy summary. Please try again.");
+      setCopyingSummary(null);
     }
   };
 
@@ -239,7 +268,7 @@ export default function ShortCheckResults({
                   <span className="animate-spin">⏳</span>
                   Generating...
                 </>
-              ) : copied ? (
+              ) : copiedShare ? (
                 <>
                   <span>✅</span>
                   Copied!
@@ -268,6 +297,43 @@ export default function ShortCheckResults({
                 </>
               )}
             </button>
+            <div className="relative inline-flex items-center gap-1">
+              <button
+                onClick={() => handleCopySummary('quick')}
+                disabled={!!copyingSummary}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md rounded-r-none transition-colors border-r border-indigo-400"
+                title="Copy quick summary (key highlights)"
+              >
+                {copyingSummary === 'quick' ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Copying...
+                  </>
+                ) : copiedSummary && copyingSummary === null ? (
+                  <>
+                    <span>✅</span>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <span>📋</span>
+                    Copy Summary
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => handleCopySummary('full')}
+                disabled={!!copyingSummary}
+                className="inline-flex items-center gap-1 px-2 py-1.5 bg-indigo-400 hover:bg-indigo-500 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-xs font-medium rounded-md rounded-l-none transition-colors"
+                title="Copy full summary (all data)"
+              >
+                {copyingSummary === 'full' ? (
+                  <span className="animate-spin text-xs">⏳</span>
+                ) : (
+                  <span className="text-xs">Full</span>
+                )}
+              </button>
+            </div>
           </div>
           {shareUrl && (
             <div className="mt-3 p-2 bg-white dark:bg-gray-900 rounded border border-gray-300 dark:border-gray-600">
@@ -281,15 +347,15 @@ export default function ShortCheckResults({
                   readOnly
                   className="flex-1 px-2 py-1 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded font-mono"
                 />
-                <button
+                  <button
                   onClick={() => {
                     navigator.clipboard.writeText(shareUrl);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
+                    setCopiedShare(true);
+                    setTimeout(() => setCopiedShare(false), 2000);
                   }}
                   className="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded transition-colors"
                 >
-                  {copied ? "✓" : "Copy"}
+                  {copiedShare ? "✓" : "Copy"}
                 </button>
               </div>
             </div>
