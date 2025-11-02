@@ -463,17 +463,35 @@ export async function POST(req: NextRequest) {
       }
 
       // Fraud Evidence
-      if (pumpScorecardData.fraudImages && pumpScorecardData.fraudImages.length > 0) {
+      // Filter out "manual check" placeholders (same logic as FraudEvidence component)
+      const fraudItems = Array.isArray(pumpScorecardData.fraudImages) 
+        ? pumpScorecardData.fraudImages.filter(
+            (item: any) => (item?.caption || '').toLowerCase() !== 'manual check'
+          )
+        : [];
+      
+      if (fraudItems.length > 0) {
         yPosition = addSectionHeader('Fraud Evidence', yPosition);
         yPosition -= 10;
-        currentPage.drawText(`Found ${pumpScorecardData.fraudImages.length} fraud evidence image(s)`, {
+        currentPage.drawText(`Found ${fraudItems.length} fraud evidence image(s)`, {
           x: margin,
           y: yPosition,
           size: 10,
           font: font,
           color: rgb(0.8, 0, 0),
         });
-        yPosition -= lineHeight * 1.5;
+        yPosition -= lineHeight;
+        
+        // List fraud evidence items
+        for (const item of fraudItems.slice(0, 5)) {
+          const caption = item.caption || 'Fraud evidence';
+          yPosition = addText(`• ${caption}`, margin + 10, yPosition, 9, false);
+          yPosition -= 5;
+          if (yPosition < margin + 50) {
+            currentPage = pdfDoc.addPage([612, 792]);
+            yPosition = 750;
+          }
+        }
         yPosition -= sectionSpacing;
       }
 
