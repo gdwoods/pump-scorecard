@@ -294,7 +294,7 @@ export async function POST(req: NextRequest) {
     // ========== PUMP SCORECARD DATA ==========
     if (pumpScorecardData) {
       yPosition -= sectionSpacing * 2;
-      yPosition = addSectionHeader('═══════ PUMP SCORECARD ANALYSIS ═══════', yPosition);
+      yPosition = addSectionHeader('========== PUMP SCORECARD ANALYSIS ==========', yPosition);
       yPosition -= sectionSpacing;
 
       // Droppiness
