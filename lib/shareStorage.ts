@@ -27,36 +27,47 @@ export function generateShareId(): string {
 // Get Vercel KV client (if available)
 async function getKVClient() {
   // Check for Vercel KV environment variables
-  // Vercel creates KV_REST_API_REDIS_URL and KV_REST_API_REDIS_TOKEN when prefix is "KV_REST_API"
+  // Vercel creates different variable names depending on how KV is connected
+  // With custom prefix "KV_REST_API": KV_REST_API_REDIS_URL (sometimes just KV_REST_API_URL for token)
+  // Default: KV_URL and KV_TOKEN
   const redisUrl = process.env.KV_REST_API_REDIS_URL;
-  const redisToken = process.env.KV_REST_API_REDIS_TOKEN;
   
-  // Also check for legacy naming convention (without _REDIS suffix)
-  const hasUrl = redisUrl || process.env.KV_REST_API_URL;
-  const hasToken = redisToken || process.env.KV_REST_API_TOKEN;
+  // Try multiple possible token variable names
+  const redisToken = process.env.KV_REST_API_REDIS_TOKEN || 
+                     process.env.KV_REST_API_TOKEN ||
+                     process.env.KV_TOKEN;
   
-  if (!hasUrl || !hasToken) {
-    console.log(`[Share] KV not configured: REDIS_URL=${!!redisUrl}, REDIS_TOKEN=${!!redisToken}, URL=${!!process.env.KV_REST_API_URL}, TOKEN=${!!process.env.KV_REST_API_TOKEN}`);
+  // Also check for standard naming (without _REDIS suffix)
+  const hasUrl = redisUrl || process.env.KV_REST_API_URL || process.env.KV_URL;
+  const hasToken = redisToken || process.env.KV_REST_API_TOKEN || process.env.KV_TOKEN;
+  
+  if (!hasUrl) {
+    console.log(`[Share] KV not configured: No URL found. Checked: KV_REST_API_REDIS_URL, KV_REST_API_URL, KV_URL`);
     return null;
+  }
+  
+  if (!hasToken) {
+    console.warn(`[Share] KV URL found but no token. Checked: KV_REST_API_REDIS_TOKEN, KV_REST_API_TOKEN, KV_TOKEN`);
+    console.warn(`[Share] Attempting to connect without explicit token (KV might have token embedded in URL)`);
   }
 
   try {
     // Dynamic import to avoid errors if @vercel/kv is not installed
     const { createClient } = await import('@vercel/kv');
     
-    // @vercel/kv automatically reads from KV_URL and KV_REST_API_TOKEN by default
-    // But Vercel creates KV_REST_API_REDIS_URL when prefix is used
-    // So we need to explicitly configure it
-    const kv = createClient({
-      url: redisUrl || process.env.KV_REST_API_URL || process.env.KV_URL,
-      token: redisToken || process.env.KV_REST_API_TOKEN || process.env.KV_TOKEN,
-    });
+    // @vercel/kv can work with just URL if token is embedded, or with explicit config
+    const kvConfig: any = { url: hasUrl };
+    if (hasToken) {
+      kvConfig.token = hasToken;
+    }
     
-    console.log(`[Share] KV client initialized successfully`);
+    const kv = createClient(kvConfig);
+    
+    console.log(`[Share] ✅ KV client initialized with URL=${!!hasUrl}, Token=${!!hasToken}`);
     return kv;
   } catch (error: any) {
     // @vercel/kv not installed or not available - use fallback
-    console.error(`[Share] KV import failed:`, error?.message || error);
+    console.error(`[Share] ❌ KV import/init failed:`, error?.message || error);
     return null;
   }
 }
