@@ -42,7 +42,16 @@ async function getKVClient() {
 
   try {
     // Dynamic import to avoid errors if @vercel/kv is not installed
-    const { kv } = await import('@vercel/kv');
+    const { createClient } = await import('@vercel/kv');
+    
+    // @vercel/kv automatically reads from KV_URL and KV_REST_API_TOKEN by default
+    // But Vercel creates KV_REST_API_REDIS_URL when prefix is used
+    // So we need to explicitly configure it
+    const kv = createClient({
+      url: redisUrl || process.env.KV_REST_API_URL || process.env.KV_URL,
+      token: redisToken || process.env.KV_REST_API_TOKEN || process.env.KV_TOKEN,
+    });
+    
     console.log(`[Share] KV client initialized successfully`);
     return kv;
   } catch (error: any) {
