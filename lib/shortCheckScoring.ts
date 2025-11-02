@@ -996,22 +996,29 @@ function generateAlertCard(
     card += `\n\n⚠️ Walk-away flags: ${result.walkAwayFlags.join(', ')}`;
   }
   
-  // Add top scoring factors
+  // Add top scoring factors (including droppiness)
   const breakdown = result.scoreBreakdown;
   const factors: [string, number][] = [
+    ['Droppiness', breakdown.droppiness],
+    ['Overall Risk', breakdown.overallRisk],
     ['Cash Need', breakdown.cashNeed],
     ['Offering Ability', breakdown.offeringAbility],
-    ['Short Interest', breakdown.shortInterest],
     ['Cash Runway', breakdown.cashRunway],
+    ['Short Interest', breakdown.shortInterest],
+    ['Historical Dilution', breakdown.historicalDilution],
     ['News Catalyst', breakdown.newsCatalyst],
     ['Float', breakdown.float],
+    ['Price Spike', breakdown.priceSpike],
+    ['Debt/Cash Ratio', breakdown.debtToCash],
+    ['Institutional Ownership', breakdown.institutionalOwnership],
   ];
   
-  factors.sort((a, b) => b[1] - a[1]);
-  const topFactors = factors.slice(0, 3).filter(f => f[1] > 0);
+  // Sort by absolute value to catch both positive and negative contributions
+  factors.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  const topFactors = factors.slice(0, 5).filter(f => Math.abs(f[1]) > 0);
   
   if (topFactors.length > 0) {
-    card += `\n\nTop scoring factors: ${topFactors.map(f => `${f[0]} (${f[1]})`).join(', ')}`;
+    card += `\n\nTop scoring factors: ${topFactors.map(f => `${f[0]} (${f[1] >= 0 ? '+' : ''}${f[1].toFixed(1)})`).join(', ')}`;
   }
   
   return card;
