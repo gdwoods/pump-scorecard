@@ -136,8 +136,8 @@ export async function POST(req: NextRequest) {
     // Alert Labels
     if (result.alertLabels && result.alertLabels.length > 0) {
       const alertText = `Alerts: ${result.alertLabels.map(a => a.label).join(', ')}`;
-      addText(alertText, margin, yPosition, 10, false);
-      yPosition -= lineHeight * 1.5;
+      yPosition = addText(alertText, margin, yPosition, 10, false);
+      yPosition -= lineHeight * 0.5;
     }
 
     // Risk Synopsis
