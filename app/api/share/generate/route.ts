@@ -66,6 +66,10 @@ export async function POST(req: NextRequest) {
       }
     }
     
+    // Ensure baseUrl doesn't have a trailing path - strip any path components
+    // Remove trailing slashes and any path segments
+    baseUrl = baseUrl.replace(/\/+$/, '').split('/').slice(0, 3).join('/'); // Keep only protocol + hostname
+    
     const shareUrl = `${baseUrl}/share/${shareId}`;
     console.log(`[Share] Generated URL: ${shareUrl} (env: ${process.env.VERCEL_ENV || 'local'})`);
 

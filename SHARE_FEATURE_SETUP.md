@@ -61,6 +61,11 @@ If using Vercel KV, these are automatically added by Vercel:
 **Required for Public Share Links:**
 - `NEXT_PUBLIC_BASE_URL` - Your production domain URL (e.g., `https://short-check.vercel.app` or your custom domain)
 
+**Important:** 
+- ✅ **Correct**: `https://short-check.vercel.app` (domain only, no path)
+- ❌ **Wrong**: `https://short-check.vercel.app/short-check` (don't include paths)
+- The share link will automatically append `/share/[id]` to this base URL
+
 **Why this matters:** Without this, share links may point to preview deployments that require Vercel authentication. Set this to your production domain to ensure share links are publicly accessible.
 
 ## Features
