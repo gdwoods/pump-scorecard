@@ -35,30 +35,6 @@ export default function ShortCheckResults({
     "No-Trade": "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800",
   };
 
-  const downloadAlertCard = () => {
-    const blob = new Blob([result.alertCard], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${ticker || "short-check"}_alert_card.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const copyToClipboard = async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      // Simple feedback - could be enhanced with toast notification
-      const button = document.activeElement as HTMLElement;
-      const originalText = button.textContent;
-      button.textContent = "✓ Copied!";
-      setTimeout(() => {
-        if (button) button.textContent = originalText;
-      }, 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
-    }
-  };
 
   const getQuickStats = () => {
     if (!extractedData) return null;
@@ -122,8 +98,59 @@ export default function ShortCheckResults({
     return stats.length > 0 ? stats : null;
   };
 
+  const getQuickActionLinks = () => {
+    if (!ticker) return null;
+    const upperTicker = ticker.toUpperCase();
+    
+    return {
+      tradingView: `https://www.tradingview.com/chart/?symbol=${upperTicker}`,
+      finviz: `https://finviz.com/quote.ashx?t=${upperTicker}`,
+      secEdgar: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company=${upperTicker}`,
+    };
+  };
+
+  const quickLinks = getQuickActionLinks();
+
   return (
     <div className="space-y-6">
+      {/* Quick Actions Toolbar */}
+      {quickLinks && ticker && (
+        <Card className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Quick Actions:
+            </span>
+            <a
+              href={quickLinks.tradingView}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors"
+            >
+              <span>📈</span>
+              TradingView
+            </a>
+            <a
+              href={quickLinks.finviz}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors"
+            >
+              <span>📊</span>
+              Finviz
+            </a>
+            <a
+              href={quickLinks.secEdgar}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-md transition-colors"
+            >
+              <span>📄</span>
+              SEC EDGAR
+            </a>
+          </div>
+        </Card>
+      )}
+
       {/* Main Rating Card */}
       <Card
         className={`p-4 md:p-6 shadow-lg border-2 ${categoryBgColors[result.category]}`}
@@ -173,18 +200,9 @@ export default function ShortCheckResults({
         {/* Risk Synopsis - Combined into top card */}
         {extractedData && (
           <div className="mt-6 p-4 bg-white/50 dark:bg-black/20 border border-current/20 rounded-lg">
-            <div className="flex justify-between items-start mb-2">
-              <h3 className="text-base font-semibold opacity-90">
-                📋 Risk Synopsis
-              </h3>
-              <Button
-                onClick={() => copyToClipboard(generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData), "Risk Synopsis")}
-                className="text-xs h-7 px-2"
-                variant="outline"
-              >
-                📋 Copy
-              </Button>
-            </div>
+            <h3 className="text-base font-semibold opacity-90 mb-2">
+              📋 Risk Synopsis
+            </h3>
             <p className="text-sm leading-relaxed opacity-80">
               {generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData)}
             </p>
@@ -230,21 +248,7 @@ export default function ShortCheckResults({
 
       {/* Alert Card */}
       <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">Alert Card</h2>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => copyToClipboard(result.alertCard, "Alert Card")}
-              className="text-sm"
-              variant="outline"
-            >
-              📋 Copy
-            </Button>
-            <Button onClick={downloadAlertCard} className="text-sm">
-              💾 Download
-            </Button>
-          </div>
-        </div>
+        <h2 className="text-lg font-semibold mb-4">Alert Card</h2>
         <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg font-mono text-sm whitespace-pre-wrap">
           {result.alertCard}
         </div>
