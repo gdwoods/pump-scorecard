@@ -227,99 +227,103 @@ export default function ShortCheckResults({
       {/* Quick Actions Toolbar */}
       {quickLinks && ticker && (
         <Card className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              Quick Actions:
-            </span>
-            <a
-              href={quickLinks.tradingView}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors"
-            >
-              <span>📈</span>
-              TradingView
-            </a>
-            <a
-              href={quickLinks.finviz}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors"
-            >
-              <span>📊</span>
-              Finviz
-            </a>
-            <a
-              href={quickLinks.secEdgar}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-md transition-colors"
-            >
-              <span>📄</span>
-              SEC EDGAR
-            </a>
-            <button
-              onClick={handleShare}
-              disabled={sharing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
-            >
-              {sharing ? (
-                <>
-                  <span className="animate-spin">⏳</span>
-                  Generating...
-                </>
-              ) : copiedShare ? (
-                <>
-                  <span>✅</span>
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <span>🔗</span>
-                  Share
-                </>
-              )}
-            </button>
-            <button
-              onClick={handleExportPDF}
-              disabled={exportingPDF}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
-            >
-              {exportingPDF ? (
-                <>
-                  <span className="animate-spin">⏳</span>
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <span>📄</span>
-                  Export PDF
-                </>
-              )}
-            </button>
-            <button
-              onClick={handleCopySummary}
-              disabled={copyingSummary}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
-              title="Copy complete analysis summary to clipboard"
-            >
-              {copyingSummary ? (
-                <>
-                  <span className="animate-spin">⏳</span>
-                  Copying...
-                </>
-              ) : copiedSummary ? (
-                <>
-                  <span>✅</span>
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <span>📋</span>
-                  Copy Summary
-                </>
-              )}
-            </button>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Quick Actions:
+              </span>
+              <a
+                href={quickLinks.tradingView}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors"
+              >
+                <span>📈</span>
+                TradingView
+              </a>
+              <a
+                href={quickLinks.finviz}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors"
+              >
+                <span>📊</span>
+                Finviz
+              </a>
+              <a
+                href={quickLinks.secEdgar}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-md transition-colors"
+              >
+                <span>📄</span>
+                SEC EDGAR
+              </a>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopySummary}
+                disabled={copyingSummary}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
+                title="Copy complete analysis summary to clipboard"
+              >
+                {copyingSummary ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Copying...
+                  </>
+                ) : copiedSummary ? (
+                  <>
+                    <span>✅</span>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <span>📋</span>
+                    Copy Summary
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleExportPDF}
+                disabled={exportingPDF}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
+              >
+                {exportingPDF ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <span>📄</span>
+                    Export PDF
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleShare}
+                disabled={sharing}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
+              >
+                {sharing ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Generating...
+                  </>
+                ) : copiedShare ? (
+                  <>
+                    <span>✅</span>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <span>🔗</span>
+                    Share
+                  </>
+                )}
+              </button>
+            </div>
           </div>
           {shareUrl && (
             <div className="mt-3 p-2 bg-white dark:bg-gray-900 rounded border border-gray-300 dark:border-gray-600">
