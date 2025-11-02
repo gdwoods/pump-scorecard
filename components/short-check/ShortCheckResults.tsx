@@ -29,8 +29,7 @@ export default function ShortCheckResults({
   const [copiedShare, setCopiedShare] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [copyingSummary, setCopyingSummary] = useState<'quick' | 'full' | null>(null);
-  const [copiedSummary, setCopiedSummary] = useState(false);
-  const [summaryFormat, setSummaryFormat] = useState<'quick' | 'full'>('quick');
+  const [copiedSummaryFormat, setCopiedSummaryFormat] = useState<'quick' | 'full' | null>(null);
   const categoryColors = {
     "High-Priority Short Candidate": "bg-red-500 text-white",
     "Moderate Short Candidate": "bg-yellow-500 text-white",
@@ -211,9 +210,9 @@ export default function ShortCheckResults({
       });
 
       await navigator.clipboard.writeText(summary);
-      setCopiedSummary(true);
+      setCopiedSummaryFormat(format);
       setTimeout(() => {
-        setCopiedSummary(false);
+        setCopiedSummaryFormat(null);
         setCopyingSummary(null);
       }, 2000);
     } catch (error) {
@@ -300,35 +299,50 @@ export default function ShortCheckResults({
             </button>
             <div className="inline-flex items-center gap-2">
               <button
-                onClick={() => handleCopySummary(summaryFormat)}
+                onClick={() => handleCopySummary('quick')}
                 disabled={!!copyingSummary}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
-                title={`Copy ${summaryFormat === 'quick' ? 'quick' : 'full'} summary`}
+                title="Copy quick summary (key highlights)"
               >
-                {copyingSummary ? (
+                {copyingSummary === 'quick' ? (
                   <>
                     <span className="animate-spin">⏳</span>
                     Copying...
                   </>
-                ) : copiedSummary ? (
+                ) : copiedSummaryFormat === 'quick' ? (
                   <>
                     <span>✅</span>
                     Copied!
                   </>
                 ) : (
                   <>
-                    <span>📋</span>
-                    Copy {summaryFormat === 'quick' ? 'Quick' : 'Full'} Summary
+                    <span>⚡</span>
+                    Quick Summary
                   </>
                 )}
               </button>
               <button
-                onClick={() => setSummaryFormat(prev => prev === 'quick' ? 'full' : 'quick')}
+                onClick={() => handleCopySummary('full')}
                 disabled={!!copyingSummary}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-xs font-medium rounded-md transition-colors border border-indigo-400"
-                title={`Switch to ${summaryFormat === 'quick' ? 'full' : 'quick'} summary format`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
+                title="Copy full summary (all data)"
               >
-                <span className="text-xs">{summaryFormat === 'quick' ? '📝 Full' : '⚡ Quick'}</span>
+                {copyingSummary === 'full' ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Copying...
+                  </>
+                ) : copiedSummaryFormat === 'full' ? (
+                  <>
+                    <span>✅</span>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <span>📝</span>
+                    Full Summary
+                  </>
+                )}
               </button>
             </div>
           </div>
