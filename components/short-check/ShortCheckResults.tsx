@@ -309,7 +309,7 @@ export default function ShortCheckResults({
                     <span className="animate-spin">⏳</span>
                     Copying...
                   </>
-                ) : copiedSummary && copyingSummary === null ? (
+                ) : copiedSummary ? (
                   <>
                     <span>✅</span>
                     Copied!
