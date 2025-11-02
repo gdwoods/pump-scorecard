@@ -27,11 +27,16 @@ export function generateShareId(): string {
 // Get Vercel KV client (if available)
 async function getKVClient() {
   // Check for Vercel KV environment variables
-  const hasUrl = !!process.env.KV_REST_API_URL;
-  const hasToken = !!process.env.KV_REST_API_TOKEN;
+  // Vercel creates KV_REST_API_REDIS_URL and KV_REST_API_REDIS_TOKEN when prefix is "KV_REST_API"
+  const redisUrl = process.env.KV_REST_API_REDIS_URL;
+  const redisToken = process.env.KV_REST_API_REDIS_TOKEN;
+  
+  // Also check for legacy naming convention (without _REDIS suffix)
+  const hasUrl = redisUrl || process.env.KV_REST_API_URL;
+  const hasToken = redisToken || process.env.KV_REST_API_TOKEN;
   
   if (!hasUrl || !hasToken) {
-    console.log(`[Share] KV not configured: URL=${hasUrl}, Token=${hasToken}`);
+    console.log(`[Share] KV not configured: REDIS_URL=${!!redisUrl}, REDIS_TOKEN=${!!redisToken}, URL=${!!process.env.KV_REST_API_URL}, TOKEN=${!!process.env.KV_REST_API_TOKEN}`);
     return null;
   }
 
