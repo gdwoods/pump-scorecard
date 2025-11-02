@@ -24,6 +24,7 @@ export default function ShortCheckResults({
   const [sharing, setSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
   const categoryColors = {
     "High-Priority Short Candidate": "bg-red-500 text-white",
     "Moderate Short Candidate": "bg-yellow-500 text-white",
@@ -150,6 +151,44 @@ export default function ShortCheckResults({
     }
   };
 
+  const handleExportPDF = async () => {
+    if (!ticker || !result) return;
+
+    setExportingPDF(true);
+    try {
+      const response = await fetch("/api/short-check/export-pdf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ticker,
+          result,
+          extractedData,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate PDF");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `short-check-${ticker}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      alert("Failed to export PDF. Please try again.");
+    } finally {
+      setExportingPDF(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Quick Actions Toolbar */}
@@ -205,6 +244,23 @@ export default function ShortCheckResults({
                 <>
                   <span>🔗</span>
                   Share
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={exportingPDF}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
+            >
+              {exportingPDF ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <span>📄</span>
+                  Export PDF
                 </>
               )}
             </button>
