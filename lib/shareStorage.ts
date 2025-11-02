@@ -27,16 +27,22 @@ export function generateShareId(): string {
 // Get Vercel KV client (if available)
 async function getKVClient() {
   // Check for Vercel KV environment variables
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+  const hasUrl = !!process.env.KV_REST_API_URL;
+  const hasToken = !!process.env.KV_REST_API_TOKEN;
+  
+  if (!hasUrl || !hasToken) {
+    console.log(`[Share] KV not configured: URL=${hasUrl}, Token=${hasToken}`);
     return null;
   }
 
   try {
     // Dynamic import to avoid errors if @vercel/kv is not installed
     const { kv } = await import('@vercel/kv');
+    console.log(`[Share] KV client initialized successfully`);
     return kv;
-  } catch (error) {
+  } catch (error: any) {
     // @vercel/kv not installed or not available - use fallback
+    console.error(`[Share] KV import failed:`, error?.message || error);
     return null;
   }
 }
@@ -46,14 +52,19 @@ export async function saveShare(shareId: string, data: ShareData): Promise<void>
   const kv = await getKVClient();
   
   if (kv) {
-    // Use Vercel KV with expiration
-    const ttl = Math.floor((data.expiresAt - Date.now()) / 1000); // Convert to seconds
-    await kv.setex(`share:${shareId}`, ttl, JSON.stringify(data));
-    console.log(`[Share] Saved to KV: ${shareId}, expires in ${ttl}s`);
+    try {
+      // Use Vercel KV with expiration
+      const ttl = Math.floor((data.expiresAt - Date.now()) / 1000); // Convert to seconds
+      await kv.setex(`share:${shareId}`, ttl, JSON.stringify(data));
+      console.log(`[Share] ✅ Saved to KV: ${shareId}, expires in ${ttl}s (${Math.floor(ttl / 86400)} days)`);
+    } catch (error: any) {
+      console.error(`[Share] ❌ Failed to save to KV: ${error?.message || error}`);
+      throw error; // Re-throw to let caller know save failed
+    }
   } else {
     // Fallback to in-memory cache
     memoryCache.set(shareId, data);
-    console.log(`[Share] Saved to memory: ${shareId} (cache size: ${memoryCache.size})`);
+    console.warn(`[Share] ⚠️ Saved to memory (NOT PERSISTENT): ${shareId} (cache size: ${memoryCache.size})`);
     // Auto-expire from memory after expiration time
     setTimeout(() => {
       memoryCache.delete(shareId);
@@ -67,13 +78,18 @@ export async function getShare(shareId: string): Promise<ShareData | null> {
   const kv = await getKVClient();
   
   if (kv) {
-    const data = await kv.get<string>(`share:${shareId}`);
-    if (!data) {
-      console.log(`[Share] Not found in KV: ${shareId}`);
+    try {
+      const data = await kv.get<string>(`share:${shareId}`);
+      if (!data) {
+        console.log(`[Share] ❌ Not found in KV: ${shareId}`);
+        return null;
+      }
+      console.log(`[Share] ✅ Retrieved from KV: ${shareId}`);
+      return JSON.parse(data) as ShareData;
+    } catch (error: any) {
+      console.error(`[Share] ❌ Error retrieving from KV: ${error?.message || error}`);
       return null;
     }
-    console.log(`[Share] Retrieved from KV: ${shareId}`);
-    return JSON.parse(data) as ShareData;
   } else {
     const data = memoryCache.get(shareId);
     console.log(`[Share] Looking in memory: ${shareId}, found: ${!!data}, cache size: ${memoryCache.size}`);
