@@ -58,8 +58,10 @@ If using Vercel KV, these are automatically added by Vercel:
 - `KV_REST_API_URL` - KV endpoint URL
 - `KV_REST_API_TOKEN` - KV authentication token
 
-Optional (for custom domains):
-- `NEXT_PUBLIC_BASE_URL` - Your app's base URL (defaults to Vercel URL)
+**Required for Public Share Links:**
+- `NEXT_PUBLIC_BASE_URL` - Your production domain URL (e.g., `https://short-check.vercel.app` or your custom domain)
+
+**Why this matters:** Without this, share links may point to preview deployments that require Vercel authentication. Set this to your production domain to ensure share links are publicly accessible.
 
 ## Features
 

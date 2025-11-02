@@ -35,21 +35,39 @@ export async function POST(req: NextRequest) {
     console.log(`[Share] Generated share link: ${shareId} for ticker: ${ticker}`);
 
     // Get base URL from request or use environment variable
+    // Priority: NEXT_PUBLIC_BASE_URL > Production domain > VERCEL_URL (preview)
     let baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     
     if (!baseUrl) {
-      // Try to get from Vercel environment
-      if (process.env.VERCEL_URL) {
-        baseUrl = `https://${process.env.VERCEL_URL}`;
-      } else {
-        // Try to get from request headers (for local dev)
+      // Check if we have a custom production domain
+      // Vercel custom domains are typically available in production
+      if (process.env.VERCEL_ENV === 'production') {
+        // Try to get production URL from request headers first (most reliable)
         const host = req.headers.get('host');
-        const protocol = req.headers.get('x-forwarded-proto') || 'http';
-        baseUrl = `${protocol}://${host}`;
+        if (host && !host.includes('.vercel.app')) {
+          // Custom domain detected
+          const protocol = req.headers.get('x-forwarded-proto') || 'https';
+          baseUrl = `${protocol}://${host}`;
+        } else if (process.env.VERCEL_URL) {
+          // Fall back to vercel.app URL (but check if it's production)
+          baseUrl = `https://${process.env.VERCEL_URL}`;
+        }
+      } else {
+        // For preview/development, use VERCEL_URL but warn in logs
+        if (process.env.VERCEL_URL) {
+          baseUrl = `https://${process.env.VERCEL_URL}`;
+          console.warn(`[Share] Using preview URL: ${baseUrl} - Preview deployments may require Vercel auth`);
+        } else {
+          // Local development fallback
+          const host = req.headers.get('host');
+          const protocol = req.headers.get('x-forwarded-proto') || 'http';
+          baseUrl = `${protocol}://${host}`;
+        }
       }
     }
     
     const shareUrl = `${baseUrl}/share/${shareId}`;
+    console.log(`[Share] Generated URL: ${shareUrl} (env: ${process.env.VERCEL_ENV || 'local'})`);
 
     return NextResponse.json({
       shareId,
