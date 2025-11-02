@@ -13,12 +13,14 @@ interface ShortCheckResultsProps {
   result: ShortCheckResult;
   ticker?: string;
   extractedData?: ExtractedData;
+  pumpScorecardData?: any; // Pump Scorecard data to include in PDF
 }
 
 export default function ShortCheckResults({
   result,
   ticker,
   extractedData,
+  pumpScorecardData,
 }: ShortCheckResultsProps) {
   const [showScoringGuide, setShowScoringGuide] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -165,6 +167,7 @@ export default function ShortCheckResults({
           ticker,
           result,
           extractedData,
+          pumpScorecardData,
         }),
       });
 

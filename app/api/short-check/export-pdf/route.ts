@@ -8,7 +8,7 @@ export const maxDuration = 30;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { ticker, result, extractedData } = body;
+    const { ticker, result, extractedData, pumpScorecardData } = body;
 
     if (!ticker || !result) {
       return NextResponse.json(
@@ -263,6 +263,236 @@ export async function POST(req: NextRequest) {
           currentPage = pdfDoc.addPage([612, 792]);
           yPosition = 750;
         }
+      }
+    }
+
+    // ========== PUMP SCORECARD DATA ==========
+    if (pumpScorecardData) {
+      yPosition -= sectionSpacing * 2;
+      yPosition = addSectionHeader('═══════ PUMP SCORECARD ANALYSIS ═══════', yPosition);
+      yPosition -= sectionSpacing;
+
+      // Droppiness
+      if (pumpScorecardData.droppinessScore !== undefined) {
+        yPosition = addSectionHeader('Droppiness Score', yPosition);
+        yPosition -= 10;
+        currentPage.drawText(`Score: ${pumpScorecardData.droppinessScore}`, {
+          x: margin,
+          y: yPosition,
+          size: 12,
+          font: boldFont,
+        });
+        yPosition -= lineHeight;
+        if (pumpScorecardData.droppinessVerdict) {
+          yPosition = addText(`Verdict: ${pumpScorecardData.droppinessVerdict}`, margin, yPosition, 10, false);
+          yPosition -= lineHeight * 1.5;
+        }
+        if (pumpScorecardData.droppinessDetail && pumpScorecardData.droppinessDetail.length > 0) {
+          yPosition = addText(`Spike History: ${pumpScorecardData.droppinessDetail.length} spikes analyzed`, margin, yPosition, 9, false);
+          yPosition -= sectionSpacing;
+        }
+      }
+
+      // Pump Risk Scorecard
+      if (pumpScorecardData.weightedRiskScore !== undefined) {
+        yPosition = addSectionHeader('Pump Risk Scorecard', yPosition);
+        yPosition -= 10;
+        
+        const riskColor = pumpScorecardData.weightedRiskScore >= 70 
+          ? rgb(0.8, 0, 0)
+          : pumpScorecardData.weightedRiskScore >= 40
+          ? rgb(0.8, 0.6, 0)
+          : rgb(0, 0.6, 0);
+        
+        currentPage.drawText(`Weighted Risk Score: ${pumpScorecardData.weightedRiskScore.toFixed(1)}`, {
+          x: margin,
+          y: yPosition,
+          size: 14,
+          font: boldFont,
+          color: riskColor,
+        });
+        yPosition -= lineHeight;
+        
+        if (pumpScorecardData.summaryVerdict) {
+          currentPage.drawText(`Verdict: ${pumpScorecardData.summaryVerdict}`, {
+            x: margin,
+            y: yPosition,
+            size: 12,
+            font: font,
+          });
+          yPosition -= lineHeight;
+        }
+        
+        if (pumpScorecardData.summaryText) {
+          yPosition = addText(pumpScorecardData.summaryText, margin, yPosition, 10, false);
+          yPosition -= sectionSpacing;
+        }
+      }
+
+      // Fundamentals
+      if (pumpScorecardData.marketCap || pumpScorecardData.floatShares) {
+        yPosition = addSectionHeader('Fundamentals', yPosition);
+        yPosition -= 10;
+        
+        const fundamentals = [];
+        if (pumpScorecardData.marketCap) {
+          fundamentals.push(`Market Cap: $${(pumpScorecardData.marketCap / 1e9).toFixed(2)}B`);
+        }
+        if (pumpScorecardData.floatShares) {
+          fundamentals.push(`Float: ${(pumpScorecardData.floatShares / 1e6).toFixed(2)}M shares`);
+        }
+        if (pumpScorecardData.sharesOutstanding) {
+          fundamentals.push(`Shares Outstanding: ${(pumpScorecardData.sharesOutstanding / 1e6).toFixed(2)}M`);
+        }
+        if (pumpScorecardData.shortFloat !== undefined) {
+          fundamentals.push(`Short Float: ${pumpScorecardData.shortFloat.toFixed(1)}%`);
+        }
+        if (pumpScorecardData.institutionalOwnership !== undefined) {
+          fundamentals.push(`Institutional Ownership: ${pumpScorecardData.institutionalOwnership.toFixed(1)}%`);
+        }
+        if (pumpScorecardData.insiderOwnership !== undefined) {
+          fundamentals.push(`Insider Ownership: ${pumpScorecardData.insiderOwnership.toFixed(1)}%`);
+        }
+        if (pumpScorecardData.country) {
+          fundamentals.push(`Country: ${pumpScorecardData.country}`);
+        }
+        if (pumpScorecardData.exchange) {
+          fundamentals.push(`Exchange: ${pumpScorecardData.exchange}`);
+        }
+        if (pumpScorecardData.avgVolume) {
+          fundamentals.push(`Avg Volume: ${(pumpScorecardData.avgVolume / 1e6).toFixed(2)}M`);
+        }
+        
+        for (const metric of fundamentals) {
+          currentPage.drawText(metric, {
+            x: margin,
+            y: yPosition,
+            size: 10,
+            font: font,
+          });
+          yPosition -= lineHeight;
+          if (yPosition < margin + 50) {
+            currentPage = pdfDoc.addPage([612, 792]);
+            yPosition = 750;
+          }
+        }
+        yPosition -= sectionSpacing;
+      }
+
+      // SEC Filings
+      if (pumpScorecardData.filings && pumpScorecardData.filings.length > 0) {
+        yPosition = addSectionHeader('Recent SEC Filings', yPosition);
+        yPosition -= 10;
+        
+        const filingsToShow = pumpScorecardData.filings.slice(0, 10);
+        for (const filing of filingsToShow) {
+          const filingText = `${filing.title || 'Filing'} - ${filing.date || 'Unknown date'}`;
+          yPosition = addText(filingText, margin + 10, yPosition, 9, false);
+          yPosition -= 5;
+          if (yPosition < margin + 50) {
+            currentPage = pdfDoc.addPage([612, 792]);
+            yPosition = 750;
+          }
+        }
+        yPosition -= sectionSpacing;
+      }
+
+      // Promotions
+      const recentPromos = pumpScorecardData.recentPromotions || [];
+      const olderPromos = pumpScorecardData.olderPromotions || [];
+      if (recentPromos.length > 0 || olderPromos.length > 0) {
+        yPosition = addSectionHeader('Stock Promotions', yPosition);
+        yPosition -= 10;
+        
+        if (recentPromos.length > 0) {
+          currentPage.drawText(`Recent (${recentPromos.length}):`, {
+            x: margin + 10,
+            y: yPosition,
+            size: 10,
+            font: boldFont,
+          });
+          yPosition -= lineHeight;
+          for (const promo of recentPromos.slice(0, 5)) {
+            const promoText = `• ${promo.type || 'Promotion'} - ${promo.date || 'Unknown'}`;
+            yPosition = addText(promoText, margin + 20, yPosition, 9, false);
+            yPosition -= 3;
+          }
+        }
+        
+        if (olderPromos.length > 0) {
+          yPosition -= 5;
+          currentPage.drawText(`Older (${olderPromos.length}):`, {
+            x: margin + 10,
+            y: yPosition,
+            size: 10,
+            font: boldFont,
+          });
+          yPosition -= lineHeight;
+          for (const promo of olderPromos.slice(0, 5)) {
+            const promoText = `• ${promo.type || 'Promotion'} - ${promo.date || 'Unknown'}`;
+            yPosition = addText(promoText, margin + 20, yPosition, 9, false);
+            yPosition -= 3;
+          }
+        }
+        yPosition -= sectionSpacing;
+      }
+
+      // Fraud Evidence
+      if (pumpScorecardData.fraudImages && pumpScorecardData.fraudImages.length > 0) {
+        yPosition = addSectionHeader('Fraud Evidence', yPosition);
+        yPosition -= 10;
+        currentPage.drawText(`Found ${pumpScorecardData.fraudImages.length} fraud evidence image(s)`, {
+          x: margin,
+          y: yPosition,
+          size: 10,
+          font: font,
+          color: rgb(0.8, 0, 0),
+        });
+        yPosition -= lineHeight * 1.5;
+        yPosition -= sectionSpacing;
+      }
+
+      // News
+      if (pumpScorecardData.news && pumpScorecardData.news.length > 0) {
+        yPosition = addSectionHeader('Recent News', yPosition);
+        yPosition -= 10;
+        
+        const newsToShow = pumpScorecardData.news.slice(0, 10);
+        for (const item of newsToShow) {
+          const newsText = `${item.headline || item.title || 'News'} - ${item.date || 'Unknown date'}`;
+          yPosition = addText(newsText, margin + 10, yPosition, 9, false);
+          yPosition -= 5;
+          if (yPosition < margin + 50) {
+            currentPage = pdfDoc.addPage([612, 792]);
+            yPosition = 750;
+          }
+        }
+        yPosition -= sectionSpacing;
+      }
+
+      // Borrow Desk
+      if (pumpScorecardData.borrowData) {
+        yPosition = addSectionHeader('Borrow Desk Data', yPosition);
+        yPosition -= 10;
+        
+        const borrowInfo = [];
+        if (pumpScorecardData.borrowData.fee !== undefined) {
+          borrowInfo.push(`Borrow Fee: ${pumpScorecardData.borrowData.fee}%`);
+        }
+        if (pumpScorecardData.borrowData.available !== undefined) {
+          borrowInfo.push(`Available: ${pumpScorecardData.borrowData.available.toLocaleString()} shares`);
+        }
+        
+        for (const info of borrowInfo) {
+          currentPage.drawText(info, {
+            x: margin,
+            y: yPosition,
+            size: 10,
+            font: font,
+          });
+          yPosition -= lineHeight;
+        }
+        yPosition -= sectionSpacing;
       }
     }
 

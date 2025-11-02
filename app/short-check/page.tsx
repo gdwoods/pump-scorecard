@@ -372,7 +372,12 @@ export default function ShortCheckPage() {
 
         {/* Short Check Results - Only show if we have a result */}
         {result && (
-          <ShortCheckResults result={result} ticker={ticker} extractedData={extractedData || undefined} />
+          <ShortCheckResults 
+            result={result} 
+            ticker={ticker} 
+            extractedData={extractedData || undefined}
+            pumpScorecardData={pumpScorecardData}
+          />
         )}
 
         {/* Droppiness Card - Show when we have ticker (with or without Short Check result) */}
