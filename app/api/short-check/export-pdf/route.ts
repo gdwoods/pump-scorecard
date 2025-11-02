@@ -7,15 +7,24 @@ export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   try {
+    console.log('[PDF Export] Starting PDF generation...');
     const body = await req.json();
     const { ticker, result, extractedData, pumpScorecardData } = body;
 
     if (!ticker || !result) {
+      console.error('[PDF Export] Missing required data:', { ticker: !!ticker, result: !!result });
       return NextResponse.json(
         { error: 'Missing required data: ticker or result' },
         { status: 400 }
       );
     }
+
+    console.log('[PDF Export] Data received:', {
+      ticker,
+      hasResult: !!result,
+      hasExtractedData: !!extractedData,
+      hasPumpScorecardData: !!pumpScorecardData,
+    });
 
     // Create a new PDF document
     const pdfDoc = await PDFDocument.create();
@@ -34,6 +43,10 @@ export async function POST(req: NextRequest) {
     
     // Helper function to add text with word wrapping
     const addText = (text: string, x: number, y: number, size: number = 10, isBold: boolean = false) => {
+      if (!text || typeof text !== 'string') {
+        return y; // Return original y if text is invalid
+      }
+      
       const currentFont = isBold ? boldFont : font;
       const words = text.split(' ');
       let currentLine = '';
@@ -41,35 +54,45 @@ export async function POST(req: NextRequest) {
       
       for (const word of words) {
         const testLine = currentLine + (currentLine ? ' ' : '') + word;
-        const textWidth = currentFont.widthOfTextAtSize(testLine, size);
-        
-        if (textWidth > contentWidth && currentLine) {
+        try {
+          const textWidth = currentFont.widthOfTextAtSize(testLine, size);
+          
+          if (textWidth > contentWidth && currentLine) {
+            currentPage.drawText(currentLine, {
+              x,
+              y: currentY,
+              size,
+              font: currentFont,
+            });
+            currentLine = word;
+            currentY -= lineHeight;
+            
+            // Check if we need a new page
+            if (currentY < margin + 50) {
+              currentPage = pdfDoc.addPage([612, 792]);
+              currentY = 750;
+            }
+          } else {
+            currentLine = testLine;
+          }
+        } catch (err) {
+          // Skip problematic words
+          console.warn('[PDF Export] Error processing word:', word, err);
+          continue;
+        }
+      }
+      
+      if (currentLine) {
+        try {
           currentPage.drawText(currentLine, {
             x,
             y: currentY,
             size,
             font: currentFont,
           });
-          currentLine = word;
-          currentY -= lineHeight;
-          
-          // Check if we need a new page
-          if (currentY < margin + 50) {
-            currentPage = pdfDoc.addPage([612, 792]);
-            currentY = 750;
-          }
-        } else {
-          currentLine = testLine;
+        } catch (err) {
+          console.warn('[PDF Export] Error drawing text:', err);
         }
-      }
-      
-      if (currentLine) {
-        currentPage.drawText(currentLine, {
-          x,
-          y: currentY,
-          size,
-          font: currentFont,
-        });
       }
       
       return currentY - lineHeight;
@@ -251,17 +274,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Alert Card
-    yPosition = addSectionHeader('Alert Card', yPosition);
-    yPosition -= 10;
-    
-    const alertCardLines = result.alertCard.split('\n').slice(0, 20); // Limit lines
-    for (const line of alertCardLines) {
-      if (line.trim()) {
-        yPosition = addText(line, margin, yPosition, 9, false);
-        
-        if (yPosition < margin + 50) {
-          currentPage = pdfDoc.addPage([612, 792]);
-          yPosition = 750;
+    if (result.alertCard) {
+      yPosition = addSectionHeader('Alert Card', yPosition);
+      yPosition -= 10;
+      
+      const alertCardLines = (result.alertCard || '').toString().split('\n').slice(0, 20); // Limit lines
+      for (const line of alertCardLines) {
+        if (line && line.trim()) {
+          yPosition = addText(line.trim(), margin, yPosition, 9, false);
+          
+          if (yPosition < margin + 50) {
+            currentPage = pdfDoc.addPage([612, 792]);
+            yPosition = 750;
+          }
         }
       }
     }
@@ -453,18 +478,22 @@ export async function POST(req: NextRequest) {
       }
 
       // News
-      if (pumpScorecardData.news && pumpScorecardData.news.length > 0) {
+      if (pumpScorecardData.news && Array.isArray(pumpScorecardData.news) && pumpScorecardData.news.length > 0) {
         yPosition = addSectionHeader('Recent News', yPosition);
         yPosition -= 10;
         
         const newsToShow = pumpScorecardData.news.slice(0, 10);
         for (const item of newsToShow) {
-          const newsText = `${item.headline || item.title || 'News'} - ${item.date || 'Unknown date'}`;
-          yPosition = addText(newsText, margin + 10, yPosition, 9, false);
-          yPosition -= 5;
-          if (yPosition < margin + 50) {
-            currentPage = pdfDoc.addPage([612, 792]);
-            yPosition = 750;
+          if (item) {
+            const headline = item.headline || item.title || 'News';
+            const date = item.date || item.pubDate || 'Unknown date';
+            const newsText = `${headline} - ${date}`;
+            yPosition = addText(newsText, margin + 10, yPosition, 9, false);
+            yPosition -= 5;
+            if (yPosition < margin + 50) {
+              currentPage = pdfDoc.addPage([612, 792]);
+              yPosition = 750;
+            }
           }
         }
         yPosition -= sectionSpacing;
@@ -511,7 +540,9 @@ export async function POST(req: NextRequest) {
     );
 
     // Generate PDF bytes
+    console.log('[PDF Export] Saving PDF document...');
     const pdfBytes = await pdfDoc.save();
+    console.log('[PDF Export] PDF generated successfully, size:', pdfBytes.length);
 
     return new NextResponse(pdfBytes, {
       headers: {
@@ -520,9 +551,10 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error('Error generating PDF:', error);
+    console.error('[PDF Export] Error generating PDF:', error);
+    console.error('[PDF Export] Error stack:', error.stack);
     return NextResponse.json(
-      { error: error.message || 'Failed to generate PDF' },
+      { error: error.message || 'Failed to generate PDF', details: error.stack },
       { status: 500 }
     );
   }

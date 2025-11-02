@@ -172,7 +172,8 @@ export default function ShortCheckResults({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to generate PDF");
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Failed to generate PDF (${response.status})`);
       }
 
       const blob = await response.blob();
