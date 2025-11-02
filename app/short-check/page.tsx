@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import ShortCheckUpload from "@/components/short-check/ShortCheckUpload";
 import ShortCheckResults from "@/components/short-check/ShortCheckResults";
@@ -18,6 +18,7 @@ import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import { ShortCheckResult, calculateShortRating } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
+import { saveScanToHistory } from "@/lib/history";
 
 export default function ShortCheckPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -120,6 +121,68 @@ export default function ShortCheckPage() {
       setIsLoading(false);
     }
   };
+
+  // Save Short Check results to history when available
+  // Use a ref to prevent duplicate saves in the same render cycle
+  const historySavedRef = useRef<string | null>(null);
+  
+  useEffect(() => {
+    if (ticker && result && extractedData) {
+      // Create a key to identify this specific result to prevent duplicate saves
+      const scanKey = `${ticker}-${result.rating.toFixed(1)}`;
+      
+      // Only save if we haven't saved this exact rating for this ticker in this session
+      if (historySavedRef.current === scanKey) {
+        return;
+      }
+
+      // Map Short Check result to history format
+      const breakdown = result.scoreBreakdown;
+      const factors = [
+        { label: "Droppiness", value: breakdown.droppiness },
+        { label: "Overall Risk", value: breakdown.overallRisk },
+        { label: "Cash Need", value: breakdown.cashNeed },
+        { label: "Offering Ability", value: breakdown.offeringAbility },
+        { label: "Short Interest", value: breakdown.shortInterest },
+        { label: "Historical Dilution", value: breakdown.historicalDilution },
+        { label: "News Catalyst", value: breakdown.newsCatalyst },
+        { label: "Float", value: breakdown.float },
+        { label: "Price Spike", value: breakdown.priceSpike },
+        { label: "Debt/Cash Ratio", value: breakdown.debtToCash },
+        { label: "Institutional Ownership", value: breakdown.institutionalOwnership },
+        { label: "Cash Runway", value: breakdown.cashRunway },
+      ].filter(f => f.value !== 0);
+
+      // Map category to verdict format
+      const verdictMap: Record<string, 'Low risk' | 'Moderate risk' | 'High risk'> = {
+        'No-Trade': 'Low risk',
+        'Speculative Short Candidate': 'Moderate risk',
+        'Moderate Short Candidate': 'Moderate risk',
+        'High-Priority Short Candidate': 'High risk',
+      };
+
+      saveScanToHistory({
+        ticker: ticker.toUpperCase(),
+        score: result.rating,
+        baseScore: result.rating,
+        adjustedScore: result.rating,
+        verdict: verdictMap[result.category] || 'Moderate risk',
+        summary: `Short Check rating: ${result.rating.toFixed(1)}% - ${result.category}`,
+        factors: factors,
+        marketCap: extractedData.marketCap,
+        price: undefined, // Price not available from DT screenshot extraction
+        volume: undefined,
+        droppinessScore: pumpScorecardData?.droppinessScore,
+        fraudEvidence: pumpScorecardData?.fraudImages?.length > 0,
+        promotions: (pumpScorecardData?.recentPromotions?.length || 0) > 0 || (pumpScorecardData?.olderPromotions?.length || 0) > 0,
+        riskyCountry: undefined,
+      });
+
+      historySavedRef.current = scanKey;
+      // Trigger history refresh
+      setHistoryRefreshTrigger(prev => prev + 1);
+    }
+  }, [ticker, result, extractedData, pumpScorecardData]);
 
   // Fetch Pump Scorecard data when ticker is available
   // Also recalculate Short Check score when droppiness becomes available
@@ -386,10 +449,12 @@ export default function ShortCheckPage() {
                 borrowData={pumpScorecardData.borrowData}
               />
             )}
-
-            {/* History Card */}
-            <HistoryCard ticker={ticker} refreshTrigger={historyRefreshTrigger} />
           </>
+        )}
+
+        {/* History Card - Show when we have ticker (works independently of Pump Scorecard data) */}
+        {ticker && (
+          <HistoryCard ticker={ticker} refreshTrigger={historyRefreshTrigger} />
         )}
 
         {/* Performance Monitor */}

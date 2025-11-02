@@ -84,14 +84,32 @@ export function getTickerHistory(ticker: string): TickerHistory | null {
   const scores = tickerScans.map(scan => scan.adjustedScore);
   const averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
   
+  // Determine if this is Short Check data (higher = better) or Pump Scorecard (lower = better)
+  // Check if any scan has "Short Check" in the summary
+  const isShortCheck = tickerScans.some(scan => 
+    scan.summary?.toLowerCase().includes('short check')
+  );
+  
   // Calculate trend (comparing first half vs second half)
   const midPoint = Math.floor(tickerScans.length / 2);
   const firstHalfAvg = scores.slice(0, midPoint).reduce((sum, score) => sum + score, 0) / midPoint;
   const secondHalfAvg = scores.slice(midPoint).reduce((sum, score) => sum + score, 0) / (scores.length - midPoint);
   
   let scoreTrend: 'improving' | 'declining' | 'stable' = 'stable';
-  if (secondHalfAvg < firstHalfAvg - 5) scoreTrend = 'improving';
-  else if (secondHalfAvg > firstHalfAvg + 5) scoreTrend = 'declining';
+  if (isShortCheck) {
+    // For Short Check: improving = scores increasing (higher is better)
+    if (secondHalfAvg > firstHalfAvg + 5) scoreTrend = 'improving';
+    else if (secondHalfAvg < firstHalfAvg - 5) scoreTrend = 'declining';
+  } else {
+    // For Pump Scorecard: improving = scores decreasing (lower is better)
+    if (secondHalfAvg < firstHalfAvg - 5) scoreTrend = 'improving';
+    else if (secondHalfAvg > firstHalfAvg + 5) scoreTrend = 'declining';
+  }
+
+  // For Short Check: best = highest, worst = lowest
+  // For Pump Scorecard: best = lowest, worst = highest
+  const bestScore = isShortCheck ? Math.max(...scores) : Math.min(...scores);
+  const worstScore = isShortCheck ? Math.min(...scores) : Math.max(...scores);
 
   return {
     ticker: ticker.toUpperCase(),
@@ -101,8 +119,8 @@ export function getTickerHistory(ticker: string): TickerHistory | null {
     totalScans: tickerScans.length,
     averageScore: Math.round(averageScore),
     scoreTrend,
-    bestScore: Math.min(...scores),
-    worstScore: Math.max(...scores),
+    bestScore,
+    worstScore,
   };
 }
 
