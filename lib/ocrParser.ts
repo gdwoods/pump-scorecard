@@ -125,7 +125,8 @@ function extractTicker(text: string): string | undefined {
  * Detects: ATM Active, S-1 Filed, Equity Line, Share Purchase Agreement, etc.
  */
 function extractAtmShelfStatus(text: string): string | undefined {
-  const lower = text.toLowerCase();
+  let workingText = text;
+  let lower = workingText.toLowerCase();
   
   // FIRST: Check for DT's explicit visual tags for Offering Ability
   // These tags take ABSOLUTE precedence - return immediately, don't continue with keyword detection
@@ -202,7 +203,16 @@ function extractAtmShelfStatus(text: string): string | undefined {
     }
   }
   
-  // Collect all dilution mechanisms found in the text
+  // Exclude DT "Major Developments" block from heuristic keyword scans
+  const mdIndex = lower.indexOf('major developments');
+  if (mdIndex !== -1) {
+    // remove up to ~1000 chars after marker to avoid historical notes
+    const cutEnd = Math.min(workingText.length, mdIndex + 1000);
+    workingText = workingText.substring(0, mdIndex) + workingText.substring(cutEnd);
+    lower = workingText.toLowerCase();
+  }
+
+  // Collect all dilution mechanisms found in the (cleaned) text
   const mechanisms: string[] = [];
   
   // Check for multiple dilution mechanisms (SCNX has ATM, Equity Line, S-1 Offering, Convertible Preferred)
@@ -210,7 +220,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
   
   // Check for Equity Line (often with value like "Equity Line: 53.25")
   if (lower.includes('equity line')) {
-    const equityLineMatch = text.match(/equity\s*line[:\s]*([0-9.,]+[MKmk]?)/i);
+    const equityLineMatch = workingText.match(/equity\s*line[:\s]*([0-9.,]+[MKmk]?)/i);
     if (equityLineMatch) {
       mechanisms.push(`Equity Line (${equityLineMatch[1]}M)`);
     } else {
@@ -220,7 +230,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
   
   // Check for ATM/At-The-Market offerings
   if (lower.includes('atm') || lower.includes('at-the-market')) {
-    const atmMatch = text.match(/atm[:\s]*([0-9.,]+[MKmk]?)/i) || text.match(/at-the-market[:\s]*([0-9.,]+[MKmk]?)/i);
+    const atmMatch = workingText.match(/atm[:\s]*([0-9.,]+[MKmk]?)/i) || workingText.match(/at-the-market[:\s]*([0-9.,]+[MKmk]?)/i);
     if (atmMatch) {
       mechanisms.push(`ATM (${atmMatch[1]}M)`);
     } else if (lower.includes('atm active') || lower.includes('active atm')) {
@@ -232,7 +242,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
   
   // Check for S-1 Shelf/Offering
   if (lower.includes('s-1') || lower.includes('s1')) {
-    const s1Match = text.match(/s-1\s*(?:shelf|offering)?[:\s]*([0-9.,]+[MKmk]?)/i);
+    const s1Match = workingText.match(/s-1\s*(?:shelf|offering)?[:\s]*([0-9.,]+[MKmk]?)/i);
     if (s1Match) {
       mechanisms.push(`S-1 Offering (${s1Match[1]}M)`);
     } else if (lower.includes('filed') || lower.includes('pending')) {
@@ -244,7 +254,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
   
   // Check for Convertible Preferred/Convertibles
   if (lower.includes('convertible preferred') || lower.includes('convertible')) {
-    const convertMatch = text.match(/convertible\s*(?:preferred)?[:\s]*([0-9.,]+[MKmk]?)/i);
+    const convertMatch = workingText.match(/convertible\s*(?:preferred)?[:\s]*([0-9.,]+[MKmk]?)/i);
     if (convertMatch) {
       mechanisms.push(`Convertible Preferred (${convertMatch[1]}M)`);
     } else {
