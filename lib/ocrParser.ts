@@ -855,10 +855,55 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
     extracted.atmShelfStatus = extractAtmShelfStatus(fullText);
     extracted.overheadSupplyStatus = extractOverheadSupplyStatus(fullText);
     extracted.cashNeedStatus = extractDTStatus(fullText, 'cash need');
-    // Extract Historical Dilution - try both "Historical" and "Historical Dilution"
-    extracted.historicalDilutionStatus = extractDTStatus(fullText, 'historical dilution') || 
-                                         extractDTStatus(fullText, 'historical');
     extracted.overallRiskStatus = extractDTStatus(fullText, 'overall risk');
+    
+    // Extract Historical Dilution - try multiple approaches
+    // 1. Try standard extractDTStatus with variations
+    extracted.historicalDilutionStatus = extractDTStatus(fullText, 'historical dilution') || 
+                                         extractDTStatus(fullText, 'historical') ||
+                                         extractDTStatus(fullText, 'historical:');
+    
+    // 2. Direct pattern match for "Historical:" followed by status (most common DT format)
+    if (!extracted.historicalDilutionStatus) {
+      const directPattern = /historical\s*[:]\s*(high|medium|low|red|yellow|green)\b/i;
+      const directMatch = fullText.match(directPattern);
+      if (directMatch) {
+        extracted.historicalDilutionStatus = mapDTTag(directMatch[1].toLowerCase());
+        console.log(`[OCR] Extracted Historical via direct pattern: ${extracted.historicalDilutionStatus}`);
+      }
+    }
+    
+    // 3. Pattern that matches Historical in context of the 5-card row
+    // Look for pattern: "Historical" followed by colon/space and status, possibly with line breaks
+    if (!extracted.historicalDilutionStatus) {
+      const contextPattern = /historical[:\s\n]+(high|medium|low|red|yellow|green)\b/i;
+      const contextMatch = fullText.match(contextPattern);
+      if (contextMatch) {
+        extracted.historicalDilutionStatus = mapDTTag(contextMatch[1].toLowerCase());
+        console.log(`[OCR] Extracted Historical via context pattern: ${extracted.historicalDilutionStatus}`);
+      }
+    }
+    
+    // Debug: Check if Historical appears in text at all
+    if (!extracted.historicalDilutionStatus) {
+      const historicalMatches = fullText.match(/historical[:\s\n]+(high|medium|low|red|yellow|green)/i);
+      if (historicalMatches) {
+        console.log(`[OCR Debug] Found "Historical ${historicalMatches[1]}" but all extraction methods failed`);
+        const histIndex = fullText.toLowerCase().indexOf('historical');
+        if (histIndex !== -1) {
+          const context = fullText.substring(Math.max(0, histIndex - 50), Math.min(fullText.length, histIndex + 100));
+          console.log(`[OCR Debug] Context: ${context}`);
+        }
+      } else {
+        console.log(`[OCR Debug] No "Historical" pattern found in OCR text`);
+        // Check if "historical" word exists at all
+        if (fullText.toLowerCase().includes('historical')) {
+          const histIndex = fullText.toLowerCase().indexOf('historical');
+          const context = fullText.substring(Math.max(0, histIndex - 50), Math.min(fullText.length, histIndex + 100));
+          console.log(`[OCR Debug] Word "historical" found but no status pattern. Context: ${context}`);
+        }
+      }
+    }
     
     // Debug: Log all extracted DT tags
     console.log('Extracted DT tags:');
