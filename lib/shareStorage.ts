@@ -13,6 +13,10 @@ interface ShareData {
 // In-memory cache for development (not persistent across deployments)
 const memoryCache = new Map<string, ShareData>();
 
+// Cache Redis client to avoid reconnecting
+let cachedRedisClient: any = null;
+let cachedClientType: 'redis' | 'vercel-kv' | null = null;
+
 // Generate a unique share ID
 export function generateShareId(): string {
   // Generate a URL-safe random ID (12 characters)
@@ -54,84 +58,111 @@ async function getKVClient() {
   try {
     // Check if URL is redis:// (Redis Cloud) or https:// (Upstash/Vercel KV)
     if (hasUrl && hasUrl.startsWith('redis://')) {
+      // Return cached client if available
+      if (cachedRedisClient && cachedClientType === 'redis') {
+        console.log(`[Share] Using cached Redis client`);
+        return cachedRedisClient;
+      }
+      
       // Use native Redis client for redis:// URLs (Redis Cloud)
       console.log(`[Share] Detected redis:// URL - using native Redis client`);
       try {
         const { createClient } = await import('redis');
         
-        // Redis Cloud connection - try both TLS and non-TLS
-        // Extract connection details from URL
-        const urlObj = new URL(hasUrl);
-        const host = urlObj.hostname;
-        const port = parseInt(urlObj.port || '6379');
-        const password = urlObj.password || '';
-        const username = urlObj.username || 'default';
-        
-        // Try TLS first (rediss://), fallback to non-TLS if that fails
+        // Try non-TLS first (since URL is redis://, not rediss://)
         let redisClient: any = null;
-        let connectionError: any = null;
         
-        // First attempt: TLS connection (rediss://)
+        // First attempt: non-TLS connection (redis://)
         try {
-          console.log(`[Share] Attempting TLS connection to Redis Cloud...`);
+          console.log(`[Share] Attempting non-TLS connection to Redis Cloud...`);
           redisClient = createClient({
-            url: hasUrl.replace(/^redis:\/\//, 'rediss://'),
-            socket: {
-              tls: true,
-              rejectUnauthorized: false, // Redis Cloud may use self-signed certs
-            },
+            url: hasUrl,
           });
           await redisClient.connect();
-          console.log(`[Share] ✅ Redis Cloud TLS connection successful`);
-        } catch (tlsError: any) {
-          console.log(`[Share] TLS connection failed, trying non-TLS:`, tlsError?.message);
-          connectionError = tlsError;
-          // Try non-TLS connection
+          console.log(`[Share] ✅ Redis Cloud non-TLS connection successful`);
+        } catch (nonTlsError: any) {
+          console.log(`[Share] Non-TLS connection failed, trying TLS:`, nonTlsError?.message);
+          // Try TLS connection (rediss://)
           try {
             redisClient = createClient({
-              url: hasUrl,
+              url: hasUrl.replace(/^redis:\/\//, 'rediss://'),
+              socket: {
+                tls: true,
+                rejectUnauthorized: false, // Redis Cloud may use self-signed certs
+              },
             });
             await redisClient.connect();
-            console.log(`[Share] ✅ Redis Cloud non-TLS connection successful`);
-          } catch (nonTlsError: any) {
-            console.error(`[Share] ❌ Both TLS and non-TLS connections failed`);
-            throw nonTlsError;
+            console.log(`[Share] ✅ Redis Cloud TLS connection successful`);
+          } catch (tlsError: any) {
+            console.error(`[Share] ❌ Both non-TLS and TLS connections failed`);
+            console.error(`[Share] Non-TLS error:`, nonTlsError?.message);
+            console.error(`[Share] TLS error:`, tlsError?.message);
+            throw tlsError;
           }
         }
         
-        // Store client for connection management
-        let isConnected = true;
-        
         // Wrap in a compatible interface
-        return {
+        const wrappedClient = {
           get: async (key: string) => {
-            if (!isConnected) {
-              await redisClient.connect();
-              isConnected = true;
+            try {
+              const value = await redisClient.get(key);
+              return value;
+            } catch (err: any) {
+              // Reconnect if connection lost
+              if (err.message?.includes('Connection') || err.message?.includes('closed')) {
+                console.log(`[Share] Reconnecting Redis client...`);
+                await redisClient.connect();
+                return await redisClient.get(key);
+              }
+              throw err;
             }
-            const value = await redisClient.get(key);
-            return value;
           },
           setex: async (key: string, seconds: number, value: string) => {
-            if (!isConnected) {
-              await redisClient.connect();
-              isConnected = true;
+            try {
+              await redisClient.setEx(key, seconds, value);
+            } catch (err: any) {
+              // Reconnect if connection lost
+              if (err.message?.includes('Connection') || err.message?.includes('closed')) {
+                console.log(`[Share] Reconnecting Redis client...`);
+                await redisClient.connect();
+                await redisClient.setEx(key, seconds, value);
+              } else {
+                throw err;
+              }
             }
-            await redisClient.setEx(key, seconds, value);
           },
           del: async (key: string) => {
-            if (!isConnected) {
-              await redisClient.connect();
-              isConnected = true;
+            try {
+              await redisClient.del(key);
+            } catch (err: any) {
+              // Reconnect if connection lost
+              if (err.message?.includes('Connection') || err.message?.includes('closed')) {
+                console.log(`[Share] Reconnecting Redis client...`);
+                await redisClient.connect();
+                await redisClient.del(key);
+              } else {
+                throw err;
+              }
             }
-            await redisClient.del(key);
           },
         } as any;
+        
+        // Cache the client
+        cachedRedisClient = wrappedClient;
+        cachedClientType = 'redis';
+        
+        return wrappedClient;
       } catch (redisError: any) {
         console.error(`[Share] ❌ Redis client failed:`, redisError?.message || redisError);
         return null;
       }
     } else {
+      // Return cached client if available
+      if (cachedRedisClient && cachedClientType === 'vercel-kv') {
+        console.log(`[Share] Using cached Vercel KV client`);
+        return cachedRedisClient;
+      }
+      
       // Use @vercel/kv for https:// URLs (Upstash/Vercel KV)
       const { createClient } = await import('@vercel/kv');
       
@@ -141,6 +172,10 @@ async function getKVClient() {
       }
       
       const kv = createClient(kvConfig);
+      
+      // Cache the client
+      cachedRedisClient = kv;
+      cachedClientType = 'vercel-kv';
       
       console.log(`[Share] ✅ Vercel KV client initialized with URL=${!!hasUrl}, Token=${!!hasToken}`);
       return kv;
