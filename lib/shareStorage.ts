@@ -59,18 +59,50 @@ async function getKVClient() {
       try {
         const { createClient } = await import('redis');
         
-        // Convert redis:// to rediss:// (Redis with TLS) for Redis Cloud
-        // Redis Cloud requires TLS for secure connections
-        const tlsUrl = hasUrl.replace(/^redis:\/\//, 'rediss://');
+        // Redis Cloud connection - try both TLS and non-TLS
+        // Extract connection details from URL
+        const urlObj = new URL(hasUrl);
+        const host = urlObj.hostname;
+        const port = parseInt(urlObj.port || '6379');
+        const password = urlObj.password || '';
+        const username = urlObj.username || 'default';
         
-        const redisClient = createClient({
-          url: tlsUrl,
-        });
+        // Try TLS first (rediss://), fallback to non-TLS if that fails
+        let redisClient: any = null;
+        let connectionError: any = null;
+        
+        // First attempt: TLS connection (rediss://)
+        try {
+          console.log(`[Share] Attempting TLS connection to Redis Cloud...`);
+          redisClient = createClient({
+            url: hasUrl.replace(/^redis:\/\//, 'rediss://'),
+            socket: {
+              tls: true,
+              rejectUnauthorized: false, // Redis Cloud may use self-signed certs
+            },
+          });
+          await redisClient.connect();
+          console.log(`[Share] ✅ Redis Cloud TLS connection successful`);
+        } catch (tlsError: any) {
+          console.log(`[Share] TLS connection failed, trying non-TLS:`, tlsError?.message);
+          connectionError = tlsError;
+          // Try non-TLS connection
+          try {
+            redisClient = createClient({
+              url: hasUrl,
+            });
+            await redisClient.connect();
+            console.log(`[Share] ✅ Redis Cloud non-TLS connection successful`);
+          } catch (nonTlsError: any) {
+            console.error(`[Share] ❌ Both TLS and non-TLS connections failed`);
+            throw nonTlsError;
+          }
+        }
         
         // Store client for connection management
-        let isConnected = false;
+        let isConnected = true;
         
-        // Wrap in a compatible interface with lazy connection
+        // Wrap in a compatible interface
         return {
           get: async (key: string) => {
             if (!isConnected) {
