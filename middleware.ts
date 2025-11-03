@@ -28,11 +28,12 @@ export const config = {
     /*
      * Match all request paths except:
      * - api routes
+     * - share routes (to avoid any interference with share links)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!api|share|_next/static|_next/image|favicon.ico).*)',
   ],
 };
 
