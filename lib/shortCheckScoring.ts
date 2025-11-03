@@ -875,9 +875,20 @@ function checkWalkAwayFlags(data: ExtractedData): string[] {
   }
   
   // Green Offering + Green Overhead = walk-away
-  const offeringColor = getOfferingColor(data.atmShelfStatus);
-  const overheadColor = getOverheadColor(data.outstandingShares, data.float);
-  if (offeringColor === 'Green' && overheadColor === 'Green') {
+  // IMPORTANT: Only trigger when DT explicitly tags BOTH as Green (Low).
+  // We avoid triggering based on heuristics because OCR values can be incomplete and
+  // DT badges are the source of truth for these pills.
+  const offeringTag = (data.atmShelfStatus || '').toLowerCase().startsWith('dt:')
+    ? (data.atmShelfStatus || '').toLowerCase().substring(3).trim()
+    : undefined;
+  const overheadTag = (data.overheadSupplyStatus || '').toLowerCase().startsWith('dt:')
+    ? (data.overheadSupplyStatus || '').toLowerCase().substring(3).trim()
+    : undefined;
+
+  const dtOfferingGreen = offeringTag === 'green' || offeringTag === 'low';
+  const dtOverheadGreen = overheadTag === 'green' || overheadTag === 'low';
+
+  if (dtOfferingGreen && dtOverheadGreen) {
     flags.push('Green Offering Ability and Green Overhead Supply');
   }
   
