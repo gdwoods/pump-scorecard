@@ -45,6 +45,21 @@ Once you set this and redeploy:
 - Share links will be publicly accessible (no Vercel login required)
 - Works in incognito/private browsing mode
 
+## Other Required Environment Variables
+
+Add these in Vercel → Project → Settings → Environment Variables (all envs):
+
+- `GOOGLE_CLOUD_VISION_API_KEY` — Google Cloud Vision OCR
+- `FINNHUB_API_KEY` — external news (score + Recent News card)
+- `NEXT_PUBLIC_BASE_URL` — your production domain (no path)
+- Vercel KV credentials (choose whichever pair your account provides):
+  - `KV_REST_API_REDIS_URL` and `KV_REST_API_REDIS_TOKEN`
+  - or `KV_REST_API_URL` and `KV_REST_API_TOKEN`
+
+Notes:
+- In local dev, share storage uses in‑memory cache and resets on reloads.
+- Preview deployments may require Vercel auth; use production domain for public share links.
+
 ## Troubleshooting
 
 **Still seeing login page?**

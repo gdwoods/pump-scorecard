@@ -7,7 +7,7 @@ Short Check is a tool that analyzes dilution tracker screenshots to quickly iden
 ## How It Works
 
 1. **Upload a Screenshot**: Drag, drop, paste, or select a screenshot from your dilution tracker (Dilution Tracker, FinTwit, etc.)
-2. **OCR Processing**: The app uses AI to extract key financial data (cash runway, float, dilution tools, etc.)
+2. **OCR Processing**: The app extracts DT badges (High/Medium/Low and Red/Yellow/Green) and key metrics
 3. **Instant Scoring**: Get a 0-100% rating indicating short trade quality
 4. **Risk Analysis**: See alert labels, red flags, and a plain-English risk synopsis
 
@@ -41,6 +41,11 @@ After uploading a screenshot, enter the ticker to get:
 - **Promotions & Fraud Evidence**: Red flag detection
 - **Charts & Fundamentals**: Full market context
 
+### 🔗 **Actions & Sharing**
+- **Copy Summary** (full formatted report)
+- **Export PDF** (server-rendered, includes Pump Scorecard data when available)
+- **Share Link** (KV-backed; public read-only)
+
 ### 📝 **Plain-English Risk Synopsis**
 Get a concise summary like:
 > "XYZ has only 1.2 months of runway and multiple active dilution tools. With a float of 2.4M shares and institutional ownership of just 0.8%, it may face selling pressure."
@@ -56,7 +61,7 @@ Get a concise summary like:
 
 1. Visit: [your-short-check-url.vercel.app]
 2. Upload a screenshot from your dilution tracker
-3. Review the score, alerts, and risk synopsis
+3. Review the score, alerts, and risk synopsis (DT “Major Developments” is ignored unless ≤ 7 days old)
 4. Enter the ticker for full Pump Scorecard analysis
 
 ## Pro Tips

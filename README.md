@@ -1,10 +1,24 @@
-# Pump Scorecard  
+# Short Check + Pump Scorecard
 
-A Next.js web application for short-sellers to quickly assess risk signals on microcap tickers. The app aggregates fundamentals, SEC filings, insider/institutional ownership, fraud evidence, and historical price behavior into a **weighted risk score**.  
+This monorepo-style Next.js app powers two related tools:
+
+- Short Check: DT screenshot → deterministic short setup rating, alert labels, red‑flag tags, shareable link, PDF export.
+- Pump Scorecard: original fundamentals/risk scorecard by ticker.
+
+They share infrastructure but can be deployed as separate Vercel projects.
 
 ---
 
 ## 🚀 Usage  
+
+Short Check
+
+1. Visit `/short-check`.
+2. Upload a DT screenshot (drag/drop, Select Image, or paste) or use Quick Ticker Analysis.
+3. The app will OCR DT badges (High/Medium/Low and Red/Yellow/Green), fetch recent news from Yahoo/Finnhub, and compute the Short Check rating and breakdown.
+4. Use the right‑aligned action buttons: Copy Summary, Export PDF, Share.
+
+Pump Scorecard
 
 1. Enter a ticker in the search box.  
 2. The app scans:  
@@ -42,6 +56,13 @@ A Next.js web application for short-sellers to quickly assess risk signals on mi
 1. **Ticker Input → API Scan Route**  
    - `/api/scan/[ticker]/route.ts` orchestrates all lookups.  
    - Each module is wrapped in try/catch to fail gracefully.  
+
+Short Check
+
+- `/api/short-check` processes images and computes the Short Check score
+- `/api/short-check/export-pdf` generates a PDF report (includes Pump Scorecard data if available)
+- `/api/share/generate` + `/api/share/[id]` create and serve shareable links
+- `/share/[id]` is the public read‑only view
 
 2. **Fundamentals**  
    - Market cap, float, insider/institutional ownership, average volume.  
@@ -97,6 +118,15 @@ Each module contributes to a weighted score:
 
 Manual flags adjust the score in real time to reflect user judgment.  
 
+### Short Check Scoring & UX
+- 12 categories, including Droppiness; alert labels and walk‑away flags.
+- DT tag mapping covers both color tags (Red/Yellow/Green) and text labels (High/Medium/Low).
+- Overhead Supply OCR tightened to avoid stray “high” misclassifications.
+- “Major Developments” from DT is ignored unless the first dated item is within 7 days (then used as the news headline with date).
+- News Catalyst scored with deterministic keywords using Yahoo/Finnhub fetch.
+- Score Breakdown is collapsible; includes red‑flag tags and “Why this matters” tooltips.
+- Quick Actions: TradingView / Finviz / SEC EDGAR on the left; Copy / PDF / Share on the right.
+
 ---
 
 ## ⚠️ Limitations  
@@ -115,14 +145,27 @@ Manual flags adjust the score in real time to reflect user judgment.
 - Hosted on Vercel.  
 - Exports PDF reports using serverless API route.  
 
+### Environment Variables
+- `FINNHUB_API_KEY` (news)
+- `GOOGLE_CLOUD_VISION_API_KEY` (OCR)
+- `NEXT_PUBLIC_BASE_URL` (domain only; used for share links)
+- Vercel KV (any supported naming): `KV_REST_API_REDIS_URL` + `KV_REST_API_REDIS_TOKEN` or `KV_REST_API_URL` + `KV_REST_API_TOKEN`
+
+Notes:
+- Local dev stores shares in memory (not persistent across reloads).
+- Preview URLs may require Vercel auth; prefer a production domain for sharing.
+
 ---
 
 ## 👨‍💻 Developer Notes  
 
-- **Main Scan Logic**: `/app/api/scan/[ticker]/route.ts`  
-- **Risk Scoring Logic**: `/utils/scoring.ts`  
-- **UI Components**: `/components/` folder (FinalVerdict, Chart, DroppinessCard, etc.)  
-- **PDF Export**: `/app/api/export-pdf/route.ts`  
+- **Pump Scorecard Scan**: `/app/api/scan/[ticker]/route.ts`  
+- **Short Check Scoring**: `/lib/shortCheckScoring.ts`  
+- **Short Check Helpers**: `/lib/shortCheckHelpers.ts`  
+- **OCR Parser**: `/lib/ocrParser.ts`  
+- **Short Check UI**: `/components/short-check/*`  
+- **Short Check PDF Export**: `/app/api/short-check/export-pdf/route.ts`  
+- **Share Storage**: `/lib/shareStorage.ts` + `/app/api/share/*` + `/app/share/[id]/page.tsx`  
 
 To extend:  
 - Add new data sources by editing the scan route.  
