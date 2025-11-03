@@ -28,6 +28,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "recharts": "^3.2.0",
+    "redis": "^5.9.0",
     "sharp": "^0.33.5",
     "tailwind-merge": "^3.3.1",
     "yahoo-finance2": "^2.13.3"
