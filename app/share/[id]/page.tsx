@@ -31,25 +31,61 @@ export default function SharePage() {
 
     async function fetchShareData() {
       try {
-        const response = await fetch(`/api/share/${shareId}`);
+        // Add timeout to prevent infinite loading
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch(`/api/share/${shareId}`, {
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
+          let errorMessage = "Failed to load shared analysis";
           if (response.status === 404) {
-            setError("Share link not found");
+            errorMessage = "Share link not found";
           } else if (response.status === 410) {
-            setError("This share link has expired (links expire after 7 days)");
-          } else {
-            setError("Failed to load shared analysis");
+            errorMessage = "This share link has expired (links expire after 7 days)";
+          } else if (response.status >= 500) {
+            errorMessage = "Server error. Please try again later.";
           }
+          
+          // Try to get error message from response
+          try {
+            const errorData = await response.json();
+            if (errorData.error) {
+              errorMessage = errorData.error;
+            }
+          } catch (e) {
+            // Ignore JSON parse errors
+          }
+          
+          setError(errorMessage);
           setLoading(false);
           return;
         }
 
         const data = await response.json();
+        if (!data || !data.ticker || !data.result) {
+          setError("Invalid share data received");
+          setLoading(false);
+          return;
+        }
+        
         setShareData(data);
       } catch (err: any) {
         console.error("Error fetching share data:", err);
-        setError("Failed to load shared analysis");
+        if (err.name === 'AbortError') {
+          setError("Request timed out. Please try again.");
+        } else if (err.message) {
+          setError(`Failed to load: ${err.message}`);
+        } else {
+          setError("Failed to load shared analysis. Please check the console for details.");
+        }
       } finally {
         setLoading(false);
       }
