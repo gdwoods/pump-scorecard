@@ -58,23 +58,35 @@ async function getKVClient() {
     // Convert redis:// URLs to https:// REST API URLs
     // Vercel KV requires https:// URLs, not redis:// protocol URLs
     let kvUrl = hasUrl;
+    let extractedToken = hasToken;
+    
     if (kvUrl && kvUrl.startsWith('redis://')) {
-      // Extract host and port from redis:// URL
-      // Format: redis://default:password@host:port
-      const redisMatch = kvUrl.match(/^redis:\/\/(?:[^@]+@)?([^:]+):(\d+)/);
+      // Extract host, port, and password from redis:// URL
+      // Format: redis://[username]:[password]@[host]:[port]
+      const redisMatch = kvUrl.match(/^redis:\/\/(?:([^:]+):([^@]+)@)?([^:]+):(\d+)/);
       if (redisMatch) {
-        const host = redisMatch[1];
-        const port = redisMatch[2];
+        const username = redisMatch[1]; // Usually "default"
+        const password = redisMatch[2]; // This is the token!
+        const host = redisMatch[3];
+        const port = redisMatch[4];
+        
         // Convert to Upstash REST API format: https://host:port
         kvUrl = `https://${host}:${port}`;
-        console.log(`[Share] Converted redis:// URL to https:// REST API format`);
+        
+        // Extract token from password if not already provided
+        if (password && !extractedToken) {
+          extractedToken = password;
+          console.log(`[Share] Extracted token from redis:// URL`);
+        }
+        
+        console.log(`[Share] Converted redis:// URL to https:// REST API format: ${kvUrl.substring(0, 30)}...`);
       }
     }
     
     // @vercel/kv can work with just URL if token is embedded, or with explicit config
     const kvConfig: any = { url: kvUrl };
-    if (hasToken) {
-      kvConfig.token = hasToken;
+    if (extractedToken) {
+      kvConfig.token = extractedToken;
     }
     
     const kv = createClient(kvConfig);
