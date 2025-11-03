@@ -303,56 +303,51 @@ function extractOverheadSupplyStatus(text: string): string | undefined {
 function extractDTStatus(text: string, metricName: string): string | undefined {
   const lower = text.toLowerCase();
   const metricLower = metricName.toLowerCase();
-  
-  // Pattern 1: "Metric Name: Low/Medium/High" with colon
-  const colonPattern = new RegExp(`${metricLower.replace(/\s+/g, '\\s+')}[:\s=]+(low|medium|high|red|yellow|green)`, 'i');
+
+  // Pattern 1: "Metric Name: Low/Medium/High" with colon (strongest signal)
+  const colonPattern = new RegExp(
+    `${metricLower.replace(/\s+/g, '\\s+')}\s*[:=]\s*(low|medium|high|red|yellow|green)\b`,
+    'i'
+  );
   const colonMatch = text.match(colonPattern);
   if (colonMatch) {
     return mapDTTag(colonMatch[1].toLowerCase());
   }
-  
+
   // Pattern 2: "Metric Name Low/Medium/High" without colon
-  const spacePattern = new RegExp(`${metricLower.replace(/\s+/g, '\\s+')}\\s+(low|medium|high|red|yellow|green)`, 'i');
+  const spacePattern = new RegExp(
+    `${metricLower.replace(/\s+/g, '\\s+')}\s+(low|medium|high|red|yellow|green)\b`,
+    'i'
+  );
   const spaceMatch = text.match(spacePattern);
   if (spaceMatch) {
     return mapDTTag(spaceMatch[1].toLowerCase());
   }
-  
-  // Pattern 3: Metric name and status within 100 chars of each other
+
+  // Pattern 3: Proximity-based — only consider terms AFTER the metric, within 50 chars
   const metricIndex = lower.indexOf(metricLower);
   if (metricIndex !== -1) {
-    const mediumIndex = lower.indexOf('medium', metricIndex);
-    const highIndex = lower.indexOf('high', metricIndex);
-    const lowIndex = lower.indexOf('low', metricIndex);
-    const redIndex = lower.indexOf('red', metricIndex);
-    const yellowIndex = lower.indexOf('yellow', metricIndex);
-    const greenIndex = lower.indexOf('green', metricIndex);
-    
-    const searchWindow = 100;
-    
-    // Check color tags first (more specific)
-    if (redIndex !== -1 && redIndex - metricIndex < searchWindow) {
-      return 'DT:Red';
-    }
-    if (yellowIndex !== -1 && yellowIndex - metricIndex < searchWindow) {
-      return 'DT:Yellow';
-    }
-    if (greenIndex !== -1 && greenIndex - metricIndex < searchWindow) {
-      return 'DT:Green';
-    }
-    
-    // Then check text labels
-    if (highIndex !== -1 && highIndex - metricIndex < searchWindow) {
-      return 'DT:Red'; // High = Red
-    }
-    if (mediumIndex !== -1 && mediumIndex - metricIndex < searchWindow) {
-      return 'DT:Yellow'; // Medium = Yellow
-    }
-    if (lowIndex !== -1 && lowIndex - metricIndex < searchWindow) {
-      return 'DT:Green'; // Low = Green
+    const after = lower.slice(metricIndex);
+    const searchWindow = 50; // tighten window to avoid stray matches
+
+    // Find nearest status token after the metric
+    const tokens: Array<{ label: 'red'|'yellow'|'green'|'high'|'medium'|'low'; index: number }> = [];
+    ['red', 'yellow', 'green', 'high', 'medium', 'low'].forEach((label) => {
+      const idx = after.indexOf(label);
+      if (idx !== -1 && idx <= searchWindow) {
+        tokens.push({ label: label as any, index: idx });
+      }
+    });
+
+    if (tokens.length > 0) {
+      tokens.sort((a, b) => a.index - b.index);
+      const first = tokens[0].label;
+      if (first === 'red' || first === 'high') return 'DT:Red';
+      if (first === 'yellow' || first === 'medium') return 'DT:Yellow';
+      if (first === 'green' || first === 'low') return 'DT:Green';
     }
   }
-  
+
   return undefined;
 }
 
