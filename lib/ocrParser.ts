@@ -447,12 +447,42 @@ function detectPriceSpike(text: string): boolean {
 /**
  * Extract news information
  */
-function extractNews(text: string): string | undefined {
-  // Look for news section or headlines
+function extractNews(text: string): { headline: string; date?: string } | undefined {
+  // 1) Prefer explicit News line if present
   const newsMatch = text.match(/news[:\s]+(.*?)(?:\n|$)/i);
   if (newsMatch && newsMatch[1] && !newsMatch[1].toLowerCase().includes('none')) {
-    return newsMatch[1].trim();
+    return { headline: newsMatch[1].trim() };
   }
+
+  // 2) Fallback: Detect DT "Major Developments" section, but ONLY within last 7 days
+  // Example lines near the section:
+  // "Major Developments"
+  // "9/3/2025, 10:08:35 PM  Wind down cancelled, new PIPE to existing shareholders."
+  const lower = text.toLowerCase();
+  const markerIndex = lower.indexOf('major developments');
+  if (markerIndex !== -1) {
+    const after = text.substring(markerIndex, Math.min(text.length, markerIndex + 800));
+    // Find the first date-like pattern MM/DD/YYYY or M/D/YYYY with optional time
+    const dateRegex = /(\b\d{1,2}\/\d{1,2}\/\d{2,4})(?:,?\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)?/i;
+    const dateMatch = after.match(dateRegex);
+    if (dateMatch) {
+      const dateStr = dateMatch[1];
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) {
+        const days = (Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24);
+        if (days <= 7) {
+          // Extract the rest of the line as headline
+          const lineStart = after.indexOf(dateMatch[0]);
+          const rest = after.substring(lineStart + dateMatch[0].length).split('\n')[0].trim();
+          const headline = rest.replace(/^[,\-:\s]+/, '').trim();
+          if (headline) {
+            return { headline, date: parsed.toISOString() };
+          }
+        }
+      }
+    }
+  }
+
   return undefined;
 }
 
@@ -905,8 +935,14 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
       extracted.priceSpike = detectPriceSpike(fullText);
     }
     
-    // Extract news
-    extracted.recentNews = extractNews(fullText);
+    // Extract news (prefer recent Major Developments within 7 days)
+    const ocrNews = extractNews(fullText);
+    if (ocrNews) {
+      extracted.recentNews = ocrNews.headline;
+      if (ocrNews.date) {
+        (extracted as any).recentNewsDate = ocrNews.date;
+      }
+    }
     
     return extracted;
   } catch (error) {
