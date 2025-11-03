@@ -855,7 +855,9 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
     extracted.atmShelfStatus = extractAtmShelfStatus(fullText);
     extracted.overheadSupplyStatus = extractOverheadSupplyStatus(fullText);
     extracted.cashNeedStatus = extractDTStatus(fullText, 'cash need');
-    extracted.historicalDilutionStatus = extractDTStatus(fullText, 'historical');
+    // Extract Historical Dilution - try both "Historical" and "Historical Dilution"
+    extracted.historicalDilutionStatus = extractDTStatus(fullText, 'historical dilution') || 
+                                         extractDTStatus(fullText, 'historical');
     extracted.overallRiskStatus = extractDTStatus(fullText, 'overall risk');
     
     // Debug: Log all extracted DT tags
