@@ -55,15 +55,31 @@ async function getKVClient() {
     // Dynamic import to avoid errors if @vercel/kv is not installed
     const { createClient } = await import('@vercel/kv');
     
+    // Convert redis:// URLs to https:// REST API URLs
+    // Vercel KV requires https:// URLs, not redis:// protocol URLs
+    let kvUrl = hasUrl;
+    if (kvUrl && kvUrl.startsWith('redis://')) {
+      // Extract host and port from redis:// URL
+      // Format: redis://default:password@host:port
+      const redisMatch = kvUrl.match(/^redis:\/\/(?:[^@]+@)?([^:]+):(\d+)/);
+      if (redisMatch) {
+        const host = redisMatch[1];
+        const port = redisMatch[2];
+        // Convert to Upstash REST API format: https://host:port
+        kvUrl = `https://${host}:${port}`;
+        console.log(`[Share] Converted redis:// URL to https:// REST API format`);
+      }
+    }
+    
     // @vercel/kv can work with just URL if token is embedded, or with explicit config
-    const kvConfig: any = { url: hasUrl };
+    const kvConfig: any = { url: kvUrl };
     if (hasToken) {
       kvConfig.token = hasToken;
     }
     
     const kv = createClient(kvConfig);
     
-    console.log(`[Share] ✅ KV client initialized with URL=${!!hasUrl}, Token=${!!hasToken}`);
+    console.log(`[Share] ✅ KV client initialized with URL=${!!kvUrl}, Token=${!!hasToken}`);
     return kv;
   } catch (error: any) {
     // @vercel/kv not installed or not available - use fallback
