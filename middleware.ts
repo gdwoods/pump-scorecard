@@ -3,9 +3,20 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || '';
+  const pathname = request.nextUrl.pathname;
+  
+  // Redirect old Pump Scorecard URL to new Short Check URL
+  if (hostname.includes('pump-scorecard')) {
+    const targetUrl = new URL(`https://short-check.vercel.app${pathname}`);
+    // Preserve query parameters
+    request.nextUrl.searchParams.forEach((value, key) => {
+      targetUrl.searchParams.set(key, value);
+    });
+    return NextResponse.redirect(targetUrl, 308); // 308 = Permanent Redirect
+  }
   
   // If hostname contains "short-check", redirect root to /short-check
-  if (hostname.includes('short-check') && request.nextUrl.pathname === '/') {
+  if (hostname.includes('short-check') && pathname === '/') {
     return NextResponse.redirect(new URL('/short-check', request.url));
   }
   
@@ -13,6 +24,15 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/',
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - api routes
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+  ],
 };
 
