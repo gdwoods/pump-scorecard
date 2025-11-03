@@ -27,7 +27,7 @@
 - **Consistent**: Standardized scoring eliminates guesswork
 - **Complete**: OCR + manual entry + full market context in one tool
 
-**URL**: [your-short-check-url.vercel.app]
+**URL**: https://short-check.vercel.app
 
 ---
 

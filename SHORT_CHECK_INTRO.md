@@ -59,7 +59,7 @@ Get a concise summary like:
 
 ## Getting Started
 
-1. Visit: [your-short-check-url.vercel.app]
+1. Visit: https://short-check.vercel.app
 2. Upload a screenshot from your dilution tracker
 3. Review the score, alerts, and risk synopsis (DT “Major Developments” is ignored unless ≤ 7 days old)
 4. Enter the ticker for full Pump Scorecard analysis
