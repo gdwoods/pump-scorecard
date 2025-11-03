@@ -138,12 +138,12 @@ function extractAtmShelfStatus(text: string): string | undefined {
   // IMPORTANT: DT shows "High/Medium/Low" but also uses color tags "Red/Yellow/Green"
   // We need to catch both formats
   const offeringAbilityPatterns = [
-    /offering\s*ability[:\s=]+(red|yellow|medium|green|high|low)/i,
-    /offering\s*ability\s+(red|yellow|medium|green|high|low)/i,
-    /(?:ability|offering)[:\s=]+(red|yellow|medium|green|high|low)/i,
-    // More flexible: "Offering" and status within 50 chars of each other
-    /offering[^\n]{0,50}?(medium|yellow|red|green|high|low)/i,
-    /ability[^\n]{0,50}?(medium|yellow|red|green|high|low)/i,
+    /offering\s*ability[:\s=]+(red|yellow|medium|green|high|low)\b/i,
+    /offering\s*ability\s+(red|yellow|medium|green|high|low)\b/i,
+    /(?:ability|offering)[:\s=]+(red|yellow|medium|green|high|low)\b/i,
+    // Flexible across line breaks: status within 120 chars AFTER the word
+    /offering[\s\S]{0,120}?(medium|yellow|red|green|high|low)\b/i,
+    /ability[\s\S]{0,120}?(medium|yellow|red|green|high|low)\b/i,
   ];
   
   for (const pattern of offeringAbilityPatterns) {
