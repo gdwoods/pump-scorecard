@@ -123,7 +123,11 @@ export function generateRiskSynopsis(
 
   // Cash runway
   if (data.cashRunway !== undefined) {
-    parts.push(`${tickerStr} has only ${data.cashRunway.toFixed(1)} months of runway`);
+    if (data.cashRunway < 0) {
+      parts.push(`${tickerStr} has negative cash runway (${Math.abs(data.cashRunway).toFixed(1)} months)`);
+    } else {
+      parts.push(`${tickerStr} has only ${data.cashRunway.toFixed(1)} months of runway`);
+    }
   }
 
   // Dilution tools

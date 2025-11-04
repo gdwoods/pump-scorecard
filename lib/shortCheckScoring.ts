@@ -974,7 +974,11 @@ function generateAlertCard(
   
   // Add key metrics
   if (data.cashRunway !== undefined) {
-    card += `Cash Runway: ${data.cashRunway.toFixed(1)} months. `;
+    if (data.cashRunway < 0) {
+      card += `Cash Runway: -${Math.abs(data.cashRunway).toFixed(1)} months (negative cash). `;
+    } else {
+      card += `Cash Runway: ${data.cashRunway.toFixed(1)} months. `;
+    }
   }
   if (data.cashOnHand) {
     card += `Cash on hand: $${(data.cashOnHand / 1_000_000).toFixed(1)}M. `;
@@ -1147,7 +1151,11 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
         }
         return parts.length > 0 ? parts.join(', ') : undefined;
       })(),
-      cashRunway: effectiveRunway !== undefined ? `${effectiveRunway.toFixed(1)} months` : undefined,
+      cashRunway: effectiveRunway !== undefined 
+        ? effectiveRunway < 0 
+          ? `-${Math.abs(effectiveRunway).toFixed(1)} months (negative cash)`
+          : `${effectiveRunway.toFixed(1)} months`
+        : undefined,
       offeringAbility: data.atmShelfStatus || undefined,
       historicalDilution: (() => {
         const parts: string[] = [];

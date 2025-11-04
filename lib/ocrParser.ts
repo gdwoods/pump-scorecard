@@ -76,12 +76,21 @@ function parseNumberWithSuffix(text: string): number | null {
 }
 
 /**
- * Parse months from text (e.g., "3.7 months", "3.7 mo")
+ * Parse months from text (e.g., "3.7 months", "-3.4 months", "3.7 mo")
+ * Handles negative values like "-3.4 months of cash left"
  */
 function parseMonths(text: string): number | null {
-  const match = text.match(/(\d+\.?\d*)\s*(?:months?|mo)/i);
-  if (!match) return null;
-  return parseFloat(match[1]);
+  // First try to match negative values explicitly (e.g., "-3.4 months")
+  const negativeMatch = text.match(/(-?\d+\.?\d*)\s*(?:months?|mo)/i);
+  if (negativeMatch) {
+    return parseFloat(negativeMatch[1]);
+  }
+  // Fallback: check for "negative" or "-" in context
+  const negativeContextMatch = text.match(/(?:negative|has\s+-\s*)(\d+\.?\d*)\s*(?:months?|mo)/i);
+  if (negativeContextMatch) {
+    return -parseFloat(negativeContextMatch[1]);
+  }
+  return null;
 }
 
 /**
@@ -713,20 +722,25 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
       }
     }
     
-    // Extract cash runway
+    // Extract cash runway (handles negative values like "-3.4 months")
     const runwayPatterns = [
-      /cash\s*(?:runway|left)[:\s]*([0-9.]+)\s*(?:months?|mo)/i,
-      /([0-9.]+)\s*(?:months?|mo)\s*(?:runway|cash|left)/i,
-      /has\s+([0-9.]+)\s+months?\s+of\s+cash/i,
-      /([0-9.]+)\s+months?\s+of\s+cash/i,
+      /cash\s*(?:runway|left)[:\s]*(-?\d+\.?\d*)\s*(?:months?|mo)/i,
+      /(-?\d+\.?\d*)\s*(?:months?|mo)\s*(?:runway|cash|left)/i,
+      /has\s+(-?\d+\.?\d*)\s+months?\s+of\s+cash/i,
+      /(-?\d+\.?\d*)\s+months?\s+of\s+cash/i,
+      // Pattern for explicit negative: "has -3.4 months of cash left"
+      /has\s+-\s*(\d+\.?\d*)\s+months?\s+of\s+cash/i,
+      // Pattern for "negative X months"
+      /negative\s+(\d+\.?\d*)\s+months?\s+of\s+cash/i,
     ];
     for (const pattern of runwayPatterns) {
       const match = fullText.match(pattern);
       if (match) {
         // Use the full match since parseMonths expects text with "months" keyword
         const parsed = parseMonths(match[0]);
-        if (parsed) {
+        if (parsed !== null) {
           extracted.cashRunway = parsed;
+          console.log(`[OCR] Extracted cash runway: ${extracted.cashRunway} months (from: "${match[0]}")`);
           break;
         }
       }
