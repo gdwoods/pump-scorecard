@@ -1307,16 +1307,19 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
   // Check walk-away flags
   const walkAwayFlags = checkWalkAwayFlags(data);
   
-  // If walk-away flags exist (excluding Cash Runway which is already penalized), set rating to 0 (No-Trade)
+  // Filter out Cash Runway and Positive cash flow (already penalized in scoring)
   // Note: Cash Runway walk-away is already handled via -10 penalty in scoreCashRunway
   // So we filter it out here to avoid double-penalty
   const walkAwayFlagsExcludingCashRunway = walkAwayFlags.filter(
     flag => !flag.includes('Cash runway') && !flag.includes('Positive cash flow')
   );
-  const finalRating = walkAwayFlagsExcludingCashRunway.length > 0 ? 0 : rating;
   
-  // Determine category
-  const category = getCategory(finalRating);
+  // Always show the computed rating, but set category to "No-Trade" if walk-away flags exist
+  const finalRating = rating; // Always show the computed score
+  const hasWalkAwayFlags = walkAwayFlagsExcludingCashRunway.length > 0;
+  
+  // Determine category: "No-Trade" if walk-away flags exist, otherwise based on rating
+  const category = hasWalkAwayFlags ? 'No-Trade' : getCategory(finalRating);
   
   // Generate alert card
   const alertCard = generateAlertCard(
