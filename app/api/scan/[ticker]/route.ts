@@ -616,7 +616,19 @@ try {
     }
 
     // ---------- Return ----------
-return NextResponse.json({
+  let droppinessVerdict = "Mixed behavior — some spikes retraced quickly, while others held their gains.";
+  if (droppinessScore === 0 && !droppinessDetail.length) {
+    droppinessVerdict =
+      "No qualifying spikes were detected in the last 18 months — the stock has not shown pump-like behavior recently.";
+  } else if (droppinessScore >= 70) {
+    droppinessVerdict =
+      "Spikes usually fade quickly — most large moves retraced within a few sessions.";
+  } else if (droppinessScore < 40) {
+    droppinessVerdict =
+      "Spikes often hold — many large moves remained elevated after the initial run-up.";
+  }
+
+  return NextResponse.json({
   ticker: upperTicker,
   companyName: quote.longName || quote.shortName || upperTicker,
 
@@ -643,6 +655,7 @@ return NextResponse.json({
   fraudImages,
   droppinessScore,
   droppinessDetail,
+    droppinessVerdict,
   borrowData,
   weightedRiskScore,
   summaryVerdict,
