@@ -102,7 +102,7 @@ export default function DroppinessCard({
           {verdict}
         </p>
 
-        {detail && detail.length > 0 && (
+        {detail && detail.length > 0 ? (
           <div className="mt-4">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
               Recent spikes:
@@ -115,6 +115,12 @@ export default function DroppinessCard({
                 </li>
               ))}
             </ul>
+          </div>
+        ) : (
+          <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center italic">
+              No qualifying spikes detected in the last 18 months. The score reflects the neutral prior (50%).
+            </p>
           </div>
         )}
       </CardContent>

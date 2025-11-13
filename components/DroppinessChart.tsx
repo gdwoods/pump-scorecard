@@ -44,82 +44,97 @@ export default function DroppinessChart({
     </div>
   );
 
+  const hasData = detail && detail.length > 0;
+
   return (
     <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow-sm transition-colors">
       <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
         📉 {ticker} Spike Scatter (Droppiness)
       </h2>
-      <ResponsiveContainer width="100%" height={350}>
-        <ScatterChart margin={{ top: 20, right: 20, bottom: 50, left: 50 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis
-            dataKey="date"
-            type="number"
-            domain={["auto", today]}
-            tickFormatter={(ts) => new Date(ts).toISOString().split("T")[0]}
-            angle={-30}
-            textAnchor="end"
-            tick={{ fill: "currentColor" }}
-          />
-          <YAxis
-            dataKey="spikePct"
-            domain={[0, "dataMax + 50"]}
-            label={{
-              value: "Spike %",
-              angle: -90,
-              position: "insideLeft",
-              fill: "currentColor",
-            }}
-            tick={{ fill: "currentColor" }}
-          />
-          <Tooltip
-            cursor={{ strokeDasharray: "3 3" }}
-            labelFormatter={() => ""}
-            formatter={(value: any, _name: any, props: any) => {
-              if (props.dataKey === "spikePct") {
-                const dateStr = new Date(props.payload.date)
-                  .toISOString()
-                  .split("T")[0];
-                return [`${value}% (${dateStr})`, props.name];
-              }
-              return null;
-            }}
-          />
-          <Legend verticalAlign="top" content={renderLegend} />
-          <Scatter
-            name="Held"
-            data={dataHeld}
-            dataKey="spikePct"
-            shape={(props) => (
-              <circle
-                cx={props.cx}
-                cy={props.cy}
-                r={sizeFn(props.payload.spikePct)}
-                fill="#22c55e"
-              />
-            )}
-          />
-          <Scatter
-            name="Retraced"
-            data={dataRetraced}
-            dataKey="spikePct"
-            shape={(props) => (
-              <circle
-                cx={props.cx}
-                cy={props.cy}
-                r={sizeFn(props.payload.spikePct)}
-                fill="#ef4444"
-              />
-            )}
-          />
-          <Brush
-            dataKey="date"
-            height={30}
-            stroke="#8884d8"
-            tickFormatter={(ts) => new Date(ts).toISOString().split("T")[0]}
-          />
-        </ScatterChart>
-      </ResponsiveContainer>
+      {hasData ? (
+        <ResponsiveContainer width="100%" height={350}>
+          <ScatterChart margin={{ top: 20, right: 20, bottom: 50, left: 50 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="date"
+              type="number"
+              domain={["auto", today]}
+              tickFormatter={(ts) => new Date(ts).toISOString().split("T")[0]}
+              angle={-30}
+              textAnchor="end"
+              tick={{ fill: "currentColor" }}
+            />
+            <YAxis
+              dataKey="spikePct"
+              domain={[0, "dataMax + 50"]}
+              label={{
+                value: "Spike %",
+                angle: -90,
+                position: "insideLeft",
+                fill: "currentColor",
+              }}
+              tick={{ fill: "currentColor" }}
+            />
+            <Tooltip
+              cursor={{ strokeDasharray: "3 3" }}
+              labelFormatter={() => ""}
+              formatter={(value: any, _name: any, props: any) => {
+                if (props.dataKey === "spikePct") {
+                  const dateStr = new Date(props.payload.date)
+                    .toISOString()
+                    .split("T")[0];
+                  return [`${value}% (${dateStr})`, props.name];
+                }
+                return null;
+              }}
+            />
+            <Legend verticalAlign="top" content={renderLegend} />
+            <Scatter
+              name="Held"
+              data={dataHeld}
+              dataKey="spikePct"
+              shape={(props) => (
+                <circle
+                  cx={props.cx}
+                  cy={props.cy}
+                  r={sizeFn(props.payload.spikePct)}
+                  fill="#22c55e"
+                />
+              )}
+            />
+            <Scatter
+              name="Retraced"
+              data={dataRetraced}
+              dataKey="spikePct"
+              shape={(props) => (
+                <circle
+                  cx={props.cx}
+                  cy={props.cy}
+                  r={sizeFn(props.payload.spikePct)}
+                  fill="#ef4444"
+                />
+              )}
+            />
+            <Brush
+              dataKey="date"
+              height={30}
+              stroke="#8884d8"
+              tickFormatter={(ts) => new Date(ts).toISOString().split("T")[0]}
+            />
+          </ScatterChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="flex items-center justify-center h-[350px] p-6">
+          <div className="text-center">
+            <p className="text-gray-600 dark:text-gray-400 text-sm italic">
+              No qualifying spikes detected in the last 18 months.
+            </p>
+            <p className="text-gray-500 dark:text-gray-500 text-xs mt-2">
+              The droppiness score reflects the neutral prior (50%) since no spikes >20% were found.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
