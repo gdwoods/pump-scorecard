@@ -130,7 +130,7 @@ export default function DroppinessChart({
               No qualifying spikes detected in the last 18 months.
             </p>
             <p className="text-gray-500 dark:text-gray-500 text-xs mt-2">
-              The droppiness score reflects the neutral prior (50%) since no spikes >20% were found.
+              The droppiness score reflects the neutral prior (50%) since no spikes &gt;20% were found.
             </p>
           </div>
         </div>
