@@ -106,15 +106,35 @@ function extractTicker(text: string): string | undefined {
   
   const allMatches: Array<{ ticker: string; priority: number; index: number }> = [];
   
-  // Pattern 1: $TICKER format (priority 1 - highest)
+  // Pattern 1a: TICKER $PRICE format (highest priority - very specific to DT screenshots)
+  // Example: "XPON $1.270" or "XPON $1.64 29.13%"
+  const tickerPriceMatches = [...text.matchAll(/\b([A-Z]{2,5})\s+\$(\d+\.?\d*)/g)];
+  tickerPriceMatches.forEach(match => {
+    const candidate = match[1];
+    // Exclude common financial terms even in this pattern
+    if (candidate && candidate.length >= 2 && candidate.length <= 5 && 
+        !['OS', 'O/S', 'EV', 'MKT', 'CAP', 'SI', 'EST', 'NET'].includes(candidate)) {
+      allMatches.push({
+        ticker: candidate,
+        priority: 0, // Highest priority - this is the most reliable pattern
+        index: match.index || 0
+      });
+    }
+  });
+  
+  // Pattern 1b: $TICKER format (priority 1)
   const dollarMatches = [...text.matchAll(/\$([A-Z]{1,5})\b/g)];
   dollarMatches.forEach(match => {
     if (match[1] && match[1].length >= 1 && match[1].length <= 5) {
-      allMatches.push({
-        ticker: match[1],
-        priority: match[1].length >= 2 ? 1 : 4, // Prefer longer tickers
-        index: match.index || 0
-      });
+      const candidate = match[1];
+      // Filter out common abbreviations that might appear after $
+      if (!['OS', 'EV', 'MKT', 'CAP', 'SI'].includes(candidate)) {
+        allMatches.push({
+          ticker: candidate,
+          priority: match[1].length >= 2 ? 1 : 4, // Prefer longer tickers
+          index: match.index || 0
+        });
+      }
     }
   });
   
@@ -133,18 +153,45 @@ function extractTicker(text: string): string | undefined {
   // Pattern 3: Look for multi-letter tickers (2-5 chars) near price data or company info
   // Prioritize tickers that appear near "$" signs, numbers, or company names
   const multiLetterMatches = [...text.matchAll(/\b([A-Z]{2,5})\b/g)];
-  const commonWords = new Set(['THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL', 'CAN', 'HER', 'WAS', 'ONE', 'OUR', 'OUT', 'DAY', 'GET', 'HAS', 'HIM', 'HIS', 'HOW', 'ITS', 'MAY', 'NEW', 'NOW', 'OLD', 'SEE', 'TWO', 'WAY', 'WHO', 'BOY', 'DID', 'ITS', 'LET', 'PUT', 'SAY', 'SHE', 'TOO', 'USE', 'USD', 'EST', 'NET', 'CASH', 'DEBT', 'FLOAT', 'SHARES', 'STOCK', 'PRICE', 'MARKET', 'CAP', 'OWN', 'OWNERSHIP']);
+  // Common words and financial abbreviations to exclude
+  const commonWords = new Set([
+    // Common English words
+    'THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL', 'CAN', 'HER', 'WAS', 'ONE', 'OUR', 'OUT', 'DAY', 'GET', 'HAS', 'HIM', 'HIS', 'HOW', 'ITS', 'MAY', 'NEW', 'NOW', 'OLD', 'SEE', 'TWO', 'WAY', 'WHO', 'BOY', 'DID', 'ITS', 'LET', 'PUT', 'SAY', 'SHE', 'TOO', 'USE',
+    // Financial abbreviations
+    'USD', 'EST', 'NET', 'CASH', 'DEBT', 'FLOAT', 'SHARES', 'STOCK', 'PRICE', 'MARKET', 'CAP', 'OWN', 'OWNERSHIP',
+    // Dilution Tracker specific terms
+    'OS', 'O/S', 'OUTSTANDING', 'SHARES', 'MILLIONS', 'MILLION', 'BILLION', 'BILLIONS',
+    // Other common financial terms
+    'EV', 'MKT', 'MCAP', 'INST', 'SI', 'SHORT', 'INTEREST', 'OWNERSHIP', 'INSTITUTIONAL',
+    // Company info terms
+    'SECTOR', 'INDUSTRY', 'COUNTRY', 'EXCHANGE', 'NASDAQ', 'NYSE', 'AMEX',
+    // Common company descriptors
+    'INC', 'CORP', 'LTD', 'LLC', 'CO', 'COMPANY', 'COMPANIES'
+  ]);
   multiLetterMatches.forEach(match => {
     const candidate = match[1];
     if (!commonWords.has(candidate) && !/^\d+$/.test(candidate)) {
-      // Check if it appears near price indicators (higher confidence)
-      const context = text.substring(Math.max(0, (match.index || 0) - 20), Math.min(text.length, (match.index || 0) + 20));
-      const nearPrice = /\$|price|ticker|shares|float|market/i.test(context);
-      allMatches.push({
-        ticker: candidate,
-        priority: nearPrice ? 3 : 6, // Higher priority if near price indicators
-        index: match.index || 0
-      });
+      // Check context - avoid financial terms even if near prices
+      const context = text.substring(Math.max(0, (match.index || 0) - 30), Math.min(text.length, (match.index || 0) + 30));
+      const nearPrice = /\$|price|ticker/i.test(context);
+      // Check if it's in a financial context that suggests it's NOT a ticker
+      const isFinancialContext = /\b(float|shares|outstanding|os|o\/s|market|cap|ev|si|short|interest)\b/i.test(context);
+      
+      // Only add if near price AND not in a financial abbreviation context
+      if (nearPrice && !isFinancialContext) {
+        allMatches.push({
+          ticker: candidate,
+          priority: 3, // Higher priority if near price indicators but not financial terms
+          index: match.index || 0
+        });
+      } else if (!nearPrice && !isFinancialContext) {
+        // Lower priority if not near price
+        allMatches.push({
+          ticker: candidate,
+          priority: 6,
+          index: match.index || 0
+        });
+      }
     }
   });
   
