@@ -113,7 +113,7 @@ function extractTicker(text: string): string | undefined {
     const candidate = match[1];
     // Exclude common financial terms even in this pattern
     if (candidate && candidate.length >= 2 && candidate.length <= 5 && 
-        !['OS', 'O/S', 'EV', 'MKT', 'CAP', 'SI', 'EST', 'NET'].includes(candidate)) {
+        !['OS', 'O/S', 'EV', 'MKT', 'CAP', 'SI', 'EST', 'NET', 'DT'].includes(candidate)) {
       allMatches.push({
         ticker: candidate,
         priority: 0, // Highest priority - this is the most reliable pattern
@@ -128,7 +128,7 @@ function extractTicker(text: string): string | undefined {
     if (match[1] && match[1].length >= 1 && match[1].length <= 5) {
       const candidate = match[1];
       // Filter out common abbreviations that might appear after $
-      if (!['OS', 'EV', 'MKT', 'CAP', 'SI'].includes(candidate)) {
+      if (!['OS', 'EV', 'MKT', 'CAP', 'SI', 'DT'].includes(candidate)) {
         allMatches.push({
           ticker: candidate,
           priority: match[1].length >= 2 ? 1 : 4, // Prefer longer tickers
@@ -160,7 +160,7 @@ function extractTicker(text: string): string | undefined {
     // Financial abbreviations
     'USD', 'EST', 'NET', 'CASH', 'DEBT', 'FLOAT', 'SHARES', 'STOCK', 'PRICE', 'MARKET', 'CAP', 'OWN', 'OWNERSHIP',
     // Dilution Tracker specific terms
-    'OS', 'O/S', 'OUTSTANDING', 'SHARES', 'MILLIONS', 'MILLION', 'BILLION', 'BILLIONS',
+    'OS', 'O/S', 'OUTSTANDING', 'SHARES', 'MILLIONS', 'MILLION', 'BILLION', 'BILLIONS', 'DT', 'DILUTION', 'TRACKER',
     // Other common financial terms
     'EV', 'MKT', 'MCAP', 'INST', 'SI', 'SHORT', 'INTEREST', 'OWNERSHIP', 'INSTITUTIONAL',
     // Company info terms
@@ -175,7 +175,7 @@ function extractTicker(text: string): string | undefined {
       const context = text.substring(Math.max(0, (match.index || 0) - 30), Math.min(text.length, (match.index || 0) + 30));
       const nearPrice = /\$|price|ticker/i.test(context);
       // Check if it's in a financial context that suggests it's NOT a ticker
-      const isFinancialContext = /\b(float|shares|outstanding|os|o\/s|market|cap|ev|si|short|interest)\b/i.test(context);
+      const isFinancialContext = /\b(float|shares|outstanding|os|o\/s|market|cap|ev|si|short|interest|dt|dilution|tracker)\b/i.test(context);
       
       // Only add if near price AND not in a financial abbreviation context
       if (nearPrice && !isFinancialContext) {
