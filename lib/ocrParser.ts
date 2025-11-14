@@ -279,9 +279,9 @@ function extractTicker(text: string): string | undefined {
   });
   
   // Prefer multi-letter tickers (2-5 chars) - they're much more reliable
-  const multiLetterMatches = filteredMatches.filter(m => m.ticker.length >= 2);
-  if (multiLetterMatches.length > 0) {
-    return multiLetterMatches[0].ticker;
+  const multiLetterFiltered = filteredMatches.filter(m => m.ticker.length >= 2);
+  if (multiLetterFiltered.length > 0) {
+    return multiLetterFiltered[0].ticker;
   }
   
   // Only return single-letter if no multi-letter found AND it's high confidence
