@@ -377,6 +377,22 @@ export default function ShortCheckPage() {
             ticker={ticker} 
             extractedData={extractedData || undefined}
             pumpScorecardData={pumpScorecardData}
+            onTickerChange={(newTicker) => {
+              setTicker(newTicker);
+              setHasAnalyzedTicker(true);
+              setLoadingPumpData(true);
+              fetch(`/api/scan/${newTicker}`)
+                .then((res) => res.json())
+                .then((data) => {
+                  setPumpScorecardData(data);
+                })
+                .catch((err) => {
+                  console.error("Failed to load Pump Scorecard data:", err);
+                })
+                .finally(() => {
+                  setLoadingPumpData(false);
+                });
+            }}
           />
         )}
 

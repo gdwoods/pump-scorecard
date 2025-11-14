@@ -95,38 +95,86 @@ function parseMonths(text: string): number | null {
 
 /**
  * Extract ticker symbol from text
+ * Prioritizes longer tickers (2-5 chars) over single letters to avoid false matches
  */
 function extractTicker(text: string): string | undefined {
-  // Common ticker patterns:
-  // 1. "$TICKER" format
+  // Common ticker patterns (in priority order):
+  // 1. "$TICKER" format (highest priority)
   // 2. "Ticker: TICKER" format
-  // 3. Standalone uppercase 1-5 letter codes (not common words)
-  // 4. In context like "Company (TICKER)"
+  // 3. Multi-letter tickers (2-5 chars) - prioritize these
+  // 4. Single-letter tickers (lowest priority, rare)
   
-  // Try $TICKER format first
-  const dollarMatch = text.match(/\$([A-Z]{1,5})\b/);
-  if (dollarMatch && dollarMatch[1].length >= 1 && dollarMatch[1].length <= 5) {
-    return dollarMatch[1];
-  }
+  const allMatches: Array<{ ticker: string; priority: number; index: number }> = [];
   
-  // Try "Ticker:" format
-  const tickerColonMatch = text.match(/ticker[:\s]+([A-Z]{1,5})\b/i);
-  if (tickerColonMatch && tickerColonMatch[1].length >= 1 && tickerColonMatch[1].length <= 5) {
-    return tickerColonMatch[1];
-  }
-  
-  // Try standalone uppercase codes (avoid common words)
-  const commonWords = new Set(['THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL', 'CAN', 'HER', 'WAS', 'ONE', 'OUR', 'OUT', 'DAY', 'GET', 'HAS', 'HIM', 'HIS', 'HOW', 'ITS', 'MAY', 'NEW', 'NOW', 'OLD', 'SEE', 'TWO', 'WAY', 'WHO', 'BOY', 'DID', 'ITS', 'LET', 'PUT', 'SAY', 'SHE', 'TOO', 'USE']);
-  const standaloneMatch = text.match(/\b([A-Z]{1,5})\b/);
-  if (standaloneMatch && standaloneMatch[1].length >= 1 && standaloneMatch[1].length <= 5) {
-    const candidate = standaloneMatch[1];
-    // Filter out common words and numbers
-    if (!commonWords.has(candidate) && !/^\d+$/.test(candidate)) {
-      return candidate;
+  // Pattern 1: $TICKER format (priority 1 - highest)
+  const dollarMatches = [...text.matchAll(/\$([A-Z]{1,5})\b/g)];
+  dollarMatches.forEach(match => {
+    if (match[1] && match[1].length >= 1 && match[1].length <= 5) {
+      allMatches.push({
+        ticker: match[1],
+        priority: match[1].length >= 2 ? 1 : 4, // Prefer longer tickers
+        index: match.index || 0
+      });
     }
-  }
+  });
   
-  return undefined;
+  // Pattern 2: "Ticker:" format (priority 2)
+  const tickerColonMatches = [...text.matchAll(/ticker[:\s]+([A-Z]{1,5})\b/gi)];
+  tickerColonMatches.forEach(match => {
+    if (match[1] && match[1].length >= 1 && match[1].length <= 5) {
+      allMatches.push({
+        ticker: match[1],
+        priority: match[1].length >= 2 ? 2 : 5, // Prefer longer tickers
+        index: match.index || 0
+      });
+    }
+  });
+  
+  // Pattern 3: Look for multi-letter tickers (2-5 chars) near price data or company info
+  // Prioritize tickers that appear near "$" signs, numbers, or company names
+  const multiLetterMatches = [...text.matchAll(/\b([A-Z]{2,5})\b/g)];
+  const commonWords = new Set(['THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL', 'CAN', 'HER', 'WAS', 'ONE', 'OUR', 'OUT', 'DAY', 'GET', 'HAS', 'HIM', 'HIS', 'HOW', 'ITS', 'MAY', 'NEW', 'NOW', 'OLD', 'SEE', 'TWO', 'WAY', 'WHO', 'BOY', 'DID', 'ITS', 'LET', 'PUT', 'SAY', 'SHE', 'TOO', 'USE', 'USD', 'EST', 'NET', 'CASH', 'DEBT', 'FLOAT', 'SHARES', 'STOCK', 'PRICE', 'MARKET', 'CAP', 'OWN', 'OWNERSHIP']);
+  multiLetterMatches.forEach(match => {
+    const candidate = match[1];
+    if (!commonWords.has(candidate) && !/^\d+$/.test(candidate)) {
+      // Check if it appears near price indicators (higher confidence)
+      const context = text.substring(Math.max(0, (match.index || 0) - 20), Math.min(text.length, (match.index || 0) + 20));
+      const nearPrice = /\$|price|ticker|shares|float|market/i.test(context);
+      allMatches.push({
+        ticker: candidate,
+        priority: nearPrice ? 3 : 6, // Higher priority if near price indicators
+        index: match.index || 0
+      });
+    }
+  });
+  
+  // Pattern 4: Single-letter tickers (lowest priority, only if nothing else found)
+  const singleLetterMatches = [...text.matchAll(/\b([A-Z])\b/g)];
+  const singleLetterCommon = new Set(['A', 'I', 'O']); // Very common single letters to avoid
+  singleLetterMatches.forEach(match => {
+    const candidate = match[1];
+    if (!singleLetterCommon.has(candidate)) {
+      // Only consider if near price indicators
+      const context = text.substring(Math.max(0, (match.index || 0) - 20), Math.min(text.length, (match.index || 0) + 20));
+      const nearPrice = /\$|price|ticker/i.test(context);
+      if (nearPrice) {
+        allMatches.push({
+          ticker: candidate,
+          priority: 7, // Lowest priority
+          index: match.index || 0
+        });
+      }
+    }
+  });
+  
+  // Sort by priority (lower number = higher priority), then by position (earlier = better)
+  allMatches.sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return a.index - b.index;
+  });
+  
+  // Return the highest priority match
+  return allMatches.length > 0 ? allMatches[0].ticker : undefined;
 }
 
 /**

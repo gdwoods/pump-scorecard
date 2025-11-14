@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import ShortCheckScoreBreakdown from "./ShortCheckScoreBreakdown";
@@ -15,6 +15,7 @@ interface ShortCheckResultsProps {
   ticker?: string;
   extractedData?: ExtractedData;
   pumpScorecardData?: any; // Pump Scorecard data to include in PDF
+  onTickerChange?: (newTicker: string) => void; // Callback when ticker is overridden
 }
 
 export default function ShortCheckResults({
@@ -22,6 +23,7 @@ export default function ShortCheckResults({
   ticker,
   extractedData,
   pumpScorecardData,
+  onTickerChange,
 }: ShortCheckResultsProps) {
   const [showScoringGuide, setShowScoringGuide] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -30,6 +32,12 @@ export default function ShortCheckResults({
   const [exportingPDF, setExportingPDF] = useState(false);
   const [copyingSummary, setCopyingSummary] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
+  const [tickerOverride, setTickerOverride] = useState<string>("");
+  const [showTickerOverride, setShowTickerOverride] = useState(false);
+  
+  // Use override ticker if set, otherwise use original ticker
+  const effectiveTicker = tickerOverride || ticker;
+  const isSingleLetterTicker = effectiveTicker && effectiveTicker.length === 1;
   const categoryColors = {
     "High-Priority Short Candidate": "bg-red-500 text-white",
     "Moderate Short Candidate": "bg-yellow-500 text-white",
@@ -108,8 +116,8 @@ export default function ShortCheckResults({
   };
 
   const getQuickActionLinks = () => {
-    if (!ticker) return null;
-    const upperTicker = ticker.toUpperCase();
+    if (!effectiveTicker) return null;
+    const upperTicker = effectiveTicker.toUpperCase();
     
     return {
       tradingView: `https://www.tradingview.com/chart/?symbol=${upperTicker}`,
@@ -119,9 +127,17 @@ export default function ShortCheckResults({
   };
 
   const quickLinks = getQuickActionLinks();
+  
+  // Handle ticker override - fetch pump data when override is applied
+  useEffect(() => {
+    if (tickerOverride && tickerOverride !== ticker && tickerOverride.length >= 1) {
+      // Trigger parent to fetch pump data with override ticker
+      // This will be handled by the parent component
+    }
+  }, [tickerOverride, ticker]);
 
   const handleShare = async () => {
-    if (!ticker || !extractedData || !result) return;
+    if (!effectiveTicker || !extractedData || !result) return;
 
     setSharing(true);
     try {
@@ -131,7 +147,7 @@ export default function ShortCheckResults({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ticker,
+          ticker: effectiveTicker,
           extractedData,
           result,
         }),
@@ -157,7 +173,7 @@ export default function ShortCheckResults({
   };
 
   const handleExportPDF = async () => {
-    if (!ticker || !result) return;
+    if (!effectiveTicker || !result) return;
 
     setExportingPDF(true);
     try {
@@ -167,7 +183,7 @@ export default function ShortCheckResults({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ticker,
+          ticker: effectiveTicker,
           result,
           extractedData,
           pumpScorecardData,
@@ -183,7 +199,7 @@ export default function ShortCheckResults({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `short-check-${ticker}-${new Date().toISOString().split('T')[0]}.pdf`;
+      a.download = `short-check-${effectiveTicker}-${new Date().toISOString().split('T')[0]}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -197,12 +213,12 @@ export default function ShortCheckResults({
   };
 
   const handleCopySummary = async () => {
-    if (!ticker || !result) return;
+    if (!effectiveTicker || !result) return;
 
     setCopyingSummary(true);
     try {
       const summary = generateFormattedSummary({
-        ticker,
+        ticker: effectiveTicker,
         result,
         extractedData,
         pumpScorecardData,
@@ -225,7 +241,7 @@ export default function ShortCheckResults({
   return (
     <div className="space-y-6">
       {/* Quick Actions Toolbar */}
-      {quickLinks && ticker && (
+      {quickLinks && effectiveTicker && (
         <Card className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 flex-wrap">
@@ -353,6 +369,120 @@ export default function ShortCheckResults({
         </Card>
       )}
 
+      {/* Ticker Override Warning and Input */}
+      {isSingleLetterTicker && (
+        <Card className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div className="flex-1">
+              <strong className="text-yellow-800 dark:text-yellow-300 block mb-1">
+                Single-Letter Ticker Detected
+              </strong>
+              <p className="text-yellow-700 dark:text-yellow-400 text-sm mb-3">
+                The OCR detected "{ticker}" as the ticker symbol. Single-letter tickers are rare and may indicate a parsing error. 
+                If this is incorrect, please enter the correct ticker below.
+              </p>
+              {!showTickerOverride ? (
+                <button
+                  onClick={() => setShowTickerOverride(true)}
+                  className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded transition-colors"
+                >
+                  Correct Ticker
+                </button>
+              ) : (
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={tickerOverride}
+                    onChange={(e) => setTickerOverride(e.target.value.toUpperCase())}
+                    placeholder="Enter correct ticker (e.g., XPON)"
+                    className="px-3 py-1.5 border border-yellow-300 dark:border-yellow-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex-1 max-w-xs"
+                    maxLength={5}
+                  />
+                  <button
+                    onClick={() => {
+                      if (tickerOverride && tickerOverride.length >= 1) {
+                        if (onTickerChange) {
+                          onTickerChange(tickerOverride);
+                        } else {
+                          // Fallback: reload with query param
+                          window.location.href = `/short-check?ticker=${tickerOverride}`;
+                        }
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded transition-colors"
+                  >
+                    Apply
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTickerOverride("");
+                      setShowTickerOverride(false);
+                    }}
+                    className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+      
+      {/* Ticker Override Field (for any ticker, not just single-letter) */}
+      {!isSingleLetterTicker && ticker && (
+        <Card className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600 dark:text-gray-400">Detected ticker:</span>
+            <span className="font-semibold">{ticker}</span>
+            {!showTickerOverride ? (
+              <button
+                onClick={() => setShowTickerOverride(true)}
+                className="ml-auto px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+              >
+                Correct
+              </button>
+            ) : (
+              <div className="ml-auto flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={tickerOverride}
+                  onChange={(e) => setTickerOverride(e.target.value.toUpperCase())}
+                  placeholder="Enter correct ticker"
+                  className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm w-24"
+                  maxLength={5}
+                />
+                <button
+                  onClick={() => {
+                    if (tickerOverride && tickerOverride.length >= 1) {
+                      if (onTickerChange) {
+                        onTickerChange(tickerOverride);
+                      } else {
+                        // Fallback: reload with query param
+                        window.location.href = `/short-check?ticker=${tickerOverride}`;
+                      }
+                    }
+                  }}
+                  className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors"
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={() => {
+                    setTickerOverride("");
+                    setShowTickerOverride(false);
+                  }}
+                  className="px-2 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs rounded transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Main Rating Card */}
       <Card
         className={`p-4 md:p-6 shadow-lg border-2 ${categoryBgColors[result.category]}`}
@@ -360,7 +490,7 @@ export default function ShortCheckResults({
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <h2 className="text-xl md:text-2xl font-bold">
-              {ticker ? `${ticker} — ` : ""}Short Rating
+              {effectiveTicker ? `${effectiveTicker} — ` : ""}Short Rating
             </h2>
             <button
               onClick={() => setShowScoringGuide(true)}
@@ -406,7 +536,7 @@ export default function ShortCheckResults({
               📋 Risk Synopsis
             </h3>
             <p className="text-sm leading-relaxed opacity-80">
-              {generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData)}
+              {generateRiskSynopsis(effectiveTicker || ticker, result.scoreBreakdown, extractedData)}
             </p>
           </div>
         )}
