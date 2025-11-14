@@ -183,7 +183,9 @@ function extractTicker(text: string): string | undefined {
   
   // Pattern 3: Look for multi-letter tickers (2-5 chars) near price data or company info
   // Prioritize tickers that appear near "$" signs, numbers, or company names
+  // This is more aggressive - look for ANY multi-letter uppercase word that could be a ticker
   const multiLetterMatches = [...text.matchAll(/\b([A-Z]{2,5})\b/g)];
+  
   // Common words and financial abbreviations to exclude
   const commonWords = new Set([
     // Common English words
@@ -203,20 +205,35 @@ function extractTicker(text: string): string | undefined {
     const candidate = match[1];
     if (!commonWords.has(candidate) && !/^\d+$/.test(candidate)) {
       // Check context - avoid financial terms even if near prices
-      const context = text.substring(Math.max(0, (match.index || 0) - 30), Math.min(text.length, (match.index || 0) + 30));
+      const context = text.substring(Math.max(0, (match.index || 0) - 50), Math.min(text.length, (match.index || 0) + 50));
       const nearPrice = /\$|price|ticker/i.test(context);
       // Check if it's in a financial context that suggests it's NOT a ticker
       const isFinancialContext = /\b(float|shares|outstanding|os|o\/s|market|cap|ev|si|short|interest|dt|dilution|tracker)\b/i.test(context);
       
+      // Check if it appears near the top of the text (more likely to be a ticker)
+      const isNearTop = (match.index || 0) < text.length * 0.3;
+      
+      // More aggressive: if it's a 4-letter word (like XPON) and not in financial context, prioritize it
+      const isFourLetter = candidate.length === 4;
+      
       // Only add if near price AND not in a financial abbreviation context
       if (nearPrice && !isFinancialContext) {
+        let priority = 3;
+        if (isFourLetter && isNearTop) priority = 2.5; // Boost 4-letter tickers near top
         allMatches.push({
           ticker: candidate,
-          priority: 3, // Higher priority if near price indicators but not financial terms
+          priority,
+          index: match.index || 0
+        });
+      } else if (!nearPrice && !isFinancialContext && isNearTop && isFourLetter) {
+        // Even if not near price, if it's a 4-letter word near the top, consider it
+        allMatches.push({
+          ticker: candidate,
+          priority: 4, // Lower than price-near but still reasonable
           index: match.index || 0
         });
       } else if (!nearPrice && !isFinancialContext) {
-        // Lower priority if not near price
+        // Lower priority if not near price and not near top
         allMatches.push({
           ticker: candidate,
           priority: 6,
@@ -251,8 +268,24 @@ function extractTicker(text: string): string | undefined {
     return a.index - b.index;
   });
   
-  // Return the highest priority match
-  return allMatches.length > 0 ? allMatches[0].ticker : undefined;
+  // Filter out single-letter tickers unless they're in a very high-confidence pattern (priority 0-1)
+  // Single-letter tickers are almost always false positives
+  const filteredMatches = allMatches.filter(m => {
+    if (m.ticker.length === 1) {
+      // Only allow single-letter if it's in a high-confidence pattern (TICKER $PRICE or $TICKER)
+      return m.priority <= 1;
+    }
+    return true;
+  });
+  
+  // Prefer multi-letter tickers (2-5 chars) - they're much more reliable
+  const multiLetterMatches = filteredMatches.filter(m => m.ticker.length >= 2);
+  if (multiLetterMatches.length > 0) {
+    return multiLetterMatches[0].ticker;
+  }
+  
+  // Only return single-letter if no multi-letter found AND it's high confidence
+  return filteredMatches.length > 0 ? filteredMatches[0].ticker : undefined;
 }
 
 /**

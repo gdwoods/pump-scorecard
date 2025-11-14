@@ -212,6 +212,10 @@ export default function ShortCheckPage() {
         .catch((err) => {
           console.error("Failed to load Pump Scorecard data:", err);
           // Set error state so user knows something failed
+          // If it's a 404, the ticker might be invalid - show a helpful message
+          if (err.message?.includes('404') || err.message?.includes('not found')) {
+            console.warn(`Ticker "${ticker}" may be invalid or not found`);
+          }
         })
         .finally(() => {
           setLoadingPumpData(false);

@@ -700,9 +700,25 @@ try {
 
   } catch (err: any) {
     console.error("scan route failed:", err?.message || err);
+    console.error("Error stack:", err?.stack);
+    
+    // Provide more helpful error messages
+    let errorMessage = err?.message || "Internal Server Error";
+    let statusCode = 500;
+    
+    // Check if it's a ticker validation issue
+    if (errorMessage.includes("Invalid ticker") || errorMessage.includes("not found")) {
+      statusCode = 404;
+    }
+    
     return NextResponse.json(
-      { error: err?.message || "Internal Server Error" },
-      { status: 500 }
+      { 
+        error: errorMessage,
+        ticker: upperTicker,
+        // Only include stack in development
+        ...(process.env.NODE_ENV === 'development' && { stack: err?.stack })
+      },
+      { status: statusCode }
     );
   }
 }
