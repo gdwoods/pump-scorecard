@@ -102,7 +102,7 @@ export default function DroppinessCard({
           {verdict}
         </p>
 
-        {detail && detail.length > 0 ? (
+        {Array.isArray(detail) && detail.length > 0 ? (
           <div className="mt-4">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
               Recent spikes:

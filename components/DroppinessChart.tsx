@@ -44,7 +44,7 @@ export default function DroppinessChart({
     </div>
   );
 
-  const hasData = detail && detail.length > 0;
+  const hasData = Array.isArray(detail) && detail.length > 0;
 
   return (
     <div className="p-4 border rounded-lg bg-white dark:bg-gray-800 shadow-sm transition-colors">
