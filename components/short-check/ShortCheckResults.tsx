@@ -582,7 +582,9 @@ export default function ShortCheckResults({
       <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700">
         <h2 className="text-lg font-semibold mb-4">Alert Card</h2>
         <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg font-mono text-sm whitespace-pre-wrap">
-          {result.alertCard}
+          {effectiveTicker && result.alertCard?.includes('N/A') 
+            ? result.alertCard.replace(/N\/A/g, effectiveTicker)
+            : result.alertCard}
         </div>
       </Card>
 
