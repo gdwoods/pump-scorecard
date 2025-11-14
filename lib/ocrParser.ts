@@ -107,19 +107,28 @@ function extractTicker(text: string): string | undefined {
   const allMatches: Array<{ ticker: string; priority: number; index: number }> = [];
   
   // Pattern 1a: TICKER $PRICE format (highest priority - very specific to DT screenshots)
-  // Example: "XPON $1.270" or "XPON $1.64 29.13%"
-  const tickerPriceMatches = [...text.matchAll(/\b([A-Z]{2,5})\s+\$(\d+\.?\d*)/g)];
-  tickerPriceMatches.forEach(match => {
-    const candidate = match[1];
-    // Exclude common financial terms even in this pattern
-    if (candidate && candidate.length >= 2 && candidate.length <= 5 && 
-        !['OS', 'O/S', 'EV', 'MKT', 'CAP', 'SI', 'EST', 'NET', 'DT'].includes(candidate)) {
-      allMatches.push({
-        ticker: candidate,
-        priority: 0, // Highest priority - this is the most reliable pattern
-        index: match.index || 0
-      });
-    }
+  // Example: "XPON $1.270" or "XPON $1.64 29.13%" or "XPON$1.270" (no space)
+  // Also handle variations like "XPON  $1.270" (multiple spaces) or "XPON\n$1.270" (newline)
+  const tickerPricePatterns = [
+    /\b([A-Z]{2,5})\s+\$(\d+\.?\d*)/g,  // Standard: "XPON $1.270"
+    /\b([A-Z]{2,5})\$(\d+\.?\d*)/g,     // No space: "XPON$1.270"
+    /\b([A-Z]{2,5})[\s\n]+\$(\d+\.?\d*)/g, // Multiple spaces/newlines
+  ];
+  
+  tickerPricePatterns.forEach(pattern => {
+    const matches = [...text.matchAll(pattern)];
+    matches.forEach(match => {
+      const candidate = match[1];
+      // Exclude common financial terms even in this pattern
+      if (candidate && candidate.length >= 2 && candidate.length <= 5 && 
+          !['OS', 'O/S', 'EV', 'MKT', 'CAP', 'SI', 'EST', 'NET', 'DT'].includes(candidate)) {
+        allMatches.push({
+          ticker: candidate,
+          priority: 0, // Highest priority - this is the most reliable pattern
+          index: match.index || 0
+        });
+      }
+    });
   });
   
   // Pattern 1b: $TICKER format (priority 1)
@@ -138,7 +147,29 @@ function extractTicker(text: string): string | undefined {
     }
   });
   
-  // Pattern 2: "Ticker:" format (priority 2)
+  // Pattern 2a: Ticker at start of line or near company name (high priority)
+  // Look for patterns like "XPON\nExpion360" or "XPON Expion360" or "XPON" at line start
+  const financialAbbrevs = ['OS', 'EV', 'MKT', 'CAP', 'SI', 'EST', 'NET', 'DT', 'USD'];
+  const lineStartMatches = [...text.matchAll(/(?:^|\n)([A-Z]{2,5})(?:\s|$|\n)/gm)];
+  lineStartMatches.forEach(match => {
+    const candidate = match[1];
+    if (candidate && candidate.length >= 2 && candidate.length <= 5 &&
+        !financialAbbrevs.includes(candidate)) {
+      // Check if followed by company name or price within next 50 chars
+      const afterMatch = text.substring((match.index || 0) + match[0].length, 
+                                         Math.min(text.length, (match.index || 0) + match[0].length + 50));
+      const hasCompanyOrPrice = /\$|company|expion|industr|sector/i.test(afterMatch);
+      if (hasCompanyOrPrice) {
+        allMatches.push({
+          ticker: candidate,
+          priority: 1.5, // Very high priority - ticker at line start near company info
+          index: match.index || 0
+        });
+      }
+    }
+  });
+  
+  // Pattern 2b: "Ticker:" format (priority 2)
   const tickerColonMatches = [...text.matchAll(/ticker[:\s]+([A-Z]{1,5})\b/gi)];
   tickerColonMatches.forEach(match => {
     if (match[1] && match[1].length >= 1 && match[1].length <= 5) {
@@ -688,6 +719,24 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
     
     // Extract ticker
     extracted.ticker = extractTicker(fullText);
+    
+    // Debug: Log ticker extraction details
+    if (extracted.ticker) {
+      console.log(`[OCR] Extracted ticker: "${extracted.ticker}"`);
+      // Log context around where ticker might appear
+      const tickerIndex = fullText.toUpperCase().indexOf(extracted.ticker);
+      if (tickerIndex !== -1) {
+        const context = fullText.substring(Math.max(0, tickerIndex - 30), Math.min(fullText.length, tickerIndex + extracted.ticker.length + 30));
+        console.log(`[OCR] Ticker context: "${context}"`);
+      }
+    } else {
+      console.log('[OCR] No ticker extracted from OCR text');
+      // Log potential ticker candidates for debugging
+      const potentialTickers = fullText.match(/\b([A-Z]{2,5})\s+\$(\d+\.?\d*)/g);
+      if (potentialTickers && potentialTickers.length > 0) {
+        console.log(`[OCR] Potential ticker patterns found: ${potentialTickers.join(', ')}`);
+      }
+    }
     
     // Extract cash on hand (look for patterns like "$2.4M", "Cash: $2.4M", "estimated current cash")
     // IMPORTANT: DT screenshots often show "Net Cash per Share" which is Cash - Debt
