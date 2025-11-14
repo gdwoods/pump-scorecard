@@ -433,7 +433,14 @@ try {
 
     while (url && pageCount < 10) { // limit pagination to avoid 100k+ bars
       const res = await fetch(url);
-      if (!res.ok) break;
+      if (!res.ok) {
+        if (res.status === 429) {
+          console.warn(`Polygon API rate limit hit for ${upperTicker} droppiness`);
+        } else {
+          console.warn(`Polygon API error for ${upperTicker} droppiness: ${res.status}`);
+        }
+        break;
+      }
       const json = await res.json();
       if (json.results?.length) {
         oneMinBars.push(
@@ -450,6 +457,12 @@ try {
       url = json.next_url ? `${json.next_url}&apiKey=${polygonKey}` : null;
       pageCount++;
     }
+    
+    if (oneMinBars.length === 0) {
+      console.warn(`No intraday data from Polygon for ${upperTicker} (${startDateStr} to ${endDateStr})`);
+    }
+  } else {
+    console.warn(`POLYGON_API_KEY not set - cannot fetch droppiness data for ${upperTicker}`);
   }
 
   // 📉 Aggregate into 8-hour buckets instead of 4
@@ -492,14 +505,24 @@ try {
   for (let i = 1; i < candles.length; i++) {
     const prev = candles[i - 1];
     const cur = candles[i];
-    if (!prev.close || !cur.close || !cur.high) continue;
+    if (!prev.close || !cur.close || !cur.high || !cur.open) continue;
 
-    const spikePct = (cur.high - prev.close) / prev.close;
+    // Check for spike between buckets (prev.close to cur.high)
+    const spikePctBetweenBuckets = (cur.high - prev.close) / prev.close;
+    
+    // Also check for spike within current bucket (cur.open to cur.high)
+    const spikePctWithinBucket = (cur.high - cur.open) / cur.open;
+    
+    // Use the larger of the two spike percentages
+    const spikePct = Math.max(spikePctBetweenBuckets, spikePctWithinBucket);
+    
     if (spikePct > 0.2) {
       spikeCount++;
       let retraced = false;
+      // Check if it retraced within the same bucket (high to close)
       if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
-      if (!retraceCount && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) retraced = true;
+      // Check if it retraced in the next bucket
+      if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) retraced = true;
 
       if (retraced) retraceCount++;
       droppinessDetail.push({
