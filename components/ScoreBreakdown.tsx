@@ -2,10 +2,13 @@
 
 import { Card } from "@/components/ui/card";
 
+import ScoreExplanation from "@/components/ScoreExplanation";
+
 interface BreakdownItem {
   label: string;
   value: number;
   actualValue?: string | number;
+  explanation?: string;
 }
 
 interface Props {
@@ -20,8 +23,8 @@ export default function ScoreBreakdown({ ticker, breakdown, total }: Props) {
     value > 0
       ? "text-red-500 dark:text-red-400"
       : value < 0
-      ? "text-green-400 dark:text-green-300"
-      : "text-gray-400 dark:text-gray-500";
+        ? "text-green-400 dark:text-green-300"
+        : "text-gray-400 dark:text-gray-500";
 
   // Label color (make it a bit muted but readable)
   const labelColor = "text-gray-800 dark:text-gray-200";
@@ -31,8 +34,8 @@ export default function ScoreBreakdown({ ticker, breakdown, total }: Props) {
     total >= 70
       ? "text-red-500 dark:text-red-400"
       : total >= 40
-      ? "text-yellow-400 dark:text-yellow-300"
-      : "text-green-400 dark:text-green-300";
+        ? "text-yellow-400 dark:text-yellow-300"
+        : "text-green-400 dark:text-green-300";
 
   return (
     <Card
@@ -55,7 +58,10 @@ export default function ScoreBreakdown({ ticker, breakdown, total }: Props) {
               key={i}
               className="flex justify-between items-center py-2 text-sm"
             >
-              <span className={labelColor}>{item.label}</span>
+              <div className="flex items-center">
+                <span className={labelColor}>{item.label}</span>
+                {item.explanation && <ScoreExplanation text={item.explanation} />}
+              </div>
               <div className="flex items-center gap-2">
                 <span className={`${valueColor(item.value)} font-medium`}>
                   {item.value > 0 ? "+" : ""}

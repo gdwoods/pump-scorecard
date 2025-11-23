@@ -16,6 +16,7 @@ import FraudEvidence from "@/components/FraudEvidence";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
+import SentimentCard from "@/components/SentimentCard";
 import { ShortCheckResult, calculateShortRating } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { saveScanToHistory } from "@/lib/history";
@@ -60,17 +61,17 @@ export default function ShortCheckPage() {
 
       const data = await response.json();
       console.log("Received data:", data);
-      
+
       // Always set extracted data (even if partial) so manual entry can be pre-populated
       setExtractedData(data.extractedData || null);
-      
+
       // Handle OCR failure gracefully - show manual entry with error message
       if (!data.success || data.error) {
         setError(data.error || "OCR processing failed. Please use manual entry below.");
         // Don't set result - let user use manual entry
         return;
       }
-      
+
       // Show results if we got them (even with partial data)
       if (data.result) {
         setResult(data.result);
@@ -125,12 +126,12 @@ export default function ShortCheckPage() {
   // Save Short Check results to history when available
   // Use a ref to prevent duplicate saves in the same render cycle
   const historySavedRef = useRef<string | null>(null);
-  
+
   useEffect(() => {
     if (ticker && result && extractedData) {
       // Create a key to identify this specific result to prevent duplicate saves
       const scanKey = `${ticker}-${result.rating.toFixed(1)}`;
-      
+
       // Only save if we haven't saved this exact rating for this ticker in this session
       if (historySavedRef.current === scanKey) {
         return;
@@ -201,7 +202,7 @@ export default function ShortCheckPage() {
         .then((data) => {
           console.log('Pump Scorecard data received:', Object.keys(data));
           setPumpScorecardData(data);
-          
+
           // Recalculate Short Check score with droppiness if available
           if (extractedData && data.droppinessScore !== undefined) {
             console.log('Recalculating Short Check score with droppiness:', data.droppinessScore);
@@ -298,7 +299,7 @@ export default function ShortCheckPage() {
               extractedData={extractedData || undefined}
               onManualSubmit={handleManualSubmit}
             />
-            
+
             {/* Divider with "OR" text */}
             <div className="relative flex items-center py-4">
               <div className="flex-1 border-t border-gray-300 dark:border-gray-600"></div>
@@ -376,9 +377,9 @@ export default function ShortCheckPage() {
 
         {/* Short Check Results - Only show if we have a result */}
         {result && (
-          <ShortCheckResults 
-            result={result} 
-            ticker={ticker} 
+          <ShortCheckResults
+            result={result}
+            ticker={ticker}
             extractedData={extractedData || undefined}
             pumpScorecardData={pumpScorecardData}
             onTickerChange={(newTicker) => {
@@ -413,6 +414,11 @@ export default function ShortCheckPage() {
         {/* Droppiness Scatter Plot - Full Width */}
         {ticker && pumpScorecardData && !loadingPumpData && (
           <DroppinessScatter detail={pumpScorecardData.droppinessDetail || []} ticker={ticker} />
+        )}
+
+        {/* Social Sentiment Card */}
+        {ticker && pumpScorecardData?.sentiment && !loadingPumpData && (
+          <SentimentCard sentiment={pumpScorecardData.sentiment} />
         )}
 
         {/* Additional Pump Scorecard Cards - Show when we have ticker data */}
@@ -487,24 +493,24 @@ export default function ShortCheckPage() {
 
         {/* Reset Button - Show when we have results or ticker analysis */}
         {(result || ticker || pumpScorecardData) && (
-            <div className="text-center space-y-2">
-              <button
-                onClick={() => {
-                  setResult(null);
-                  setExtractedData(null);
-                  setTicker("");
-                  setError(null);
-                  setPumpScorecardData(null);
-                  setManualFlags({});
-                  setHasAnalyzedTicker(false);
-                  // Scroll to top to show upload component
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
-              >
-                Analyze Another Screenshot
-              </button>
-            </div>
+          <div className="text-center space-y-2">
+            <button
+              onClick={() => {
+                setResult(null);
+                setExtractedData(null);
+                setTicker("");
+                setError(null);
+                setPumpScorecardData(null);
+                setManualFlags({});
+                setHasAnalyzedTicker(false);
+                // Scroll to top to show upload component
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+            >
+              Analyze Another Screenshot
+            </button>
+          </div>
         )}
       </div>
     </div>
