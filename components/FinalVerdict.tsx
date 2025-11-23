@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import ScoreExplanation from "@/components/ScoreExplanation";
+
 type Props = {
   verdict: "Low risk" | "Moderate risk" | "High risk";
   summary: string;
@@ -9,7 +11,7 @@ type Props = {
   manualFlags: Record<string, boolean>;
   droppinessVerdict: string;
   drivers?: { label: string; value: number }[];
-  scoreLog?: { label: string; value: number }[];
+  scoreLog?: { label: string; value: number; explanation?: string }[];
   baseScore?: number; // base model contribution
 };
 
@@ -29,8 +31,8 @@ export default function FinalVerdict({
     verdict === "High risk"
       ? "bg-red-600"
       : verdict === "Moderate risk"
-      ? "bg-yellow-500"
-      : "bg-green-600";
+        ? "bg-yellow-500"
+        : "bg-green-600";
 
   // ✅ Filter out any accidental duplicate "Base model risk"
   const filteredLog = scoreLog.filter(
@@ -79,7 +81,10 @@ export default function FinalVerdict({
               <tbody>
                 {/* ✅ Base model row */}
                 <tr>
-                  <td className="text-gray-400">Base model risk</td>
+                  <td className="text-gray-400 flex items-center">
+                    Base model risk
+                    <ScoreExplanation text="Initial risk assessment based on volume spikes, price action, and SEC filings." />
+                  </td>
                   <td className="text-right text-blue-400 font-semibold">
                     +{baseScore}
                   </td>
@@ -89,24 +94,23 @@ export default function FinalVerdict({
                 {filteredLog.map((item, i) => (
                   <tr key={i}>
                     <td
-                      className={`${
-                        item.value > 0
+                      className={`${item.value > 0
                           ? "text-red-400"
                           : item.value < 0
-                          ? "text-green-400"
-                          : "text-gray-400"
-                      }`}
+                            ? "text-green-400"
+                            : "text-gray-400"
+                        } flex items-center`}
                     >
                       {item.label}
+                      {item.explanation && <ScoreExplanation text={item.explanation} />}
                     </td>
                     <td
-                      className={`text-right font-semibold ${
-                        item.value > 0
+                      className={`text-right font-semibold ${item.value > 0
                           ? "text-red-400"
                           : item.value < 0
-                          ? "text-green-400"
-                          : "text-gray-400"
-                      }`}
+                            ? "text-green-400"
+                            : "text-gray-400"
+                        }`}
                     >
                       {item.value > 0 ? `+${item.value}` : item.value}
                     </td>
