@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 
 interface SentimentCardProps {
+    ticker: string;
     sentiment: {
         score: number;
         bullish: number;
@@ -9,7 +10,7 @@ interface SentimentCardProps {
     } | null;
 }
 
-export default function SentimentCard({ sentiment }: SentimentCardProps) {
+export default function SentimentCard({ ticker, sentiment }: SentimentCardProps) {
     const [filter, setFilter] = useState<'all' | 'bullish' | 'bearish'>('all');
 
     if (!sentiment) return null;
@@ -35,7 +36,7 @@ export default function SentimentCard({ sentiment }: SentimentCardProps) {
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <span>🐦</span> Social Sentiment (StockTwits)
+                <span>🐦</span> {ticker} Social Sentiment (StockTwits)
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -56,8 +57,8 @@ export default function SentimentCard({ sentiment }: SentimentCardProps) {
                     <button
                         onClick={() => setFilter(filter === 'bullish' ? 'all' : 'bullish')}
                         className={`flex justify-between items-center p-3 rounded border transition-all cursor-pointer ${filter === 'bullish'
-                                ? 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700 ring-2 ring-green-400'
-                                : 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-900/30 hover:bg-green-100 dark:hover:bg-green-900/30'
+                            ? 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700 ring-2 ring-green-400'
+                            : 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-900/30 hover:bg-green-100 dark:hover:bg-green-900/30'
                             }`}
                     >
                         <span className="font-medium text-green-700 dark:text-green-400">Bullish Msgs</span>
@@ -66,8 +67,8 @@ export default function SentimentCard({ sentiment }: SentimentCardProps) {
                     <button
                         onClick={() => setFilter(filter === 'bearish' ? 'all' : 'bearish')}
                         className={`flex justify-between items-center p-3 rounded border transition-all cursor-pointer ${filter === 'bearish'
-                                ? 'bg-red-100 dark:bg-red-900/40 border-red-300 dark:border-red-700 ring-2 ring-red-400'
-                                : 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/30'
+                            ? 'bg-red-100 dark:bg-red-900/40 border-red-300 dark:border-red-700 ring-2 ring-red-400'
+                            : 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/30'
                             }`}
                     >
                         <span className="font-medium text-red-700 dark:text-red-400">Bearish Msgs</span>
@@ -84,13 +85,19 @@ export default function SentimentCard({ sentiment }: SentimentCardProps) {
                     {filteredMessages.length > 0 ? (
                         <div className="space-y-2">
                             {filteredMessages.slice(0, 5).map((msg: any) => (
-                                <div key={msg.id} className="text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-100 dark:border-gray-600">
+                                <a
+                                    key={msg.id}
+                                    href={`https://stocktwits.com/${msg.user.username}/message/${msg.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-100 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                                >
                                     <div className="flex justify-between mb-1">
                                         <span className="font-bold text-blue-500">{msg.user.username}</span>
                                         <span className="text-gray-400">{new Date(msg.created_at).toLocaleDateString()}</span>
                                     </div>
                                     <p className="line-clamp-2">{msg.body}</p>
-                                </div>
+                                </a>
                             ))}
                         </div>
                     ) : (

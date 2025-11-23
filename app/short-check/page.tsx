@@ -418,7 +418,7 @@ export default function ShortCheckPage() {
 
         {/* Social Sentiment Card */}
         {ticker && pumpScorecardData?.sentiment && !loadingPumpData && (
-          <SentimentCard sentiment={pumpScorecardData.sentiment} />
+          <SentimentCard ticker={ticker.toUpperCase()} sentiment={pumpScorecardData.sentiment} />
         )}
 
         {/* Additional Pump Scorecard Cards - Show when we have ticker data */}
