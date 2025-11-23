@@ -17,6 +17,7 @@ import BorrowDeskCard from "@/components/BorrowDeskCard";
 import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import SentimentCard from "@/components/SentimentCard";
+import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import { ShortCheckResult, calculateShortRating } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { saveScanToHistory } from "@/lib/history";
@@ -427,11 +428,23 @@ export default function ShortCheckPage() {
             {/* Score Breakdown and Fundamentals */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Fundamentals result={pumpScorecardData} />
-              <SecFilings ticker={ticker} filings={pumpScorecardData.filings} />
+              <SecFilings
+                ticker={ticker}
+                filings={pumpScorecardData.filings}
+                insiderTransactions={pumpScorecardData.insiderTransactions}
+              />
             </div>
 
             {/* Price and Volume Chart - Full Width */}
             <Chart result={pumpScorecardData} />
+
+            {/* Insider Transactions Table */}
+            {pumpScorecardData.insiderTransactions && pumpScorecardData.insiderTransactions.length > 0 && (
+              <InsiderTransactionOverlay
+                transactions={pumpScorecardData.insiderTransactions}
+                history={pumpScorecardData.history || []}
+              />
+            )}
           </>
         )}
 

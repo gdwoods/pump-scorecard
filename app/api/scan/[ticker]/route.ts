@@ -5,6 +5,7 @@ import { parseSecAddress } from "@/utils/normalizeCountry";
 import { fetchBorrowDesk } from "@/utils/fetchBorrowDesk";
 import * as cheerio from "cheerio";
 import { fetchSentiment } from "@/utils/fetchSentiment";
+import { fetchInsiderTransactions } from "@/utils/fetchInsiderTransactions";
 export const runtime = "nodejs";
 
 type HistoryPoint = { date: string; close: number; volume: number };
@@ -503,6 +504,7 @@ export async function GET(
     })();
 
     const sentimentTask = fetchSentiment(upperTicker);
+    const insiderTransactionsTask = fetchInsiderTransactions(upperTicker);
 
     // Execute all tasks in parallel
     const [
@@ -515,7 +517,8 @@ export async function GET(
       droppinessRes,
       borrowRes,
       newsRes,
-      sentimentRes
+      sentimentRes,
+      insiderTransactionsRes
     ] = await Promise.allSettled([
       yahooTask,
       polygonSplitsTask,
@@ -526,7 +529,8 @@ export async function GET(
       droppinessTask,
       borrowTask,
       newsTask,
-      sentimentTask
+      sentimentTask,
+      insiderTransactionsTask
     ]);
 
     // Extract results
@@ -539,6 +543,7 @@ export async function GET(
     const droppinessData = droppinessRes.status === 'fulfilled' ? droppinessRes.value : { score: 0, detail: [], intraday: [] };
     const borrowData = borrowRes.status === 'fulfilled' ? borrowRes.value : null;
     const sentimentData = sentimentRes.status === 'fulfilled' ? sentimentRes.value : null;
+    const insiderTransactions = insiderTransactionsRes.status === 'fulfilled' ? insiderTransactionsRes.value : [];
     const news = newsRes.status === 'fulfilled' ? newsRes.value : [];
 
     // Process Yahoo Data
@@ -729,6 +734,7 @@ export async function GET(
       hasOptions,
       news,
       sentiment: sentimentData,
+      insiderTransactions,
     });
 
   } catch (err: unknown) {

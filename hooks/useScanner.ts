@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { saveScanToHistory, getHistory, HISTORY_STORAGE_KEY } from "@/lib/history";
 import { tickerCache, getTickerCacheKey, isCacheValid, getCachedData, setCachedData } from "@/lib/cache";
+import { InsiderTransaction } from "@/utils/fetchInsiderTransactions";
 
 export interface ScanResult {
     ticker: string;
@@ -49,6 +50,7 @@ export interface ScanResult {
         bearish: number;
         messages: any[];
     } | null;
+    insiderTransactions: InsiderTransaction[];
 }
 
 export function useScanner() {

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import CardTitle from "./CardTitle";
+import { InsiderTransaction } from "@/utils/fetchInsiderTransactions";
 
 const FORM_REGEX =
   /(10-K\/A|10-Q\/A|8-K\/A|S-\d+\/A|F-\d+\/A|20-F\/A|13D\/A|13G\/A|10-K|10-Q|8-K|20-F|6-K|S-\d+|F-\d+|13D|13G|DRS\/A|DRS|424B\d*|EFFECT|25-NSE|CORRESP)/i;
@@ -26,6 +27,7 @@ function isDilutionForm(filing: any) {
 export default function SecFilings({
   ticker,
   filings,
+  insiderTransactions,
 }: {
   ticker: string;
   filings?: Array<{
@@ -36,12 +38,17 @@ export default function SecFilings({
     url: string;
     filename?: string;
   }>;
+  insiderTransactions?: InsiderTransaction[];
 }) {
-  const [filter, setFilter] = useState<"all" | "dilution">("all");
+  const [filter, setFilter] = useState<"all" | "dilution" | "insider">("all");
   const items = Array.isArray(filings) ? filings : [];
 
   const dilutionItems = items.filter((f) => isDilutionForm(f));
-  const filtered = filter === "all" ? items : dilutionItems;
+  const insiderItems = insiderTransactions || [];
+
+  const filtered = filter === "all" ? items :
+    filter === "dilution" ? dilutionItems :
+      []; // insider filter handled separately
 
   // Group by year
   const grouped: Record<string, typeof filtered> = {};
@@ -58,21 +65,19 @@ export default function SecFilings({
         <div className="flex space-x-2">
           <button
             onClick={() => setFilter("all")}
-            className={`px-3 py-1 text-xs rounded ${
-              filter === "all"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200"
-            }`}
+            className={`px-3 py-1 text-xs rounded ${filter === "all"
+              ? "bg-blue-600 text-white"
+              : "bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200"
+              }`}
           >
             All
           </button>
           <button
             onClick={() => setFilter("dilution")}
-            className={`px-3 py-1 text-xs rounded flex items-center gap-1 ${
-              filter === "dilution"
-                ? "bg-red-600 text-white"
-                : "bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200"
-            }`}
+            className={`px-3 py-1 text-xs rounded flex items-center gap-1 ${filter === "dilution"
+              ? "bg-red-600 text-white"
+              : "bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200"
+              }`}
           >
             Dilution Only
             {dilutionItems.length > 0 && (
@@ -81,10 +86,60 @@ export default function SecFilings({
               </span>
             )}
           </button>
+          <button
+            onClick={() => setFilter("insider")}
+            className={`px-3 py-1 text-xs rounded flex items-center gap-1 ${filter === "insider"
+              ? "bg-purple-600 text-white"
+              : "bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200"
+              }`}
+          >
+            Insider (Form 4)
+            {insiderItems.length > 0 && (
+              <span className="ml-1 bg-white text-purple-600 rounded-full px-2 py-0.5 text-xs">
+                {insiderItems.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {filter === "insider" ? (
+        // Show insider transactions
+        insiderItems.length === 0 ? (
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            No Form 4 (insider trading) filings found in the last 12 months
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              Form 4 filings indicate insider buy/sell activity. Click "View" to see transaction details on SEC.gov
+            </p>
+            <ul className="space-y-2 text-sm">
+              {insiderItems.map((tx, i) => (
+                <li
+                  key={i}
+                  className="flex justify-between items-center border-b pb-1"
+                >
+                  <div>
+                    <span className="font-medium text-purple-600 dark:text-purple-400">
+                      {tx.formType}
+                    </span>{" "}
+                    – {tx.date}
+                  </div>
+                  <a
+                    href={tx.filingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 underline"
+                  >
+                    View
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      ) : filtered.length === 0 ? (
         <p className="text-sm text-gray-700 dark:text-gray-300">
           No SEC filings found — please manually check{" "}
           <a
@@ -116,11 +171,10 @@ export default function SecFilings({
                       >
                         <div>
                           <span
-                            className={`font-medium ${
-                              isDilution
-                                ? "text-red-600 dark:text-red-400"
-                                : ""
-                            }`}
+                            className={`font-medium ${isDilution
+                              ? "text-red-600 dark:text-red-400"
+                              : ""
+                              }`}
                           >
                             {label}
                           </span>{" "}
