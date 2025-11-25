@@ -29,15 +29,15 @@ function parseDollarAmount(text: string): number | null {
   const cleaned = text.replace(/[^0-9.MBKmkbd-]/g, '');
   const match = cleaned.match(/(-?\d+\.?\d*)([MKmk]?)/i);
   if (!match) return null;
-  
+
   const value = parseFloat(match[1]);
   const suffix = match[2].toUpperCase();
-  
+
   let multiplier = 1;
   if (suffix === 'M') multiplier = 1_000_000;
   else if (suffix === 'K') multiplier = 1_000;
   else if (suffix === 'B') multiplier = 1_000_000_000;
-  
+
   return value * multiplier;
 }
 
@@ -58,20 +58,20 @@ function parseNumberWithSuffix(text: string): number | null {
   const cleaned = text.replace(/[^0-9.,MKmk]/g, '').replace(/,/g, '');
   const match = cleaned.match(/(\d+\.?\d*)([MKmk]?)/i);
   if (!match) return null;
-  
+
   const value = parseFloat(match[1]);
   const suffix = match[2].toUpperCase();
-  
+
   // If the number is already large (>1000) and has no suffix, assume it's already in raw format
   // Otherwise, if it has M/K suffix or is small, apply multiplier
   if (value > 1000 && !suffix) {
     return value; // Already in raw format (e.g., 4324565)
   }
-  
+
   let multiplier = 1;
   if (suffix === 'M') multiplier = 1_000_000;
   else if (suffix === 'K') multiplier = 1_000;
-  
+
   return value * multiplier;
 }
 
@@ -103,9 +103,9 @@ function extractTicker(text: string): string | undefined {
   // 2. "Ticker: TICKER" format
   // 3. Multi-letter tickers (2-5 chars) - prioritize these
   // 4. Single-letter tickers (lowest priority, rare)
-  
+
   const allMatches: Array<{ ticker: string; priority: number; index: number }> = [];
-  
+
   // Pattern 1a: TICKER $PRICE format (highest priority - very specific to DT screenshots)
   // Example: "XPON $1.270" or "XPON $1.64 29.13%" or "XPON$1.270" (no space)
   // Also handle variations like "XPON  $1.270" (multiple spaces) or "XPON\n$1.270" (newline)
@@ -114,14 +114,14 @@ function extractTicker(text: string): string | undefined {
     /\b([A-Z]{2,5})\$(\d+\.?\d*)/g,     // No space: "XPON$1.270"
     /\b([A-Z]{2,5})[\s\n]+\$(\d+\.?\d*)/g, // Multiple spaces/newlines
   ];
-  
+
   tickerPricePatterns.forEach(pattern => {
     const matches = [...text.matchAll(pattern)];
     matches.forEach(match => {
       const candidate = match[1];
       // Exclude common financial terms even in this pattern
-      if (candidate && candidate.length >= 2 && candidate.length <= 5 && 
-          !['OS', 'O/S', 'EV', 'MKT', 'CAP', 'SI', 'EST', 'NET', 'DT'].includes(candidate)) {
+      if (candidate && candidate.length >= 2 && candidate.length <= 5 &&
+        !['OS', 'O/S', 'EV', 'MKT', 'CAP', 'SI', 'EST', 'NET', 'DT'].includes(candidate)) {
         allMatches.push({
           ticker: candidate,
           priority: 0, // Highest priority - this is the most reliable pattern
@@ -130,7 +130,7 @@ function extractTicker(text: string): string | undefined {
       }
     });
   });
-  
+
   // Pattern 1b: $TICKER format (priority 1)
   const dollarMatches = [...text.matchAll(/\$([A-Z]{1,5})\b/g)];
   dollarMatches.forEach(match => {
@@ -146,7 +146,7 @@ function extractTicker(text: string): string | undefined {
       }
     }
   });
-  
+
   // Pattern 2a: Ticker at start of line or near company name (high priority)
   // Look for patterns like "XPON\nExpion360" or "XPON Expion360" or "XPON" at line start
   const financialAbbrevs = ['OS', 'EV', 'MKT', 'CAP', 'SI', 'EST', 'NET', 'DT', 'USD'];
@@ -154,10 +154,10 @@ function extractTicker(text: string): string | undefined {
   lineStartMatches.forEach(match => {
     const candidate = match[1];
     if (candidate && candidate.length >= 2 && candidate.length <= 5 &&
-        !financialAbbrevs.includes(candidate)) {
+      !financialAbbrevs.includes(candidate)) {
       // Check if followed by company name or price within next 50 chars
-      const afterMatch = text.substring((match.index || 0) + match[0].length, 
-                                         Math.min(text.length, (match.index || 0) + match[0].length + 50));
+      const afterMatch = text.substring((match.index || 0) + match[0].length,
+        Math.min(text.length, (match.index || 0) + match[0].length + 50));
       const hasCompanyOrPrice = /\$|company|expion|industr|sector/i.test(afterMatch);
       if (hasCompanyOrPrice) {
         allMatches.push({
@@ -168,7 +168,7 @@ function extractTicker(text: string): string | undefined {
       }
     }
   });
-  
+
   // Pattern 2b: "Ticker:" format (priority 2)
   const tickerColonMatches = [...text.matchAll(/ticker[:\s]+([A-Z]{1,5})\b/gi)];
   tickerColonMatches.forEach(match => {
@@ -180,12 +180,12 @@ function extractTicker(text: string): string | undefined {
       });
     }
   });
-  
+
   // Pattern 3: Look for multi-letter tickers (2-5 chars) near price data or company info
   // Prioritize tickers that appear near "$" signs, numbers, or company names
   // This is more aggressive - look for ANY multi-letter uppercase word that could be a ticker
   const multiLetterMatches = [...text.matchAll(/\b([A-Z]{2,5})\b/g)];
-  
+
   // Common words and financial abbreviations to exclude
   const commonWords = new Set([
     // Common English words
@@ -209,13 +209,13 @@ function extractTicker(text: string): string | undefined {
       const nearPrice = /\$|price|ticker/i.test(context);
       // Check if it's in a financial context that suggests it's NOT a ticker
       const isFinancialContext = /\b(float|shares|outstanding|os|o\/s|market|cap|ev|si|short|interest|dt|dilution|tracker)\b/i.test(context);
-      
+
       // Check if it appears near the top of the text (more likely to be a ticker)
       const isNearTop = (match.index || 0) < text.length * 0.3;
-      
+
       // More aggressive: if it's a 4-letter word (like XPON) and not in financial context, prioritize it
       const isFourLetter = candidate.length === 4;
-      
+
       // Only add if near price AND not in a financial abbreviation context
       if (nearPrice && !isFinancialContext) {
         let priority = 3;
@@ -242,7 +242,7 @@ function extractTicker(text: string): string | undefined {
       }
     }
   });
-  
+
   // Pattern 4: Single-letter tickers (lowest priority, only if nothing else found)
   const singleLetterMatches = [...text.matchAll(/\b([A-Z])\b/g)];
   const singleLetterCommon = new Set(['A', 'I', 'O']); // Very common single letters to avoid
@@ -261,13 +261,13 @@ function extractTicker(text: string): string | undefined {
       }
     }
   });
-  
+
   // Sort by priority (lower number = higher priority), then by position (earlier = better)
   allMatches.sort((a, b) => {
     if (a.priority !== b.priority) return a.priority - b.priority;
     return a.index - b.index;
   });
-  
+
   // Filter out single-letter tickers unless they're in a very high-confidence pattern (priority 0-1)
   // Single-letter tickers are almost always false positives
   const filteredMatches = allMatches.filter(m => {
@@ -277,13 +277,13 @@ function extractTicker(text: string): string | undefined {
     }
     return true;
   });
-  
+
   // Prefer multi-letter tickers (2-5 chars) - they're much more reliable
   const multiLetterFiltered = filteredMatches.filter(m => m.ticker.length >= 2);
   if (multiLetterFiltered.length > 0) {
     return multiLetterFiltered[0].ticker;
   }
-  
+
   // Only return single-letter if no multi-letter found AND it's high confidence
   return filteredMatches.length > 0 ? filteredMatches[0].ticker : undefined;
 }
@@ -295,13 +295,13 @@ function extractTicker(text: string): string | undefined {
 function extractAtmShelfStatus(text: string): string | undefined {
   let workingText = text;
   let lower = workingText.toLowerCase();
-  
+
   // FIRST: Check for DT's explicit visual tags for Offering Ability
   // These tags take ABSOLUTE precedence - return immediately, don't continue with keyword detection
   // Examples: "Offering Ability: Medium", "Offering Ability: Red", "Offering Ability: Green"
   // Also handle variations: "Offering Ability Medium", "Offering Ability=Medium", etc.
   // IMPORTANT: Use special markers so getOfferingColor can respect DT's explicit tags
-  
+
   // Try multiple patterns to catch different OCR formats
   // IMPORTANT: DT shows "High/Medium/Low" but also uses color tags "Red/Yellow/Green"
   // We need to catch both formats
@@ -313,7 +313,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
     /offering[\s\S]{0,120}?(medium|yellow|red|green|high|low)\b/i,
     /ability[\s\S]{0,120}?(medium|yellow|red|green|high|low)\b/i,
   ];
-  
+
   for (const pattern of offeringAbilityPatterns) {
     const match = text.match(pattern);
     if (match) {
@@ -333,17 +333,17 @@ function extractAtmShelfStatus(text: string): string | undefined {
       }
     }
   }
-  
+
   // Fallback: Check if status keywords appear near "offering" or "ability" (case-insensitive)
   // This handles cases where OCR might split words or format differently
   const offeringIndex = lower.indexOf('offering');
   const abilityIndex = lower.indexOf('ability');
-  
+
   // Check for "high", "medium", or "low" near "offering" or "ability"
   const highIndex = lower.indexOf('high');
   const mediumIndex = lower.indexOf('medium');
   const lowIndex = lower.indexOf('low');
-  
+
   if (highIndex !== -1 && (offeringIndex !== -1 || abilityIndex !== -1)) {
     const nearOffering = offeringIndex !== -1 && Math.abs(highIndex - offeringIndex) < 100;
     const nearAbility = abilityIndex !== -1 && Math.abs(highIndex - abilityIndex) < 100;
@@ -352,7 +352,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
       return 'DT:Red'; // High = Red
     }
   }
-  
+
   if (mediumIndex !== -1 && (offeringIndex !== -1 || abilityIndex !== -1)) {
     const nearOffering = offeringIndex !== -1 && Math.abs(mediumIndex - offeringIndex) < 100;
     const nearAbility = abilityIndex !== -1 && Math.abs(mediumIndex - abilityIndex) < 100;
@@ -361,7 +361,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
       return 'DT:Medium'; // DT says Medium, trust that over keyword detection
     }
   }
-  
+
   if (lowIndex !== -1 && (offeringIndex !== -1 || abilityIndex !== -1)) {
     const nearOffering = offeringIndex !== -1 && Math.abs(lowIndex - offeringIndex) < 100;
     const nearAbility = abilityIndex !== -1 && Math.abs(lowIndex - abilityIndex) < 100;
@@ -370,7 +370,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
       return 'DT:Green'; // Low = Green
     }
   }
-  
+
   // Exclude DT "Major Developments" block from heuristic keyword scans
   const mdIndex = lower.indexOf('major developments');
   if (mdIndex !== -1) {
@@ -382,10 +382,10 @@ function extractAtmShelfStatus(text: string): string | undefined {
 
   // Collect all dilution mechanisms found in the (cleaned) text
   const mechanisms: string[] = [];
-  
+
   // Check for multiple dilution mechanisms (SCNX has ATM, Equity Line, S-1 Offering, Convertible Preferred)
   // Look for patterns like "ATM: 12.14", "Equity Line: 53.25", "S-1 Offering: 25.32"
-  
+
   // Check for Equity Line (often with value like "Equity Line: 53.25")
   if (lower.includes('equity line')) {
     const equityLineMatch = workingText.match(/equity\s*line[:\s]*([0-9.,]+[MKmk]?)/i);
@@ -395,7 +395,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
       mechanisms.push('Equity Line');
     }
   }
-  
+
   // Check for ATM/At-The-Market offerings
   if (lower.includes('atm') || lower.includes('at-the-market')) {
     const atmMatch = workingText.match(/atm[:\s]*([0-9.,]+[MKmk]?)/i) || workingText.match(/at-the-market[:\s]*([0-9.,]+[MKmk]?)/i);
@@ -407,7 +407,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
       mechanisms.push('ATM');
     }
   }
-  
+
   // Check for S-1 Shelf/Offering
   if (lower.includes('s-1') || lower.includes('s1')) {
     const s1Match = workingText.match(/s-1\s*(?:shelf|offering)?[:\s]*([0-9.,]+[MKmk]?)/i);
@@ -419,7 +419,7 @@ function extractAtmShelfStatus(text: string): string | undefined {
       mechanisms.push('S-1 Shelf');
     }
   }
-  
+
   // Check for Convertible Preferred/Convertibles
   if (lower.includes('convertible preferred') || lower.includes('convertible')) {
     const convertMatch = workingText.match(/convertible\s*(?:preferred)?[:\s]*([0-9.,]+[MKmk]?)/i);
@@ -429,12 +429,12 @@ function extractAtmShelfStatus(text: string): string | undefined {
       mechanisms.push('Convertibles');
     }
   }
-  
+
   // Check for warrants
   if (lower.includes('warrants')) {
     mechanisms.push('Warrants');
   }
-  
+
   // Check for White Lion Capital (specific to some tickers)
   if (lower.includes('white lion')) {
     if (lower.includes('common shares purchase agreement') || lower.includes('share purchase agreement')) {
@@ -443,26 +443,26 @@ function extractAtmShelfStatus(text: string): string | undefined {
       mechanisms.push('White Lion Capital Agreement');
     }
   }
-  
+
   // Check for Common Shares Purchase Agreement
   if (lower.includes('common shares purchase agreement') || lower.includes('share purchase agreement')) {
     if (!lower.includes('white lion')) {
       mechanisms.push('Common Shares Purchase Agreement');
     }
   }
-  
+
   // Return combined mechanisms if multiple found, otherwise return single mechanism
   if (mechanisms.length > 1) {
     return mechanisms.join(', '); // e.g., "Equity Line, ATM, S-1 Offering, Convertible Preferred"
   } else if (mechanisms.length === 1) {
     return mechanisms[0];
   }
-  
+
   // Fallback: check for generic dilution indicators
   if (lower.includes('dilution') && (lower.includes('equity') || lower.includes('atm') || lower.includes('s-1'))) {
     return 'Multiple Dilution Mechanisms';
   }
-  
+
   return undefined;
 }
 
@@ -509,7 +509,7 @@ function extractDTStatus(text: string, metricName: string): string | undefined {
     const searchWindow = 50; // tighten window to avoid stray matches
 
     // Find nearest status token after the metric
-    const tokens: Array<{ label: 'red'|'yellow'|'green'|'high'|'medium'|'low'; index: number }> = [];
+    const tokens: Array<{ label: 'red' | 'yellow' | 'green' | 'high' | 'medium' | 'low'; index: number }> = [];
     ['red', 'yellow', 'green', 'high', 'medium', 'low'].forEach((label) => {
       const idx = after.indexOf(label);
       if (idx !== -1 && idx <= searchWindow) {
@@ -557,7 +557,7 @@ function mapDTTag(tag: string): string {
  */
 function extractPriceSpikeFromDT(text: string): number | null {
   const priceMatches: number[] = [];
-  
+
   // Pattern 1: Look for standard price format "$X.XX" followed by percentage
   // Format: "$1.56" followed by "18.18%" (current price & day change)
   // Captures patterns like: "$1.56 18.18%" or "$1.56\n18.18%" or "$1.56\t18.18%"
@@ -571,7 +571,7 @@ function extractPriceSpikeFromDT(text: string): number | null {
       priceMatches.push(pct);
     }
   }
-  
+
   // Pattern 2: Look for extended hours format "E $X.XX" followed by percentage
   // Format: "E $1.88" followed by "20.51%" (estimate/extended hours)
   // This is the right card in DT's green price boxes
@@ -583,7 +583,7 @@ function extractPriceSpikeFromDT(text: string): number | null {
       priceMatches.push(pct);
     }
   }
-  
+
   // Pattern 3: More flexible - dollar sign followed by digits, then percentage within close proximity
   // This handles variations in spacing/formatting
   // Look for pattern: $X.XX (some whitespace/newlines) Y.YY%
@@ -600,13 +600,13 @@ function extractPriceSpikeFromDT(text: string): number | null {
       }
     }
   }
-  
+
   // Return the largest percentage found near price values
   // This should be the day change percentage from the green cards (e.g., 20.51% for MSAI)
   if (priceMatches.length > 0) {
     return Math.max(...priceMatches);
   }
-  
+
   // If no price-adjacent percentages found, return null
   // Don't fall back to all percentages as that might grab institutional ownership (e.g., 35.8%)
   return null;
@@ -673,25 +673,25 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
     // Preprocess image
     const processedImage = await preprocessImage(imageBuffer);
     console.log('OCR: Image preprocessing complete, size:', processedImage.length);
-    
+
     // Check if Google Cloud Vision API key is configured
     if (!process.env.GOOGLE_CLOUD_VISION_API_KEY && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       throw new Error('Google Cloud Vision API key not configured. Please set GOOGLE_CLOUD_VISION_API_KEY or GOOGLE_APPLICATION_CREDENTIALS environment variable. You can use manual entry as an alternative.');
     }
-    
+
     console.log('OCR: Initializing Google Cloud Vision API call...');
     console.log('OCR: API key configured:', !!process.env.GOOGLE_CLOUD_VISION_API_KEY);
     console.log('OCR: API key preview:', process.env.GOOGLE_CLOUD_VISION_API_KEY ? `${process.env.GOOGLE_CLOUD_VISION_API_KEY.substring(0, 10)}...` : 'not set');
-    
+
     // Use REST API with API key authentication
     const apiKey = process.env.GOOGLE_CLOUD_VISION_API_KEY;
     if (!apiKey) {
       throw new Error('GOOGLE_CLOUD_VISION_API_KEY not set');
     }
-    
+
     // Convert image buffer to base64
     const base64Image = processedImage.toString('base64');
-    
+
     console.log('OCR: Performing text detection via REST API...');
     // Call Google Cloud Vision REST API
     const response = await fetch(
@@ -717,42 +717,42 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }),
       }
     );
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
       throw new Error(`Google Cloud Vision API error: ${response.status} - ${JSON.stringify(errorData)}`);
     }
-    
+
     const result = await response.json();
-    
+
     if (!result.responses || !result.responses[0]) {
       throw new Error('Invalid response from Google Cloud Vision API');
     }
-    
+
     const annotations = result.responses[0].textAnnotations;
     if (!annotations || annotations.length === 0) {
       throw new Error('No text detected in image');
     }
-    
+
     // Get full text from first annotation (contains all text)
     const fullText = annotations[0].description || '';
     console.log('OCR: Recognition complete, text length:', fullText.length);
     // Log first 500 chars for debugging extraction patterns
     console.log('OCR: Extracted text preview:', fullText.substring(0, 500));
-    
+
     // Calculate confidence from annotations
-    const confidence = annotations.length > 1 
-      ? Math.min(annotations.slice(1).reduce((acc, d) => acc + (d.confidence || 0), 0) / (annotations.length - 1) / 100, 1)
+    const confidence = annotations.length > 1
+      ? Math.min(annotations.slice(1).reduce((acc: number, d: any) => acc + (d.confidence || 0), 0) / (annotations.length - 1) / 100, 1)
       : 0.8; // Default confidence if only full text available
-    
+
     // Parse extracted text
     const extracted: ExtractedData = {
       confidence,
     };
-    
+
     // Extract ticker
     extracted.ticker = extractTicker(fullText);
-    
+
     // Debug: Log ticker extraction details
     if (extracted.ticker) {
       console.log(`[OCR] Extracted ticker: "${extracted.ticker}"`);
@@ -770,13 +770,13 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         console.log(`[OCR] Potential ticker patterns found: ${potentialTickers.join(', ')}`);
       }
     }
-    
+
     // Extract cash on hand (look for patterns like "$2.4M", "Cash: $2.4M", "estimated current cash")
     // IMPORTANT: DT screenshots often show "Net Cash per Share" which is Cash - Debt
     // We need to distinguish between actual cash vs net cash to know if we can calculate debt/cash ratio
     // Priority: Look for "Cash Position" section first (most reliable)
     // Format: "estimated current cash of $14.2M" or "cash left based on quarterly cash burn"
-    
+
     // First check for "Net Cash" (which means Cash - Debt, so we can't derive debt from it)
     const netCashPatterns = [
       /net\s*cash\s*(?:per\s*share|per\s*shr)?[:\s]*\$?([0-9.,MKmk]+)/i,
@@ -802,7 +802,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // If we didn't find net cash, look for actual cash amounts
     if (!foundNetCash) {
       const cashPatterns = [
@@ -823,18 +823,18 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // Extract quarterly burn rate (look for negative amounts OR positive cash flow)
     // IMPORTANT: Check for positive cash flow FIRST if explicitly stated as "cashflow positive"
     // Then check for negative cash flow (TTM FCF, free cash flow, etc.)
-    
+
     // First, check for explicit "cashflow positive" or "positive cash flow" statements
     const explicitPositivePatterns = [
       /cashflow\s*positive\s*(?:based\s*on|with|of)?\s*(?:quarterly\s*)?(?:operating\s*)?cash\s*flow\s*(?:of)?\s*\$?([0-9.MKmk]+)/i, // "cashflow positive based on quarterly operating cash flow of $0.34M"
       /positive\s*cash\s*flow\s*(?:based\s*on|with|of)?\s*(?:quarterly\s*)?(?:operating\s*)?cash\s*flow\s*(?:of)?\s*\$?([0-9.MKmk]+)/i,
       /(?:quarterly\s*)?(?:operating\s*)?cash\s*flow\s*(?:of)?\s*\$?([0-9.MKmk]+)\s*(?:is\s*)?positive/i,
     ];
-    
+
     let foundPositive = false;
     for (const pattern of explicitPositivePatterns) {
       const match = fullText.match(pattern);
@@ -847,7 +847,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // If no explicit positive cash flow found, check for negative cash flow
     if (!foundPositive) {
       // Priority: Look for "Cash Position" section format
@@ -862,7 +862,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         /quarterly\s*burn[:\s]*-?\$?([0-9.,MKmk]+)/i,
         /-\$([0-9.,MKmk]+)\s*(?:million|M)/i,
       ];
-      
+
       let foundNegative = false;
       for (const pattern of negativeCashFlowPatterns) {
         const match = fullText.match(pattern);
@@ -879,7 +879,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
           }
         }
       }
-      
+
       // Only check for implicit positive cash flow if no negative was found
       if (!foundNegative) {
         const positiveCashFlowPatterns = [
@@ -898,7 +898,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // Extract cash runway (handles negative values like "-3.4 months")
     const runwayPatterns = [
       /cash\s*(?:runway|left)[:\s]*(-?\d+\.?\d*)\s*(?:months?|mo)/i,
@@ -922,7 +922,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // Extract float and outstanding shares
     // Priority: Look for "Float & OS" pattern first, as it's more reliable
     // Format: "Float & OS: 27.64M / 34.47M" - get first number (float) and second (O/S)
@@ -934,27 +934,27 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
     // - "Float & O S: 27.64M / 34.47M" (with space)
     const floatOsPattern = /float\s*&?\s*o[\/\s]*s[:\s]*([0-9.,]+[MKmk]?)\s*\/\s*([0-9.,]+[MKmk]?)/i;
     const floatOsMatch = fullText.match(floatOsPattern);
-    
+
     console.log(`OCR: Float/OS pattern match attempt. Pattern matched: ${!!floatOsMatch}`);
     if (floatOsMatch) {
       console.log(`OCR: Float/OS match found: "${floatOsMatch[0]}", groups: [${floatOsMatch[1]}, ${floatOsMatch[2]}]`);
       // Extract both Float and O/S from "Float & OS: X / Y"
       const floatStr = floatOsMatch[1];
       const osStr = floatOsMatch[2];
-      
+
       console.log(`OCR: Parsing Float string: "${floatStr}", O/S string: "${osStr}"`);
       const floatParsed = parseNumberWithSuffix(floatStr);
       const osParsed = parseNumberWithSuffix(osStr);
-      
+
       console.log(`OCR: Parsed values - Float: ${floatParsed}, O/S: ${osParsed}`);
-      
+
       if (floatParsed && osParsed) {
         // Sanity check: Float should never exceed O/S
         // If float > O/S, likely a parsing error (e.g., "2.76M" read as "27.6M")
         // Check if float is significantly larger than O/S - if so, it's likely wrong
         const floatM = floatParsed < 1000 ? floatParsed : floatParsed / 1_000_000;
         const osM = osParsed < 1000 ? osParsed : osParsed / 1_000_000;
-        
+
         if (floatM > osM * 1.1) {
           // Float exceeds O/S - likely parsing error
           // Common issue: "2.76M" OCR'd as "27.6M" (decimal point missed)
@@ -995,12 +995,13 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // Extract market cap
     const marketCapPatterns = [
       /market\s*cap[:\s]*\$?([0-9.MKmk]+)/i,
       /mkt\s*cap[:\s]*\$?([0-9.MKmk]+)/i,
       /market\s*cap\s*&?\s*ev[:\s]*\$?([0-9.MKmk]+)/i,
+      /mkt\s*cap\s*&?\s*ev[:\s]*\$?([0-9.MKmk]+)/i, // Added pattern for "Mkt Cap & EV"
       /(?:mkt\s*cap|market\s*cap)[:\s]*\$?([0-9.MKmk]+)/i,
     ];
     for (const pattern of marketCapPatterns) {
@@ -1013,7 +1014,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // Extract outstanding shares (only if not already extracted from Float & OS pattern)
     // Priority: Look for "total issued and outstanding shares" or "Major Developments" section first
     // This is more reliable than the summary Float & O/S line
@@ -1041,19 +1042,19 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
     } else {
       console.log(`OCR: O/S already extracted from Float & OS pattern: ${extracted.outstandingShares}`);
     }
-    
+
     // Extract all 5 DT card statuses
     extracted.atmShelfStatus = extractAtmShelfStatus(fullText);
     extracted.overheadSupplyStatus = extractOverheadSupplyStatus(fullText);
     extracted.cashNeedStatus = extractDTStatus(fullText, 'cash need');
     extracted.overallRiskStatus = extractDTStatus(fullText, 'overall risk');
-    
+
     // Extract Historical Dilution - try multiple approaches
     // 1. Try standard extractDTStatus with variations
-    extracted.historicalDilutionStatus = extractDTStatus(fullText, 'historical dilution') || 
-                                         extractDTStatus(fullText, 'historical') ||
-                                         extractDTStatus(fullText, 'historical:');
-    
+    extracted.historicalDilutionStatus = extractDTStatus(fullText, 'historical dilution') ||
+      extractDTStatus(fullText, 'historical') ||
+      extractDTStatus(fullText, 'historical:');
+
     // 2. Direct pattern match for "Historical:" followed by status (most common DT format)
     if (!extracted.historicalDilutionStatus) {
       const directPattern = /historical\s*[:]\s*(high|medium|low|red|yellow|green)\b/i;
@@ -1063,7 +1064,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         console.log(`[OCR] Extracted Historical via direct pattern: ${extracted.historicalDilutionStatus}`);
       }
     }
-    
+
     // 3. Pattern that matches Historical in context of the 5-card row
     // Look for pattern: "Historical" followed by colon/space and status, possibly with line breaks
     if (!extracted.historicalDilutionStatus) {
@@ -1074,7 +1075,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         console.log(`[OCR] Extracted Historical via context pattern: ${extracted.historicalDilutionStatus}`);
       }
     }
-    
+
     // Debug: Check if Historical appears in text at all
     if (!extracted.historicalDilutionStatus) {
       const historicalMatches = fullText.match(/historical[:\s\n]+(high|medium|low|red|yellow|green)/i);
@@ -1095,7 +1096,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // Debug: Log all extracted DT tags
     console.log('Extracted DT tags:');
     console.log('  - Offering Ability:', extracted.atmShelfStatus);
@@ -1103,7 +1104,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
     console.log('  - Cash Need:', extracted.cashNeedStatus);
     console.log('  - Historical Dilution:', extracted.historicalDilutionStatus);
     console.log('  - Overall Risk:', extracted.overallRiskStatus);
-    
+
     // Extract debt
     // IMPORTANT: DT screenshots typically don't show total debt explicitly
     // They show "Net Cash" which is Cash - Debt, so debt is hidden
@@ -1130,7 +1131,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // If we found net cash but no explicit debt, mark that we don't have actual debt data
     if (foundNetCash && !foundExplicitDebt) {
       (extracted as any).hasActualDebtData = false;
@@ -1138,7 +1139,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
     } else if (foundExplicitDebt) {
       (extracted as any).debtCashSource = 'ocr'; // Mark that we have debt from OCR
     }
-    
+
     // Extract institutional ownership
     const instOwnPatterns = [
       /institutional\s*ownership[:\s]*([0-9.]+)\s*%/i,
@@ -1154,7 +1155,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // Extract short interest
     const shortIntPatterns = [
       /short\s*interest[:\s]*([0-9.]+)\s*%/i,
@@ -1170,7 +1171,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         }
       }
     }
-    
+
     // Detect price spike - first try to extract percentage from DT screenshot
     const priceSpikePct = extractPriceSpikeFromDT(fullText);
     if (priceSpikePct !== null) {
@@ -1182,7 +1183,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
       // Fallback to keyword detection
       extracted.priceSpike = detectPriceSpike(fullText);
     }
-    
+
     // Extract news (prefer recent Major Developments within 7 days)
     const ocrNews = extractNews(fullText);
     if (ocrNews) {
@@ -1191,7 +1192,7 @@ export async function extractDataFromImage(imageBuffer: Buffer): Promise<Extract
         (extracted as any).recentNewsDate = ocrNews.date;
       }
     }
-    
+
     return extracted;
   } catch (error) {
     console.error('OCR extraction failed:', error);

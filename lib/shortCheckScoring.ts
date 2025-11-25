@@ -60,16 +60,16 @@ function getOfferingColor(atmShelfStatus: string | undefined, outstandingShares?
       let fl = float;
       if (os < 1000) os = os * 1_000_000;
       if (fl < 1000) fl = fl * 1_000_000;
-      
+
       if (os / fl >= 1.5) {
         return 'Red'; // Infer active dilution from high O/S ratio
       }
     }
     return 'Green';
   }
-  
+
   const status = atmShelfStatus.toLowerCase();
-  
+
   // CRITICAL: Respect DT's explicit visual tags FIRST - these take absolute precedence
   // When DT says "Medium", it means Yellow (score +10), NOT Red (score +25)
   // Do NOT override DT tags based on dilution ratios or other heuristics
@@ -90,23 +90,23 @@ function getOfferingColor(atmShelfStatus: string | undefined, outstandingShares?
     }
     // If unrecognized DT tag, fall through to normal logic
   }
-  
+
   // Check for active dilution indicators - these override S-1 status
   // Key patterns: Equity Line, Share Purchase Agreement, ATM Active, warrants, convertibles, White Lion
   // Note: Check for Equity Line FIRST since it's often combined with other text
   // For SCNX: "Equity Line" should trigger Red Offering
-  if (status.includes('equity line') || 
-      status.includes('share purchase agreement') ||
-      status.includes('purchase agreement') ||
-      status.includes('atm active') || 
-      status.includes('active atm') ||
-      status.includes('active dilution') ||
-      status.includes('warrants') ||
-      status.includes('convertibles') ||
-      status.includes('white lion')) {
+  if (status.includes('equity line') ||
+    status.includes('share purchase agreement') ||
+    status.includes('purchase agreement') ||
+    status.includes('atm active') ||
+    status.includes('active atm') ||
+    status.includes('active dilution') ||
+    status.includes('warrants') ||
+    status.includes('convertibles') ||
+    status.includes('white lion')) {
     return 'Red'; // Active dilution mechanism = Red (e.g., SCNX: Equity Line)
   }
-  
+
   // If S-1 Filed AND we have significant dilution (O/S >> Float), treat as Red (active)
   // This handles cases where S-1 is filed and dilution is actively happening
   // BUT: Skip this check if we already have a DT tag (handled above)
@@ -116,19 +116,19 @@ function getOfferingColor(atmShelfStatus: string | undefined, outstandingShares?
     let fl = float;
     if (os < 1000) os = os * 1_000_000;
     if (fl < 1000) fl = fl * 1_000_000;
-    
+
     const dilutionRatio = os / fl;
     if (dilutionRatio >= 1.5) {
       return 'Red'; // S-1 Filed + significant dilution = active = Red
     }
     return 'Yellow'; // S-1 Filed but no significant dilution yet = Yellow
   }
-  
+
   // S-1 or Shelf filed but not necessarily active
   if (status.includes('s-1') || status.includes('shelf')) {
     return 'Yellow';
   }
-  
+
   return 'Green';
 }
 
@@ -148,20 +148,20 @@ function getOverheadColor(
   float: number | undefined
 ): OverheadColor {
   if (!outstandingShares || !float) return 'Green';
-  
+
   // Handle values that might be in millions vs raw numbers
   // If values are < 1000, assume they're in millions and convert
   let os = outstandingShares;
   let fl = float;
   if (os < 1000) os = os * 1_000_000;
   if (fl < 1000) fl = fl * 1_000_000;
-  
+
   // Calculate dilution ratio: (O/S - Float) / Float
   const dilutionRatio = (os - fl) / fl;
-  
+
   // Also check O/S to Float ratio - if O/S is much larger, significant dilution occurred
   const osToFloatRatio = os / fl;
-  
+
   // Debug logging
   if (process.env.NODE_ENV === 'development') {
     const shouldBeRed = dilutionRatio > 1.0 || osToFloatRatio >= 1.2;
@@ -176,7 +176,7 @@ function getOverheadColor(
       threshold: '1.2x',
     });
   }
-  
+
   // Red if: dilution ratio > 1.0 (100%+) OR O/S is >=1.2x Float (suggesting major dilution)
   // For SCNX: O/S 34.47M vs Float 27.64M = 1.25x → Red (overhead supply)
   // For NIVF: O/S 4.32M vs Float 2.94M = 1.47x → Red
@@ -207,13 +207,13 @@ function scoreCashNeed(
     if (dtTag === 'yellow' || dtTag === 'medium') return 18; // Medium = +18
     if (dtTag === 'green' || dtTag === 'low') return 5; // Low = +5
   }
-  
+
   // If positive cash flow (burnRate >= 0), return Low score (+5)
   // This is NOT a walk-away for Cash Need - it just means low cash need = low score
   if (burnRate !== undefined && burnRate >= 0) {
     return 5; // Low cash need - positive cash flow means no immediate cash need
   }
-  
+
   // Calculate runway from cash and burn rate if runway not provided
   // Note: burnRate should be in dollars (negative for burn, positive for cash flow)
   // If burnRate is -3.37M, it's -3,370,000 in raw dollars
@@ -226,9 +226,9 @@ function scoreCashNeed(
       effectiveRunway = cashOnHand / monthlyBurn; // Months of cash remaining
     }
   }
-  
+
   if (!effectiveRunway) return 0;
-  
+
   if (effectiveRunway < 6) return 25; // High cash need
   if (effectiveRunway < 24) return 18; // Moderate cash need
   return 5; // Low cash need (>24 months)
@@ -241,7 +241,7 @@ function scoreCashNeed(
  * since low cash need already accounts for the situation. A -10 penalty would be double-counting.
  */
 function scoreCashRunway(
-  runway: number | undefined, 
+  runway: number | undefined,
   burnRate: number | undefined,
   cashNeedStatus?: string | undefined
 ): number {
@@ -251,24 +251,24 @@ function scoreCashRunway(
     console.log('Cash Need is Green (Low) - scoring Cash Runway as neutral/positive instead of penalty');
     // Return positive score based on runway length, but cap at moderate levels
     if (!runway) return 10; // Default neutral-positive
-    if (runway < 6) return 15; // Short runway still risky
-    if (runway < 12) return 12; // Moderate risk
-    if (runway < 24) return 10; // Neutral-positive
-    return 10; // Long runway = neutral-positive (not penalty)
+    if (runway < 6) return 12; // Short runway still risky (updated to +12 max for emergency)
+    if (runway < 12) return 10; // Moderate risk
+    if (runway < 24) return 3; // Neutral-positive
+    return 1; // Long runway = neutral-positive (not penalty)
   }
-  
+
   // If positive cash flow, return -10 (walk-away disqualification)
   if (burnRate !== undefined && burnRate >= 0) {
     return -10; // Walk-away for positive cash flow
   }
-  
+
   if (!runway) return 0;
-  
-  if (runway < 0) return 15;
-  if (runway < 6) return 15; // <6 months = max score
-  if (runway < 12) return 10; // 6-12 months
-  if (runway < 18) return 3; // 12-18 months (e.g., SCNX: 17.1 months = +3)
-  if (runway < 24) return 1; // 18-24 months
+
+  if (runway < 0) return 15; // Negative runway
+  if (runway < 4) return 12; // Emergency: 0-4 months -> +12
+  if (runway < 12) return 10; // Critical: 4-12 months -> +10
+  if (runway < 18) return 3; // Moderate: 12-18 months -> +3
+  if (runway < 24) return 1; // Safe: 18-24 months -> +1
   // runway >= 24 is handled as walk-away flag but still contributes -10 to score
   return -10;
 }
@@ -298,9 +298,9 @@ function scoreOfferingAbility(
       // Continue to matrix calculation with Green offering
     }
   }
-  
+
   const offering = getOfferingColor(atmShelfStatus, outstandingShares, float);
-  
+
   // If DT provides Overhead Supply tag, use it; otherwise calculate from O/S ratios
   let overhead: OverheadColor;
   if (overheadSupplyStatus && overheadSupplyStatus.toLowerCase().startsWith('dt:')) {
@@ -318,7 +318,7 @@ function scoreOfferingAbility(
   } else {
     overhead = getOverheadColor(outstandingShares, float);
   }
-  
+
   // Debug logging - always log when DT tag is present
   if (atmShelfStatus && atmShelfStatus.toLowerCase().startsWith('dt:')) {
     console.log('Offering Ability Debug (DT tag present):', {
@@ -328,7 +328,7 @@ function scoreOfferingAbility(
       expectedScore: offering === 'Red' && overhead === 'Red' ? 25 : offering === 'Red' && overhead === 'Green' ? 18 : offering === 'Yellow' && overhead === 'Red' ? 21 : offering === 'Yellow' && overhead === 'Yellow' ? 15 : offering === 'Yellow' && overhead === 'Green' ? 10 : 'other',
     });
   }
-  
+
   // Debug logging for development
   if (process.env.NODE_ENV === 'development') {
     console.log('Offering Ability Debug:', {
@@ -340,7 +340,7 @@ function scoreOfferingAbility(
       expectedScore: offering === 'Red' && overhead === 'Red' ? 25 : offering === 'Red' && overhead === 'Green' ? 18 : 'other',
     });
   }
-  
+
   // Matrix: Offering (rows) x Overhead (columns)
   const matrix: Record<OfferingColor, Record<OverheadColor, number>> = {
     Red: {
@@ -359,7 +359,7 @@ function scoreOfferingAbility(
       Green: -30, // Walk-away
     },
   };
-  
+
   return matrix[offering][overhead];
 }
 
@@ -385,32 +385,32 @@ function scoreHistoricalDilution(
     if (dtTag === 'yellow' || dtTag === 'medium') return 7; // Medium = +7
     if (dtTag === 'green' || dtTag === 'low') return 3; // Low = +3
   }
-  
+
   // If we don't have current O/S, can't calculate
   if (!outstandingShares) return 3; // Default moderate
-  
+
   // Handle values that might be in millions vs raw numbers
   let currentOS = outstandingShares;
   if (currentOS < 1000) currentOS = currentOS * 1_000_000;
-  
+
   // If we have historical O/S, calculate percentage increase
   if (outstandingShares3YearsAgo !== undefined && outstandingShares3YearsAgo !== null) {
     let historicalOS = outstandingShares3YearsAgo;
     if (historicalOS < 1000) historicalOS = historicalOS * 1_000_000;
-    
+
     // If historical O/S is 0 or very small, treat as massive dilution
     if (historicalOS < 1000) {
       return 10; // Went from negligible to significant = >100% increase
     }
-    
+
     // Calculate percentage increase
     const increasePct = (currentOS - historicalOS) / historicalOS;
-    
+
     if (increasePct > 1.0) return 10; // >100% increase
     if (increasePct >= 0.3) return 7;  // 30%-100% increase
     return 3; // <30% increase
   }
-  
+
   // No historical data available - return default
   return 3; // Default moderate (conservative when data unavailable)
 }
@@ -431,15 +431,14 @@ function scoreInstitutionalOwnership(instOwn: number | undefined, marketCap?: nu
     }
     return 3; // Default moderate for larger caps
   }
-  
+
   if (instOwn < 10) return 5;
   if (instOwn < 25) return 4;
-  // When ownership >= 25%, return 0 (high ownership is bullish offset, not bearish)
-  if (instOwn >= 25 && instOwn < 50) return 0; // Changed from +3 to 0
-  if (instOwn >= 50 && instOwn < 75) return -5;
-  // 75%+ is walk-away (handled separately)
-  
-  return 0; // Default to 0 for edge cases
+  if (instOwn < 50) return 3; // 25% - 50%: +3
+  if (instOwn <= 75) return -5; // > 50%: -5 (If >75%, see Rule 2.4)
+  // > 75% is walk-away (handled separately) but still contributes -5 here
+
+  return -5;
 }
 
 /**
@@ -447,7 +446,7 @@ function scoreInstitutionalOwnership(instOwn: number | undefined, marketCap?: nu
  */
 function scoreShortInterest(shortInt: number | undefined): number {
   if (!shortInt) return 8; // Default moderate
-  
+
   if (shortInt < 3) return 15;
   if (shortInt < 7) return 12;
   if (shortInt < 10) return 10;
@@ -456,7 +455,7 @@ function scoreShortInterest(shortInt: number | undefined): number {
   if (shortInt < 25) return 3;
   if (shortInt < 30) return 0;
   if (shortInt >= 30) return -5; // Warning only, not disqualifier
-  
+
   return 8;
 }
 
@@ -477,9 +476,9 @@ function scoreNewsCatalyst(news: string | undefined, newsDate?: string): number 
   if (!news || news.trim() === '' || news.toLowerCase().includes('none')) {
     return 15; // No news
   }
-  
+
   const lowerNews = news.toLowerCase().trim();
-  
+
   // Check if news is recent (within 7 days for bullish penalty)
   const isRecent = newsDate ? (() => {
     const newsTime = new Date(newsDate).getTime();
@@ -487,7 +486,7 @@ function scoreNewsCatalyst(news: string | undefined, newsDate?: string): number 
     const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
     return newsTime >= sevenDaysAgo;
   })() : true; // If no date, assume recent
-  
+
   // +0: Strong bullish terms (within 7 days)
   // These are walk-away flags when recent
   if (isRecent) {
@@ -514,7 +513,7 @@ function scoreNewsCatalyst(news: string | undefined, newsDate?: string): number 
       return 0; // Recent bullish news = walk-away (score 0, will trigger flag)
     }
   }
-  
+
   // +10: Dilution-linked filings (these are GOOD for shorts)
   const dilutionKeywords = [
     's-1',
@@ -534,7 +533,7 @@ function scoreNewsCatalyst(news: string | undefined, newsDate?: string): number 
   if (dilutionKeywords.some(keyword => lowerNews.includes(keyword))) {
     return 10; // Dilution news = good for shorts
   }
-  
+
   // +5: Neutral headlines (earnings, financials, presentations)
   const neutralKeywords = [
     'earnings',
@@ -554,7 +553,7 @@ function scoreNewsCatalyst(news: string | undefined, newsDate?: string): number 
   if (neutralKeywords.some(keyword => lowerNews.includes(keyword))) {
     return 5; // Neutral news
   }
-  
+
   // Mechanical/share administrative updates score as "no news" (+15)
   const mechanicalKeywords = [
     'holders',
@@ -581,7 +580,7 @@ function scoreNewsCatalyst(news: string | undefined, newsDate?: string): number 
   if (mechanicalKeywords.some(keyword => lowerNews.includes(keyword))) {
     return 15; // Mechanical = no bullish catalyst
   }
-  
+
   // Fluff/speculative news (old logic, kept for compatibility)
   const fluffKeywords = [
     'exploring',
@@ -595,7 +594,7 @@ function scoreNewsCatalyst(news: string | undefined, newsDate?: string): number 
   if (fluffKeywords.some(keyword => lowerNews.includes(keyword))) {
     return 10; // Fluff = moderate
   }
-  
+
   // Default to +15 (no bullish catalyst) - conservative for short scoring
   return 15;
 }
@@ -608,7 +607,7 @@ function scoreFloat(
   offeringColor: OfferingColor
 ): number {
   if (!float) return 5; // Default moderate
-  
+
   // IMPORTANT: Use float (public float), NOT outstandingShares or fully diluted shares
   // For SCNX: Float = 2.764M = 2,764,000 shares (not O/S = 34.47M)
   // Convert to raw number if needed
@@ -616,9 +615,9 @@ function scoreFloat(
   if (floatValue < 1000) {
     floatValue = floatValue * 1_000_000; // Assume millions if < 1000
   }
-  
+
   const isGreenOffering = offeringColor === 'Green';
-  
+
   // Base scores based on actual float value
   // SCNX: 2,764,000 is in 2M-5M range = +6
   if (floatValue < 500_000) {
@@ -655,30 +654,30 @@ function scoreOverallRisk(data: ExtractedData): number {
     if (dtTag === 'yellow' || dtTag === 'medium') return 5; // Medium = +5
     if (dtTag === 'green' || dtTag === 'low') return 3; // Low = +3
   }
-  
+
   let riskIndicators = 0;
-  
+
   // High risk indicators (each adds weight)
   // Cash runway <6 months
   if (data.cashRunway && data.cashRunway < 6) riskIndicators += 2;
-  
+
   // Active dilution (ATM Active, warrants, convertibles, S-1 Filed with active dilution)
   if (data.atmShelfStatus) {
     const status = data.atmShelfStatus.toLowerCase();
-    if (status.includes('active') || 
-        status.includes('atm') ||
-        status.includes('warrants') ||
-        status.includes('convertibles') ||
-        status.includes('white lion') ||
-        status.includes('equity line') ||
-        status.includes('share purchase agreement')) {
+    if (status.includes('active') ||
+      status.includes('atm') ||
+      status.includes('warrants') ||
+      status.includes('convertibles') ||
+      status.includes('white lion') ||
+      status.includes('equity line') ||
+      status.includes('share purchase agreement')) {
       riskIndicators += 2; // Active dilution = high risk
     } else if (status.includes('s-1') || status.includes('shelf')) {
       // S-1 Filed alone might not be active, but combined with other factors...
       riskIndicators += 1;
     }
   }
-  
+
   // Significant dilution (O/S much larger than float)
   if (data.outstandingShares && data.float) {
     // Handle values that might be in millions vs raw numbers
@@ -686,29 +685,29 @@ function scoreOverallRisk(data: ExtractedData): number {
     let fl = data.float;
     if (os < 1000) os = os * 1_000_000;
     if (fl < 1000) fl = fl * 1_000_000;
-    
+
     const dilutionRatio = os / fl;
     if (dilutionRatio >= 2.0) riskIndicators += 2; // >100% dilution = high risk
     else if (dilutionRatio > 1.2) riskIndicators += 1; // >20% dilution (e.g., SCNX: 1.25x, NIVF: 1.47x)
   }
-  
+
   // Low institutional ownership (ultra-low is high risk)
   if (data.institutionalOwnership !== undefined && data.institutionalOwnership < 1) {
     riskIndicators += 2; // Ultra-low institutional ownership = high risk (e.g., SCNX: 0.3%)
   } else if (data.institutionalOwnership !== undefined && data.institutionalOwnership < 5) {
     riskIndicators += 1; // Low institutional ownership = moderate risk
   }
-  
+
   // High debt relative to cash
   if (data.debt && data.cashOnHand && data.debt > data.cashOnHand * 2) {
     riskIndicators += 1;
   }
-  
+
   // Microcap (high risk by default, especially if combined with dilution)
   if (data.marketCap && data.marketCap < 50_000_000) {
     riskIndicators += 1;
   }
-  
+
   // If we have multiple high-risk factors (microcap + active dilution + significant dilution),
   // that's definitely high risk
   // Example: SCNX has S-1 Shelf (1) + Significant dilution 1.25x (1) + Microcap (1) + Ultra-low Inst Own 0.3% (2) = 5 indicators = +10
@@ -731,16 +730,17 @@ function scoreOverallRisk(data: ExtractedData): number {
  * Note: Previously required >=30% for any points, but manual scoring awards +10 for >=20%
  */
 function scorePriceSpike(hasSpike: boolean | undefined, spikePct?: number): number {
-  // If we have percentage from DT screenshot, use exact brackets (priority)
+  // If we have percentage from DT screenshot, use exact brackets
   if (spikePct !== undefined) {
-    // Updated threshold: >= 20% scores +10 points (matches manual scoring)
-    if (spikePct >= 20) return 10;
-    return 0; // < 20% = no points
+    if (spikePct > 100) return 10; // > 100%: +10
+    if (spikePct >= 50) return 8;  // 50% - 100%: +8
+    if (spikePct >= 30) return 5;  // 30% - 50%: +5
+    return 0; // < 30%: 0
   }
-  
-  // Fallback: if hasSpike boolean is true, assume moderate spike
+
+  // Fallback: if hasSpike boolean is true, assume moderate spike (30-50%)
   if (hasSpike) return 5;
-  
+
   return 0;
 }
 
@@ -755,18 +755,21 @@ function scoreDebtToCash(debt: number | undefined, cash: number | undefined, has
   if (hasActualDebtData === false) {
     return 0; // Can't calculate ratio without explicit debt data
   }
-  
+
   if (!debt || !cash || cash === 0) {
     // Debt-free or no cash
     return 0;
   }
-  
+
+  // Debt Free check (if debt is 0 explicitly)
+  if (debt === 0) return 0;
+
   const ratio = debt / cash;
-  
+
   if (ratio > 2) return 10;
-  if (ratio > 1) return 7;
-  if (ratio <= 1) return 4;
-  
+  if (ratio >= 1) return 7; // Debt 1x-2x Cash
+  if (ratio < 1) return 4; // Debt < Cash (but not 0)
+
   return 0;
 }
 
@@ -784,22 +787,22 @@ function scoreDroppiness(droppinessScore: number | undefined): number {
   if (droppinessScore === undefined || droppinessScore === null) {
     return 0; // No droppiness data available
   }
-  
+
   // High droppiness (70-100) = spikes fade quickly = very favorable for shorting
   if (droppinessScore >= 70) {
     return 12;
   }
-  
+
   // Moderate-high droppiness (50-69) = spikes usually fade = favorable
   if (droppinessScore >= 50) {
     return 5;
   }
-  
+
   // Neutral droppiness (40-49) = mixed behavior = neutral
   if (droppinessScore >= 40) {
     return 0;
   }
-  
+
   // Low droppiness (<40) = spikes hold = risky for shorting (penalty)
   return -8;
 }
@@ -807,31 +810,35 @@ function scoreDroppiness(droppinessScore: number | undefined): number {
 /**
  * Check for walk-away disqualifiers
  */
+/**
+ * Check for walk-away disqualifiers
+ */
 function checkWalkAwayFlags(data: ExtractedData): string[] {
   const flags: string[] = [];
-  
-  // Cash runway >= 24 months
-  if (data.cashRunway && data.cashRunway >= 24) {
-    flags.push('Cash runway exceeds 24 months');
+
+  // Rule 2.3: Financial Solvency
+  // Cash runway > 24 months
+  if (data.cashRunway && data.cashRunway > 24) {
+    flags.push('Cash runway > 24 months');
   }
-  
+
   // Positive cash flow
   if (data.quarterlyBurnRate && data.quarterlyBurnRate >= 0) {
     flags.push('Positive cash flow');
   }
-  
-  // Institutional ownership >= 75%
-  if (data.institutionalOwnership && data.institutionalOwnership >= 75) {
-    flags.push('Institutional ownership exceeds 75%');
+
+  // Rule 2.4: Institutional Ownership > 75%
+  if (data.institutionalOwnership && data.institutionalOwnership > 75) {
+    flags.push('Institutional ownership > 75%');
   }
-  
+
   // Strong positive news catalyst (recent bullish news scores 0, which triggers walk-away)
   if (data.recentNews && data.recentNewsDate) {
     const lowerNews = data.recentNews.toLowerCase();
     const newsTime = new Date(data.recentNewsDate).getTime();
     const now = Date.now();
     const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
-    
+
     // Check if news is recent (within 7 days) and contains bullish terms
     if (newsTime >= sevenDaysAgo) {
       const bullishKeywords = [
@@ -858,26 +865,26 @@ function checkWalkAwayFlags(data: ExtractedData): string[] {
       }
     }
   }
-  
-  // Market cap eligibility
+
+  // Rule 2.2: Market Cap Exclusions
   if (data.marketCap) {
     if (data.marketCap > 100_000_000) {
-      // $100M+ = walk-away unless runway <4mo
-      if (!data.cashRunway || data.cashRunway >= 4) {
-        flags.push('Market cap exceeds $100M with adequate runway');
-      }
-    } else if (data.marketCap > 70_000_000) {
-      // $70-100M = must have runway <=4mo
-      if (!data.cashRunway || data.cashRunway > 4) {
-        flags.push('Market cap $70-100M requires cash runway ≤4 months');
+      // > $100M -> AUTO PASS
+      flags.push('Market Cap > $100M (Auto Pass)');
+    } else if (data.marketCap >= 70_000_000) {
+      // $70M - $100M: Allowed ONLY IF Cash_Runway <= 4 months OR Cash_Runway < 0
+      const runway = data.cashRunway;
+      const isRunwaySafe = runway !== undefined && (runway <= 4 || runway < 0);
+
+      if (!isRunwaySafe) {
+        flags.push('Market Cap $70M-$100M requires Cash Runway <= 4 months');
       }
     }
+    // <= $70M is Eligible
   }
-  
-  // Green Offering + Green Overhead = walk-away
-  // IMPORTANT: Only trigger when DT explicitly tags BOTH as Green (Low).
-  // We avoid triggering based on heuristics because OCR values can be incomplete and
-  // DT badges are the source of truth for these pills.
+
+  // Rule 2.1: The "Double Green" Trap
+  // IF Offering_Ability == Green AND Overhead_Supply == Green
   const offeringTag = (data.atmShelfStatus || '').toLowerCase().startsWith('dt:')
     ? (data.atmShelfStatus || '').toLowerCase().substring(3).trim()
     : undefined;
@@ -885,14 +892,77 @@ function checkWalkAwayFlags(data: ExtractedData): string[] {
     ? (data.overheadSupplyStatus || '').toLowerCase().substring(3).trim()
     : undefined;
 
-  const dtOfferingGreen = offeringTag === 'green' || offeringTag === 'low';
-  const dtOverheadGreen = overheadTag === 'green' || overheadTag === 'low';
+  // Also check calculated colors if tags are missing
+  const offeringColor = offeringTag ? (offeringTag === 'green' || offeringTag === 'low' ? 'Green' : 'Red') : getOfferingColor(data.atmShelfStatus, data.outstandingShares, data.float);
+  const overheadColor = overheadTag ? (overheadTag === 'green' || overheadTag === 'low' ? 'Green' : 'Red') : getOverheadColor(data.outstandingShares, data.float);
 
-  if (dtOfferingGreen && dtOverheadGreen) {
-    flags.push('Green Offering Ability and Green Overhead Supply');
+  if (offeringColor === 'Green' && overheadColor === 'Green') {
+    // Exception (Regulatory Override):
+    // IF Filing_Type (S-1, S-3, F-3, ATM) found with Date > Current_Date - 1 Year AND Status == Active
+    // For now, we rely on atmShelfStatus string to contain "Active" and filing type
+    const status = (data.atmShelfStatus || '').toLowerCase();
+    const hasRegulatoryOverride = (status.includes('s-1') || status.includes('s-3') || status.includes('f-3') || status.includes('atm')) &&
+      status.includes('active'); // Simplified check
+
+    if (!hasRegulatoryOverride) {
+      flags.push('Double Green Trap (Offering Green + Supply Green)');
+    }
   }
-  
+
   return flags;
+}
+
+/**
+ * Phase III: Scalp Override Logic (The "Hail Mary")
+ */
+function checkScalpOverride(data: ExtractedData, walkAwayFlags: string[]): boolean {
+  // ALL conditions must be TRUE:
+
+  // 1. Price Spike: Very High (Parabolic/Geometric move > 100% or multiple halts)
+  // We use 100% as the threshold for "Very High"
+  if (!data.priceSpikePct || data.priceSpikePct <= 100) return false;
+
+  // 2. Cash Runway: < 4 months
+  if (!data.cashRunway || data.cashRunway >= 4) return false;
+
+  // 3. Market Cap: < $150M
+  if (!data.marketCap || data.marketCap >= 150_000_000) return false;
+
+  // Sub-rule: If MC $70M–$150M, Float must be <= 10M
+  if (data.marketCap >= 70_000_000) {
+    const float = data.float ? (data.float < 1000 ? data.float * 1_000_000 : data.float) : 0;
+    if (float > 10_000_000) return false;
+  }
+
+  // 4. News: None or Fluff only
+  // If we detected substantive news (which triggers walk-away or score penalty), we can't scalp
+  // We check if "Strong positive news" flag is present
+  if (walkAwayFlags.some(f => f.includes('Strong positive news'))) return false;
+
+  // Also check explicit news string if available
+  if (data.recentNews && data.recentNews.toLowerCase() !== 'none') {
+    // If it's not "None", we need to ensure it's "Fluff"
+    // Re-use logic from scoreNewsCatalyst or simplified check
+    const lowerNews = data.recentNews.toLowerCase();
+    const fluffKeywords = ['exploring', 'considering', 'potential', 'could', 'may', 'rumor', 'speculation'];
+    const isFluff = fluffKeywords.some(k => lowerNews.includes(k));
+
+    // If it has news and it's NOT fluff, fail
+    if (!isFluff) {
+      // Check if it's mechanical/neutral (allowed? Rules say "None or Fluff only")
+      // Strict interpretation: Only None or Fluff.
+      return false;
+    }
+  }
+
+  // 5. Double Green Exception
+  // If Setup is Double Green, you CANNOT scalp unless news is None.
+  const isDoubleGreen = walkAwayFlags.some(f => f.includes('Double Green'));
+  if (isDoubleGreen) {
+    if (data.recentNews && data.recentNews.toLowerCase() !== 'none') return false;
+  }
+
+  return true;
 }
 
 /**
@@ -901,7 +971,7 @@ function checkWalkAwayFlags(data: ExtractedData): string[] {
  */
 function calculateAlertLabels(data: ExtractedData, breakdown: ScoreBreakdown): Array<{ label: string; color: 'red' | 'orange' | 'yellow' }> {
   const alerts: Array<{ label: string; color: 'red' | 'orange' | 'yellow' }> = [];
-  
+
   // 🔴 "Cash Raise Likely" - Runway < 2mo AND burn > $1M
   if (data.cashRunway !== undefined && data.cashRunway < 2) {
     let burnDollars = data.quarterlyBurnRate;
@@ -914,7 +984,7 @@ function calculateAlertLabels(data: ExtractedData, breakdown: ScoreBreakdown): A
       }
     }
   }
-  
+
   // ⚠️ "Low Float Risk" - Float < 3M
   if (data.float !== undefined) {
     let floatShares = data.float;
@@ -923,20 +993,20 @@ function calculateAlertLabels(data: ExtractedData, breakdown: ScoreBreakdown): A
       alerts.push({ label: 'Low Float Risk', color: 'orange' });
     }
   }
-  
+
   // 🟠 "Max Dilution Tools" - ATM + S-1 + Convertibles all present
   if (data.atmShelfStatus) {
     const status = data.atmShelfStatus.toLowerCase();
     const hasATM = status.includes('atm') || status.includes('at-the-market');
     const hasS1 = status.includes('s-1') || status.includes('shelf');
     const hasConvertibles = status.includes('convertible') || status.includes('warrants') || status.includes('equity line');
-    
+
     // Count distinct dilution mechanisms
     let mechanismCount = 0;
     if (hasATM) mechanismCount++;
     if (hasS1) mechanismCount++;
     if (hasConvertibles) mechanismCount++;
-    
+
     if (mechanismCount >= 3) {
       alerts.push({ label: 'Max Dilution Tools', color: 'orange' });
     } else if (mechanismCount >= 2 && (hasATM && hasS1)) {
@@ -944,7 +1014,7 @@ function calculateAlertLabels(data: ExtractedData, breakdown: ScoreBreakdown): A
       alerts.push({ label: 'Max Dilution Tools', color: 'orange' });
     }
   }
-  
+
   return alerts;
 }
 
@@ -969,9 +1039,9 @@ function generateAlertCard(
   const tickerStr = ticker || 'N/A';
   const rating = result.rating.toFixed(1);
   const category = result.category;
-  
+
   let card = `${tickerStr} is a ${category} with a rating of ${rating}%.\n\n`;
-  
+
   // Add key metrics
   if (data.cashRunway !== undefined) {
     if (data.cashRunway < 0) {
@@ -986,31 +1056,31 @@ function generateAlertCard(
   if (data.quarterlyBurnRate !== undefined) {
     card += `Quarterly burn: $${Math.abs(data.quarterlyBurnRate / 1_000_000).toFixed(2)}M. `;
   }
-  
+
   if (data.atmShelfStatus) {
     card += `Dilution tools: ${data.atmShelfStatus}. `;
   }
-  
+
   if (data.shortInterest !== undefined) {
     card += `Short interest: ${data.shortInterest.toFixed(1)}%. `;
   }
-  
+
   if (data.float) {
     card += `Float: ${(data.float / 1_000_000).toFixed(2)}M. `;
   }
-  
+
   if (data.institutionalOwnership !== undefined) {
     card += `Institutional ownership: ${data.institutionalOwnership.toFixed(1)}%. `;
   }
-  
+
   if (data.marketCap) {
     card += `Market cap: $${(data.marketCap / 1_000_000).toFixed(1)}M. `;
   }
-  
+
   if (result.walkAwayFlags.length > 0) {
     card += `\n\n⚠️ Walk-away flags: ${result.walkAwayFlags.join(', ')}`;
   }
-  
+
   // Add top scoring factors (including droppiness)
   const breakdown = result.scoreBreakdown;
   const factors: [string, number][] = [
@@ -1027,15 +1097,15 @@ function generateAlertCard(
     ['Debt/Cash Ratio', breakdown.debtToCash],
     ['Institutional Ownership', breakdown.institutionalOwnership],
   ];
-  
+
   // Sort by absolute value to catch both positive and negative contributions
   factors.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
   const topFactors = factors.slice(0, 5).filter(f => Math.abs(f[1]) > 0);
-  
+
   if (topFactors.length > 0) {
     card += `\n\nTop scoring factors: ${topFactors.map(f => `${f[0]} (${f[1] >= 0 ? '+' : ''}${f[1].toFixed(1)})`).join(', ')}`;
   }
-  
+
   return card;
 }
 
@@ -1047,7 +1117,7 @@ function generateAlertCard(
 export function calculateShortRating(data: ExtractedData, droppinessScore?: number): ShortCheckResult {
   // Determine offering color for float adjustment (pass O/S and float for better detection)
   const offeringColor = getOfferingColor(data.atmShelfStatus, data.outstandingShares, data.float);
-  
+
   // Calculate runway from cash and burn rate if not provided
   // Handle both cases: burnRate in millions (e.g., -3.37) or raw dollars (e.g., -3,370,000)
   // If abs(burnRate) < 1000, assume it's in millions and convert
@@ -1063,13 +1133,13 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
     if (cash < 1000) {
       cash = cash * 1_000_000;
     }
-    
+
     const monthlyBurn = quarterlyBurn / 3;
     if (monthlyBurn > 0 && cash > 0) {
       effectiveRunway = cash / monthlyBurn;
     }
   }
-  
+
   // Debug: Log raw values for troubleshooting
   if (process.env.NODE_ENV === 'development' && data.ticker === 'NIVF') {
     console.log('NIVF Debug - Raw data:', {
@@ -1081,7 +1151,7 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
       recentNews: data.recentNews,
     });
   }
-  
+
   // Helper function to format dollar amounts
   const formatDollars = (value: number | undefined): string | undefined => {
     if (value === undefined || value === null) return undefined;
@@ -1116,7 +1186,7 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
 
   // Calculate droppiness score (optional, defaults to 0 if not provided)
   const droppiness = scoreDroppiness(droppinessScore);
-  
+
   // Calculate individual scores (use effectiveRunway for both cashNeed and cashRunway)
   const breakdown: ScoreBreakdown = {
     cashNeed: scoreCashNeed(effectiveRunway, data.quarterlyBurnRate, data.cashOnHand, data.cashNeedStatus),
@@ -1151,8 +1221,8 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
         }
         return parts.length > 0 ? parts.join(', ') : undefined;
       })(),
-      cashRunway: effectiveRunway !== undefined 
-        ? effectiveRunway < 0 
+      cashRunway: effectiveRunway !== undefined
+        ? effectiveRunway < 0
           ? `-${Math.abs(effectiveRunway).toFixed(1)} months (negative cash)`
           : `${effectiveRunway.toFixed(1)} months`
         : undefined,
@@ -1180,9 +1250,9 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
       })(),
       institutionalOwnership: data.institutionalOwnership !== undefined ? `${data.institutionalOwnership.toFixed(1)}%` : undefined,
       shortInterest: data.shortInterest !== undefined ? `${data.shortInterest.toFixed(1)}%` : undefined,
-      newsCatalyst: data.recentNews && data.recentNews.toLowerCase() !== 'none' 
-        ? data.recentNews.length > 80 
-          ? `${data.recentNews.substring(0, 80)}...` 
+      newsCatalyst: data.recentNews && data.recentNews.toLowerCase() !== 'none'
+        ? data.recentNews.length > 80
+          ? `${data.recentNews.substring(0, 80)}...`
           : data.recentNews
         : undefined,
       float: data.float !== undefined ? formatShares(data.float) : undefined,
@@ -1208,7 +1278,7 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
         if (data.hasActualDebtData === false) {
           return 'Debt data unavailable (DT shows Net Cash only)';
         }
-        
+
         const parts: string[] = [];
         if (data.debt !== undefined) {
           parts.push(`Debt: ${formatDollars(data.debt)}`);
@@ -1216,10 +1286,10 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
         if (data.cashOnHand !== undefined) {
           parts.push(`Cash: ${formatDollars(data.cashOnHand)}`);
         }
-        
+
         // Add source indicator if from Yahoo Finance
         const sourceNote = data.debtCashSource === 'yahoo-finance' ? ' (Yahoo Finance)' : '';
-        
+
         return parts.length > 0 ? parts.join(', ') + sourceNote : undefined;
       })(),
       droppiness: droppinessScore !== undefined ? (() => {
@@ -1230,63 +1300,18 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
       })() : undefined,
     },
   };
-  
+
   // Calculate total score (can be negative due to Offering Ability matrix and other adjustments)
   // Exclude actualValues from the sum
   const totalScore = breakdown.cashNeed + breakdown.cashRunway + breakdown.offeringAbility +
     breakdown.historicalDilution + breakdown.institutionalOwnership + breakdown.shortInterest +
     breakdown.newsCatalyst + breakdown.float + breakdown.overallRisk + breakdown.priceSpike +
     breakdown.debtToCash + breakdown.droppiness;
-  
-  // Calculate max possible score, adjusting for walk-away disqualifications
-  // Base max components (all count toward rating):
-  // Cash Need (25) + Cash Runway (15) + Offering (25) + Historical Dilution (10) +
-  // Inst Own (5) + Short Int (15) + News (15) + Float (10) + Overall Risk (10) +
-  // Price Spike (10) + Debt/Cash (10) + Droppiness (12 max) = 172
-  // 
-  // When Cash Runway is disqualified (positive cash flow):
-  // - Cash Runway contributes -10 to totalScore (penalty)
-  // - Base max excluding Cash Runway: 160 - 15 = 145
-  // - But since Cash Runway penalty reduces achievable max, effective max = 145 - 10 = 135?
-  // 
-  // Actually, based on GPT calculation for NIVF: 99 total / 113 max = 88%
-  // This suggests: Price Spike (10) and Debt/Cash (10) don't count toward max
-  // Base: 160 - 10 (Price Spike) - 10 (Debt/Cash) = 140
-  // Exclude Cash Runway: 140 - 15 = 125? Still not 113...
-  //
-  // Let's recalculate based on GPT's actual scoring:
-  // GPT shows max = 113 when Cash Runway is disqualified
-  // Components that count: Cash Need (25) + Offering (25) + Historical Dilution (10) +
-  // Inst Own (5) + Short Int (15) + News (15) + Float (10) + Overall Risk (10) = 115
-  // Exclude Cash Runway: 115 - 15 = 100? Not 113...
-  //
-  // Actually, GPT's 113 might include Cash Runway's -10 penalty in the calculation:
-  // Base max without Cash Runway: 160 - 15 = 145
-  // But since Cash Runway is -10, the achievable range is shifted down by 10
-  // Effective max = 145 - 10 = 135? Still not 113...
-  //
-  // Let me use GPT's actual calculation: max = 113 when Cash Runway disqualified
-  // This might be: 160 - 15 (Cash Runway) - 32 (some other adjustment) = 113
-  // OR: Base core components = 115, exclude Cash Runway = 100, but with penalty adjustment = 113
-  //
-  // GPT calculations show:
-  // - For SCNX (negative burn): max = 150 (excludes Price Spike + Debt/Cash = 160 - 10 - 10)
-  // - For NIVF (positive cash flow): max = 113 (excludes Cash Runway + Price Spike + Debt/Cash)
-  //
-  // Standard max (negative burn rate): 162 (excludes Price Spike and Debt/Cash from denominator, includes Droppiness max of 12)
-  // Adjusted max (positive cash flow): 125 (further excludes Cash Runway)
-  // Note: Droppiness is included in max if provided, otherwise it contributes 0
-  const droppinessMax = droppinessScore !== undefined ? 12 : 0;
-  let maxPossibleScore = 150 + droppinessMax; // Base 150 + Droppiness max (12) = 162
-  
-  // If Cash Runway is disqualified (positive cash flow), further exclude it from max denominator
-  // This aligns with GPT's calculation: 113 max when positive cash flow (before droppiness)
-  const cashRunwayDisqualified = data.quarterlyBurnRate !== undefined && data.quarterlyBurnRate >= 0;
-  if (cashRunwayDisqualified) {
-    // Base 113 + Droppiness max (12) = 125
-    maxPossibleScore = 113 + droppinessMax;
-  }
-  
+
+  // Global Constants & Configuration
+  // Total Max Score (Denominator): 150 (Fixed. Do not adjust for N/A items).
+  const maxPossibleScore = 150;
+
   // Debug: Log score breakdown for troubleshooting
   if (process.env.NODE_ENV === 'development') {
     console.log('Short Check Scoring Debug:', {
@@ -1294,51 +1319,87 @@ export function calculateShortRating(data: ExtractedData, droppinessScore?: numb
       breakdown,
       totalScore,
       maxPossibleScore,
-      cashRunwayDisqualified,
       calculatedRating: (totalScore / maxPossibleScore) * 100,
     });
   }
-  
+
   // Calculate normalized rating
-  // Note: totalScore can be negative due to Cash Runway walk-away (-10)
-  // We use totalScore directly (don't floor at 0) so negative scores reduce the rating
+  // Final Rating Calculation: (Total_Points / 150) * 100.
   const rating = (totalScore / maxPossibleScore) * 100;
-  
+
   // Check walk-away flags
   const walkAwayFlags = checkWalkAwayFlags(data);
-  
+
   // Filter out Cash Runway and Positive cash flow (already penalized in scoring)
   // Note: Cash Runway walk-away is already handled via -10 penalty in scoreCashRunway
   // So we filter it out here to avoid double-penalty
-  const walkAwayFlagsExcludingCashRunway = walkAwayFlags.filter(
-    flag => !flag.includes('Cash runway') && !flag.includes('Positive cash flow')
-  );
-  
-  // Always show the computed rating, but set category to "No-Trade" if walk-away flags exist
-  const finalRating = rating; // Always show the computed score
-  const hasWalkAwayFlags = walkAwayFlagsExcludingCashRunway.length > 0;
-  
-  // Determine category: "No-Trade" if walk-away flags exist, otherwise based on rating
-  const category = hasWalkAwayFlags ? 'No-Trade' : getCategory(finalRating);
-  
+  // UPDATE (v2.0): User requested to keep the score visible but enforce No-Trade.
+  // So we do NOT filter them out for category determination anymore.
+  const walkAwayFlagsExcludingCashRunway = walkAwayFlags;
+
+  // Check for Scalp Override
+  const isScalp = checkScalpOverride(data, walkAwayFlags);
+
+  // Determine category
+  let category: ShortCheckResult['category'];
+
+  if (walkAwayFlagsExcludingCashRunway.length > 0) {
+    category = isScalp ? 'Speculative Short Candidate' : 'No-Trade'; // Scalp override allows trade
+  } else {
+    // Rating Tiers
+    if (rating > 80) category = 'High-Priority Short Candidate';
+    else if (rating >= 70) category = 'Moderate Short Candidate';
+    else if (rating >= 65) category = 'Speculative Short Candidate';
+    else category = 'No-Trade'; // < 65%
+  }
+
+  // If Scalp Override applied, ensure category is at least Speculative
+  if (isScalp && category === 'No-Trade') {
+    category = 'Speculative Short Candidate';
+  }
+
+  // Calculate alert labels
+  const alertLabels = calculateAlertLabels(data, breakdown);
+
+  // Add new Output Flags
+  // TRAP_RISK: IF Float < 2M AND Offering_Ability == Green.
+  if (data.float && data.float < 2_000_000 && offeringColor === 'Green') {
+    alertLabels.push({ label: 'TRAP_RISK', color: 'red' });
+  }
+
+  // DOUBLE_GREEN_LOCKOUT: IF Offering == Green AND Supply == Green.
+  // We check the flags for this one
+  if (walkAwayFlags.some(f => f.includes('Double Green'))) {
+    alertLabels.push({ label: 'DOUBLE_GREEN_LOCKOUT', color: 'red' });
+  }
+
+  // DILUTION_PUMP: IF Cash_Need == High AND Price_Spike > 50% AND Offering == Red.
+  // Cash Need High = score 25
+  // Offering Red = score 25 or 22 or 18 or 21 (Red row)
+  const isCashNeedHigh = breakdown.cashNeed === 25;
+  const isPriceSpikeHigh = data.priceSpikePct ? data.priceSpikePct > 50 : false;
+  const isOfferingRed = offeringColor === 'Red';
+
+  if (isCashNeedHigh && isPriceSpikeHigh && isOfferingRed) {
+    alertLabels.push({ label: 'DILUTION_PUMP', color: 'orange' });
+  }
+
   // Generate alert card
   const alertCard = generateAlertCard(
     data.ticker,
     {
-      rating: finalRating,
+      rating: Math.round(rating * 10) / 10,
       category,
       walkAwayFlags,
       scoreBreakdown: breakdown,
       alertCard: '',
+      alertLabels,
     },
     data
   );
-  
-  // Calculate alert labels
-  const alertLabels = calculateAlertLabels(data, breakdown);
-  
+
   return {
-    rating: Math.round(finalRating * 10) / 10, // Round to 1 decimal
+    rating: Math.round(rating * 10) / 10, // Round to 1 decimal
     category,
     walkAwayFlags,
     alertLabels,
