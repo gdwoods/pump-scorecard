@@ -30,7 +30,7 @@ function generateQuickSummary(
   pumpScorecardData?: any
 ): string {
   const lines: string[] = [];
-  
+
   lines.push(`SHORT CHECK - ${ticker.toUpperCase()}`);
   lines.push(`Rating: ${result.rating.toFixed(1)}% | ${result.category}`);
   lines.push('');
@@ -54,8 +54,8 @@ function generateQuickSummary(
     { name: 'Cash Need', value: breakdown.cashNeed },
     { name: 'Overall Risk', value: breakdown.overallRisk },
   ].filter(f => f.value !== undefined && f.value !== 0)
-   .sort((a, b) => Math.abs(b.value || 0) - Math.abs(a.value || 0))
-   .slice(0, 5);
+    .sort((a, b) => Math.abs(b.value || 0) - Math.abs(a.value || 0))
+    .slice(0, 5);
 
   if (factors.length > 0) {
     lines.push('Top Factors:');
@@ -78,7 +78,7 @@ function generateQuickSummary(
     if (extractedData.institutionalOwnership !== undefined) {
       lines.push(`• Institutional Ownership: ${extractedData.institutionalOwnership}%`);
     }
-    if (extractedData.currentPrice) {
+    if (extractedData.currentPrice !== undefined) {
       lines.push(`• Current Price: $${extractedData.currentPrice.toFixed(2)}`);
     }
     lines.push('');
@@ -168,7 +168,7 @@ function generateFullSummary(
     { label: 'Float', value: breakdown.float },
     { label: 'Short Interest', value: breakdown.shortInterest },
     { label: 'Historical Dilution', value: breakdown.historicalDilution },
-    { label: 'Debt/Cash Ratio', value: breakdown.debtCashRatio },
+    { label: 'Debt/Cash Ratio', value: (breakdown as any).debtCashRatio },
     { label: 'Price Spike', value: breakdown.priceSpike },
     { label: 'News Catalyst', value: breakdown.newsCatalyst },
   ];
@@ -195,7 +195,7 @@ function generateFullSummary(
     if (extractedData.institutionalOwnership !== undefined) {
       lines.push(`• Institutional Ownership: ${extractedData.institutionalOwnership}%`);
     }
-    if (extractedData.currentPrice) {
+    if (extractedData.currentPrice !== undefined) {
       lines.push(`• Current Price: $${extractedData.currentPrice.toFixed(2)}`);
     }
     lines.push('');
@@ -315,10 +315,10 @@ function generateFullSummary(
     // Fraud Evidence
     const fraudItems = Array.isArray(pumpScorecardData.fraudImages)
       ? pumpScorecardData.fraudImages.filter(
-          (item: any) => (item?.caption || '').toLowerCase() !== 'manual check'
-        )
+        (item: any) => (item?.caption || '').toLowerCase() !== 'manual check'
+      )
       : [];
-    
+
     if (fraudItems.length > 0) {
       lines.push('FRAUD EVIDENCE:');
       lines.push(`Found ${fraudItems.length} fraud evidence image(s)`);

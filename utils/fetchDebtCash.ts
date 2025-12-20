@@ -14,7 +14,7 @@ export interface DebtCashData {
 export async function fetchDebtCashFromYahoo(ticker: string): Promise<DebtCashData> {
   try {
     const upperTicker = ticker.toUpperCase();
-    
+
     // Fetch balance sheet data from Yahoo Finance
     const quoteSummary = await yahooFinance.quoteSummary(upperTicker, {
       modules: ["balanceSheetHistory", "balanceSheetHistoryQuarterly"],
@@ -22,11 +22,11 @@ export async function fetchDebtCashFromYahoo(ticker: string): Promise<DebtCashDa
 
     // Try quarterly first (most recent), then annual
     let balanceSheet: any = null;
-    
-    if (quoteSummary?.balanceSheetHistoryQuarterly?.balanceSheetStatements?.length > 0) {
+
+    if (quoteSummary?.balanceSheetHistoryQuarterly?.balanceSheetStatements && quoteSummary.balanceSheetHistoryQuarterly.balanceSheetStatements.length > 0) {
       // Get most recent quarterly balance sheet
       balanceSheet = quoteSummary.balanceSheetHistoryQuarterly.balanceSheetStatements[0];
-    } else if (quoteSummary?.balanceSheetHistory?.balanceSheetStatements?.length > 0) {
+    } else if (quoteSummary?.balanceSheetHistory?.balanceSheetStatements && quoteSummary.balanceSheetHistory.balanceSheetStatements.length > 0) {
       // Fall back to annual balance sheet
       balanceSheet = quoteSummary.balanceSheetHistory.balanceSheetStatements[0];
     }
@@ -37,10 +37,10 @@ export async function fetchDebtCashFromYahoo(ticker: string): Promise<DebtCashDa
 
     // Extract cash and cash equivalents
     // Yahoo Finance fields: cash, cashAndShortTermInvestments, totalCash
-    const cash = balanceSheet.cashAndShortTermInvestments ?? 
-                 balanceSheet.totalCash ?? 
-                 balanceSheet.cash ?? 
-                 null;
+    const cash = balanceSheet.cashAndShortTermInvestments ??
+      balanceSheet.totalCash ??
+      balanceSheet.cash ??
+      null;
 
     // Extract total debt
     // Yahoo Finance fields: totalDebt, totalLiab (total liabilities)

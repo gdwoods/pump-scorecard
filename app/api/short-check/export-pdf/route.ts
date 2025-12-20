@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     const page = pdfDoc.addPage([612, 792]); // US Letter size
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    
+
     let yPosition = 750;
     const pageWidth = 612;
     const margin = 50;
@@ -40,23 +40,23 @@ export async function POST(req: NextRequest) {
     const sectionSpacing = 15;
 
     let currentPage = page;
-    
+
     // Helper function to add text with word wrapping
     const addText = (text: string, x: number, y: number, size: number = 10, isBold: boolean = false) => {
       if (!text || typeof text !== 'string') {
         return y; // Return original y if text is invalid
       }
-      
+
       const currentFont = isBold ? boldFont : font;
       const words = text.split(' ');
       let currentLine = '';
       let currentY = y;
-      
+
       for (const word of words) {
         const testLine = currentLine + (currentLine ? ' ' : '') + word;
         try {
           const textWidth = currentFont.widthOfTextAtSize(testLine, size);
-          
+
           if (textWidth > contentWidth && currentLine) {
             currentPage.drawText(currentLine, {
               x,
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
             });
             currentLine = word;
             currentY -= lineHeight;
-            
+
             // Check if we need a new page
             if (currentY < margin + 50) {
               currentPage = pdfDoc.addPage([612, 792]);
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
       }
-      
+
       if (currentLine) {
         try {
           currentPage.drawText(currentLine, {
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
           console.warn('[PDF Export] Error drawing text:', err);
         }
       }
-      
+
       return currentY - lineHeight;
     };
 
@@ -119,10 +119,10 @@ export async function POST(req: NextRequest) {
     yPosition -= sectionSpacing;
 
     // Date
-    const dateStr = new Date().toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
     yPosition = addText(`Generated: ${dateStr}`, margin, yPosition, 10, false);
     yPosition -= lineHeight * 0.5;
@@ -130,15 +130,15 @@ export async function POST(req: NextRequest) {
     // Main Rating
     yPosition = addSectionHeader('Overall Rating', yPosition);
     yPosition -= 10;
-    
-    const ratingColor = result.category === 'High-Priority Short Candidate' 
+
+    const ratingColor = result.category === 'High-Priority Short Candidate'
       ? rgb(0.8, 0, 0)
       : result.category === 'Moderate Short Candidate'
-      ? rgb(0.8, 0.6, 0)
-      : result.category === 'Speculative Short Candidate'
-      ? rgb(0, 0.4, 0.8)
-      : rgb(0, 0.6, 0);
-    
+        ? rgb(0.8, 0.6, 0)
+        : result.category === 'Speculative Short Candidate'
+          ? rgb(0, 0.4, 0.8)
+          : rgb(0, 0.6, 0);
+
     currentPage.drawText(`Rating: ${result.rating.toFixed(1)}%`, {
       x: margin,
       y: yPosition,
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
       color: ratingColor,
     });
     yPosition -= lineHeight;
-    
+
     currentPage.drawText(`Category: ${result.category}`, {
       x: margin,
       y: yPosition,
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
 
     // Alert Labels
     if (result.alertLabels && result.alertLabels.length > 0) {
-      const alertText = `Alerts: ${result.alertLabels.map(a => a.label).join(', ')}`;
+      const alertText = `Alerts: ${result.alertLabels.map((a: any) => a.label).join(', ')}`;
       yPosition = addText(alertText, margin, yPosition, 10, false);
       yPosition -= lineHeight * 0.5;
     }
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
     if (extractedData) {
       const { generateRiskSynopsis } = await import('@/lib/shortCheckHelpers');
       const synopsis = generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData);
-      
+
       yPosition = addSectionHeader('Risk Synopsis', yPosition);
       yPosition -= 10;
       yPosition = addText(synopsis, margin, yPosition, 10, false);
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
     // Score Breakdown
     yPosition = addSectionHeader('Score Breakdown', yPosition);
     yPosition -= 10;
-    
+
     const breakdownItems = [
       { label: 'Droppiness', value: result.scoreBreakdown.droppiness },
       { label: 'Overall Risk', value: result.scoreBreakdown.overallRisk },
@@ -203,14 +203,14 @@ export async function POST(req: NextRequest) {
           font: font,
         });
         yPosition -= lineHeight;
-        
+
         if (yPosition < margin + 50) {
           currentPage = pdfDoc.addPage([612, 792]);
           yPosition = 750;
         }
       }
     }
-    
+
     yPosition -= sectionSpacing;
 
     // Total Score
@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
     if (result.walkAwayFlags && result.walkAwayFlags.length > 0) {
       yPosition = addSectionHeader('Walk-Away Flags', yPosition);
       yPosition -= 10;
-      
+
       for (const flag of result.walkAwayFlags) {
         currentPage.drawText(`• ${flag}`, {
           x: margin + 10,
@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
           color: rgb(0.8, 0, 0),
         });
         yPosition -= lineHeight;
-        
+
         if (yPosition < margin + 50) {
           currentPage = pdfDoc.addPage([612, 792]);
           yPosition = 750;
@@ -250,7 +250,7 @@ export async function POST(req: NextRequest) {
     if (extractedData) {
       yPosition = addSectionHeader('Key Metrics', yPosition);
       yPosition -= 10;
-      
+
       const metrics = [];
       if (extractedData.cashRunway) metrics.push(`Cash Runway: ${extractedData.cashRunway} months`);
       if (extractedData.float) metrics.push(`Float: ${(extractedData.float / 1e6).toFixed(2)}M shares`);
@@ -260,7 +260,7 @@ export async function POST(req: NextRequest) {
       if (extractedData.currentPrice) {
         metrics.push(`Current Price: $${extractedData.currentPrice.toFixed(2)}`);
       }
-      
+
       for (const metric of metrics) {
         currentPage.drawText(metric, {
           x: margin,
@@ -277,12 +277,12 @@ export async function POST(req: NextRequest) {
     if (result.alertCard) {
       yPosition = addSectionHeader('Alert Card', yPosition);
       yPosition -= 10;
-      
+
       const alertCardLines = (result.alertCard || '').toString().split('\n').slice(0, 20); // Limit lines
       for (const line of alertCardLines) {
         if (line && line.trim()) {
           yPosition = addText(line.trim(), margin, yPosition, 9, false);
-          
+
           if (yPosition < margin + 50) {
             currentPage = pdfDoc.addPage([612, 792]);
             yPosition = 750;
@@ -322,13 +322,13 @@ export async function POST(req: NextRequest) {
       if (pumpScorecardData.weightedRiskScore !== undefined) {
         yPosition = addSectionHeader('Pump Risk Scorecard', yPosition);
         yPosition -= 10;
-        
-        const riskColor = pumpScorecardData.weightedRiskScore >= 70 
+
+        const riskColor = pumpScorecardData.weightedRiskScore >= 70
           ? rgb(0.8, 0, 0)
           : pumpScorecardData.weightedRiskScore >= 40
-          ? rgb(0.8, 0.6, 0)
-          : rgb(0, 0.6, 0);
-        
+            ? rgb(0.8, 0.6, 0)
+            : rgb(0, 0.6, 0);
+
         currentPage.drawText(`Weighted Risk Score: ${pumpScorecardData.weightedRiskScore.toFixed(1)}`, {
           x: margin,
           y: yPosition,
@@ -337,7 +337,7 @@ export async function POST(req: NextRequest) {
           color: riskColor,
         });
         yPosition -= lineHeight;
-        
+
         if (pumpScorecardData.summaryVerdict) {
           currentPage.drawText(`Verdict: ${pumpScorecardData.summaryVerdict}`, {
             x: margin,
@@ -347,7 +347,7 @@ export async function POST(req: NextRequest) {
           });
           yPosition -= lineHeight;
         }
-        
+
         if (pumpScorecardData.summaryText) {
           yPosition = addText(pumpScorecardData.summaryText, margin, yPosition, 10, false);
           yPosition -= sectionSpacing;
@@ -358,7 +358,7 @@ export async function POST(req: NextRequest) {
       if (pumpScorecardData.marketCap || pumpScorecardData.floatShares) {
         yPosition = addSectionHeader('Fundamentals', yPosition);
         yPosition -= 10;
-        
+
         const fundamentals = [];
         if (pumpScorecardData.marketCap) {
           fundamentals.push(`Market Cap: $${(pumpScorecardData.marketCap / 1e9).toFixed(2)}B`);
@@ -387,7 +387,7 @@ export async function POST(req: NextRequest) {
         if (pumpScorecardData.avgVolume) {
           fundamentals.push(`Avg Volume: ${(pumpScorecardData.avgVolume / 1e6).toFixed(2)}M`);
         }
-        
+
         for (const metric of fundamentals) {
           currentPage.drawText(metric, {
             x: margin,
@@ -408,7 +408,7 @@ export async function POST(req: NextRequest) {
       if (pumpScorecardData.filings && pumpScorecardData.filings.length > 0) {
         yPosition = addSectionHeader('Recent SEC Filings', yPosition);
         yPosition -= 10;
-        
+
         const filingsToShow = pumpScorecardData.filings.slice(0, 10);
         for (const filing of filingsToShow) {
           const filingText = `${filing.title || 'Filing'} - ${filing.date || 'Unknown date'}`;
@@ -428,7 +428,7 @@ export async function POST(req: NextRequest) {
       if (recentPromos.length > 0 || olderPromos.length > 0) {
         yPosition = addSectionHeader('Stock Promotions', yPosition);
         yPosition -= 10;
-        
+
         if (recentPromos.length > 0) {
           currentPage.drawText(`Recent (${recentPromos.length}):`, {
             x: margin + 10,
@@ -443,7 +443,7 @@ export async function POST(req: NextRequest) {
             yPosition -= 3;
           }
         }
-        
+
         if (olderPromos.length > 0) {
           yPosition -= 5;
           currentPage.drawText(`Older (${olderPromos.length}):`, {
@@ -464,12 +464,12 @@ export async function POST(req: NextRequest) {
 
       // Fraud Evidence
       // Filter out "manual check" placeholders (same logic as FraudEvidence component)
-      const fraudItems = Array.isArray(pumpScorecardData.fraudImages) 
+      const fraudItems = Array.isArray(pumpScorecardData.fraudImages)
         ? pumpScorecardData.fraudImages.filter(
-            (item: any) => (item?.caption || '').toLowerCase() !== 'manual check'
-          )
+          (item: any) => (item?.caption || '').toLowerCase() !== 'manual check'
+        )
         : [];
-      
+
       if (fraudItems.length > 0) {
         yPosition = addSectionHeader('Fraud Evidence', yPosition);
         yPosition -= 10;
@@ -481,7 +481,7 @@ export async function POST(req: NextRequest) {
           color: rgb(0.8, 0, 0),
         });
         yPosition -= lineHeight;
-        
+
         // List fraud evidence items
         for (const item of fraudItems.slice(0, 5)) {
           const caption = item.caption || 'Fraud evidence';
@@ -499,7 +499,7 @@ export async function POST(req: NextRequest) {
       if (pumpScorecardData.news && Array.isArray(pumpScorecardData.news) && pumpScorecardData.news.length > 0) {
         yPosition = addSectionHeader('Recent News', yPosition);
         yPosition -= 10;
-        
+
         const newsToShow = pumpScorecardData.news.slice(0, 10);
         for (const item of newsToShow) {
           if (item) {
@@ -521,7 +521,7 @@ export async function POST(req: NextRequest) {
       if (pumpScorecardData.borrowData) {
         yPosition = addSectionHeader('Borrow Desk Data', yPosition);
         yPosition -= 10;
-        
+
         const borrowInfo = [];
         if (pumpScorecardData.borrowData.fee !== undefined) {
           borrowInfo.push(`Borrow Fee: ${pumpScorecardData.borrowData.fee}%`);
@@ -529,7 +529,7 @@ export async function POST(req: NextRequest) {
         if (pumpScorecardData.borrowData.available !== undefined) {
           borrowInfo.push(`Available: ${pumpScorecardData.borrowData.available.toLocaleString()} shares`);
         }
-        
+
         for (const info of borrowInfo) {
           currentPage.drawText(info, {
             x: margin,
@@ -562,7 +562,7 @@ export async function POST(req: NextRequest) {
     const pdfBytes = await pdfDoc.save();
     console.log('[PDF Export] PDF generated successfully, size:', pdfBytes.length);
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(pdfBytes as any, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="short-check-${ticker}-${Date.now()}.pdf"`,

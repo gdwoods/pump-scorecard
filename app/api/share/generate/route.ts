@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     // Get base URL from request or use environment variable
     // Priority: NEXT_PUBLIC_BASE_URL > Production domain > VERCEL_URL (preview)
     let baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    
+
     if (!baseUrl) {
       // Check if we have a custom production domain
       // Vercel custom domains are typically available in production
@@ -65,11 +65,11 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-    
+
     // Ensure baseUrl doesn't have a trailing path - strip any path components
     // Remove trailing slashes and any path segments
-    baseUrl = baseUrl.replace(/\/+$/, '').split('/').slice(0, 3).join('/'); // Keep only protocol + hostname
-    
+    baseUrl = (baseUrl || 'http://localhost:3000').replace(/\/+$/, '').split('/').slice(0, 3).join('/'); // Keep only protocol + hostname
+
     const shareUrl = `${baseUrl}/share/${shareId}`;
     console.log(`[Share] Generated URL: ${shareUrl} (env: ${process.env.VERCEL_ENV || 'local'})`);
 

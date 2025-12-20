@@ -35,21 +35,21 @@ async function getKVClient() {
   // With custom prefix "KV_REST_API": KV_REST_API_REDIS_URL (sometimes just KV_REST_API_URL for token)
   // Default: KV_URL and KV_TOKEN
   const redisUrl = process.env.KV_REST_API_REDIS_URL;
-  
+
   // Try multiple possible token variable names
-  const redisToken = process.env.KV_REST_API_REDIS_TOKEN || 
-                     process.env.KV_REST_API_TOKEN ||
-                     process.env.KV_TOKEN;
-  
+  const redisToken = process.env.KV_REST_API_REDIS_TOKEN ||
+    process.env.KV_REST_API_TOKEN ||
+    process.env.KV_TOKEN;
+
   // Also check for standard naming (without _REDIS suffix)
   const hasUrl = redisUrl || process.env.KV_REST_API_URL || process.env.KV_URL;
   const hasToken = redisToken || process.env.KV_REST_API_TOKEN || process.env.KV_TOKEN;
-  
+
   if (!hasUrl) {
     console.log(`[Share] KV not configured: No URL found. Checked: KV_REST_API_REDIS_URL, KV_REST_API_URL, KV_URL`);
     return null;
   }
-  
+
   if (!hasToken) {
     console.warn(`[Share] KV URL found but no token. Checked: KV_REST_API_REDIS_TOKEN, KV_REST_API_TOKEN, KV_TOKEN`);
     console.warn(`[Share] Attempting to connect without explicit token (KV might have token embedded in URL)`);
@@ -63,15 +63,15 @@ async function getKVClient() {
         console.log(`[Share] Using cached Redis client`);
         return cachedRedisClient;
       }
-      
+
       // Use native Redis client for redis:// URLs (Redis Cloud)
       console.log(`[Share] Detected redis:// URL - using native Redis client`);
       try {
         const { createClient } = await import('redis');
-        
+
         // Try non-TLS first (since URL is redis://, not rediss://)
         let redisClient: any = null;
-        
+
         // First attempt: non-TLS connection (redis://)
         try {
           console.log(`[Share] Attempting non-TLS connection to Redis Cloud...`);
@@ -100,7 +100,7 @@ async function getKVClient() {
             throw tlsError;
           }
         }
-        
+
         // Wrap in a compatible interface
         const wrappedClient = {
           get: async (key: string) => {
@@ -146,11 +146,11 @@ async function getKVClient() {
             }
           },
         } as any;
-        
+
         // Cache the client
         cachedRedisClient = wrappedClient;
         cachedClientType = 'redis';
-        
+
         return wrappedClient;
       } catch (redisError: any) {
         console.error(`[Share] ❌ Redis client failed:`, redisError?.message || redisError);
@@ -162,21 +162,21 @@ async function getKVClient() {
         console.log(`[Share] Using cached Vercel KV client`);
         return cachedRedisClient;
       }
-      
+
       // Use @vercel/kv for https:// URLs (Upstash/Vercel KV)
       const { createClient } = await import('@vercel/kv');
-      
+
       const kvConfig: any = { url: hasUrl };
       if (hasToken) {
         kvConfig.token = hasToken;
       }
-      
+
       const kv = createClient(kvConfig);
-      
+
       // Cache the client
       cachedRedisClient = kv;
       cachedClientType = 'vercel-kv';
-      
+
       console.log(`[Share] ✅ Vercel KV client initialized with URL=${!!hasUrl}, Token=${!!hasToken}`);
       return kv;
     }
@@ -190,7 +190,7 @@ async function getKVClient() {
 // Save share data
 export async function saveShare(shareId: string, data: ShareData): Promise<void> {
   const kv = await getKVClient();
-  
+
   if (kv) {
     try {
       // Use Vercel KV with expiration
@@ -216,10 +216,10 @@ export async function saveShare(shareId: string, data: ShareData): Promise<void>
 // Retrieve share data
 export async function getShare(shareId: string): Promise<ShareData | null> {
   const kv = await getKVClient();
-  
+
   if (kv) {
     try {
-      const data = await kv.get<string>(`share:${shareId}`);
+      const data = await kv.get(`share:${shareId}`);
       if (!data) {
         console.log(`[Share] ❌ Not found in KV: ${shareId}`);
         return null;
@@ -253,7 +253,7 @@ export async function getShare(shareId: string): Promise<ShareData | null> {
 // Delete share data (cleanup)
 export async function deleteShare(shareId: string): Promise<void> {
   const kv = await getKVClient();
-  
+
   if (kv) {
     await kv.del(`share:${shareId}`);
   } else {

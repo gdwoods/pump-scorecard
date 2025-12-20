@@ -30,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     // 👇 Dark mode enabled on root html
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-100`}
       >

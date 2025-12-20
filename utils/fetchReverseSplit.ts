@@ -1,3 +1,5 @@
+import * as cheerio from "cheerio";
+
 // ---------- Reverse Split Scraper ----------
 async function fetchReverseSplit(ticker: string) {
   try {
@@ -5,8 +7,8 @@ async function fetchReverseSplit(ticker: string) {
     const res = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
-                      "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                      "Chrome/117.0 Safari/537.36",
+          "AppleWebKit/537.36 (KHTML, like Gecko) " +
+          "Chrome/117.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Cache-Control": "no-cache",
@@ -23,9 +25,15 @@ async function fetchReverseSplit(ticker: string) {
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    let result: { ratio: string; price: string; status: string } | null = null;
+    interface SplitResult {
+      ratio: string;
+      price: string;
+      status: string;
+    }
 
-    $("tr").each((_, el) => {
+    let result: SplitResult | null = null;
+
+    $("tr").each((_: number, el: any) => {
       const cols = $(el).find("td");
       if (cols.length >= 4) {
         const tickerCol = $(cols[0]).text().trim().toUpperCase();
@@ -43,12 +51,15 @@ async function fetchReverseSplit(ticker: string) {
       return { found: false, message: `No reverse split found for ${ticker}` };
     }
 
+    // Explicit check to satisfy TypeScript
+    const finalResult = result as SplitResult;
+
     return {
       found: true,
-      ratio: result.ratio,
-      price: result.price,
-      status: result.status,
-      message: `Ratio: ${result.ratio}, Price: ${result.price}, Status: ${result.status}`,
+      ratio: finalResult.ratio,
+      price: finalResult.price,
+      status: finalResult.status,
+      message: `Ratio: ${finalResult.ratio}, Price: ${finalResult.price}, Status: ${finalResult.status}`,
     };
   } catch (err) {
     console.error("Reverse split scrape failed:", err);

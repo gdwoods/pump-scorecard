@@ -65,3 +65,40 @@ export function FullPageSkeleton() {
     </div>
   );
 }
+
+export function ResultsSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Verdict and Droppiness */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardSkeleton className="h-64" />
+        <CardSkeleton className="h-64" />
+      </div>
+
+      {/* Score Breakdown and Fundamentals */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardSkeleton className="h-48" />
+        <CardSkeleton className="h-48" />
+      </div>
+
+      {/* Criteria and News */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardSkeleton className="h-96" />
+        <CardSkeleton className="h-96" />
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <ChartSkeleton />
+        <ChartSkeleton />
+      </div>
+
+      {/* Bottom Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <CardSkeleton className="h-64" />
+        <CardSkeleton className="h-64" />
+        <CardSkeleton className="h-64" />
+      </div>
+    </div>
+  );
+}

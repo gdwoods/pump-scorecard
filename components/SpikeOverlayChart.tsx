@@ -59,7 +59,7 @@ export default function SpikeOverlayChart({ history, spikes }: Props) {
           <Scatter
             yAxisId="left"
             data={spikeData}
-            shape={(props) => {
+            shape={(props: any) => {
               const { cx, cy, payload } = props;
               return (
                 <circle
@@ -76,7 +76,7 @@ export default function SpikeOverlayChart({ history, spikes }: Props) {
             <LabelList
               dataKey="spikePct"
               position="top"
-              formatter={(v: number) => `+${v}%`}
+              formatter={(v: any) => `+${Number(v)}%`}
               style={{ fontSize: 11, fill: "#111" }}
             />
           </Scatter>

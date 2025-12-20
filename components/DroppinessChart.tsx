@@ -93,7 +93,7 @@ export default function DroppinessChart({
               name="Held"
               data={dataHeld}
               dataKey="spikePct"
-              shape={(props) => (
+              shape={(props: any) => (
                 <circle
                   cx={props.cx}
                   cy={props.cy}
@@ -106,7 +106,7 @@ export default function DroppinessChart({
               name="Retraced"
               data={dataRetraced}
               dataKey="spikePct"
-              shape={(props) => (
+              shape={(props: any) => (
                 <circle
                   cx={props.cx}
                   cy={props.cy}

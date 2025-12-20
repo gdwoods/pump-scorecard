@@ -25,6 +25,7 @@ export interface ExtractedData {
   priceSpikePct?: number; // percentage change from DT screenshot (e.g., 18.18%, 20.51%)
   recentNews?: string; // news headline or "None"
   recentNewsDate?: string; // ISO date string for recency weighting
+  currentPrice?: number; // in dollars
   confidence: number; // overall confidence score (0-1)
 }
 

@@ -16,8 +16,20 @@ interface CandlestickChartProps {
   result: any;
 }
 
+interface ChartEntry {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  change: number;
+  changePercent: number;
+  isGreen: boolean;
+}
+
 export default function CandlestickChart({ result }: CandlestickChartProps) {
-  const chartData =
+  const chartData: ChartEntry[] =
     result?.history?.map((d: any) => {
       const open = Number(d.open) || Number(d.close);
       const close = Number(d.close);
@@ -177,9 +189,9 @@ export default function CandlestickChart({ result }: CandlestickChartProps) {
               strokeWidth={1}
               barSize={4}
             >
-              {chartData.map((entry, index) => (
-                <Cell 
-                  key={`candle-${index}`} 
+              {chartData.map((entry: ChartEntry, index: number) => (
+                <Cell
+                  key={`candle-${index}`}
                   fill={entry.isGreen ? "#22c55e" : "#ef4444"}
                   stroke={entry.isGreen ? "#16a34a" : "#dc2626"}
                   strokeWidth={1}
