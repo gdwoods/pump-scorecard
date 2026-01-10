@@ -1,12 +1,21 @@
 // app/api/scan/[ticker]/route.ts
 import { NextResponse } from "next/server";
-import yahooFinance from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
 import { parseSecAddress } from "@/utils/normalizeCountry";
 import { fetchBorrowDesk } from "@/utils/fetchBorrowDesk";
 import * as cheerio from "cheerio";
 import { fetchSentiment } from "@/utils/fetchSentiment";
 import { fetchInsiderTransactions } from "@/utils/fetchInsiderTransactions";
+import { tickerCache, getTickerCacheKey, isCacheValid, getCachedData, setCachedData } from "@/lib/cache";
 export const runtime = "nodejs";
+
+// Initialize Yahoo Finance instance (v3 requires instantiation)
+const yahooFinance = new YahooFinance();
+
+// Suppress Yahoo Finance survey notice
+try {
+  yahooFinance.suppressNotices(['yahooSurvey']);
+} catch {}
 
 type HistoryPoint = { date: string; close: number; volume: number };
 type Filing = {
@@ -149,6 +158,29 @@ interface YahooQuoteResult {
 interface YahooSummaryResult {
   defaultKeyStatistics?: {
     shortPercentOfFloat?: number;
+    marketCap?: number;
+    sharesOutstanding?: number;
+    floatShares?: number;
+    sharesShort?: number;
+    currentPrice?: number;
+    previousClose?: number;
+    regularMarketPrice?: number;
+    averageVolume?: number;
+    averageVolume10days?: number;
+    averageDailyVolume10Day?: number;
+    volume?: number;
+    [key: string]: any; // Allow any other fields
+  };
+  financialData?: {
+    currentPrice?: number;
+    totalRevenue?: number;
+    revenuePerShare?: number;
+    [key: string]: any;
+  };
+  quoteType?: {
+    exchange?: string;
+    symbol?: string;
+    [key: string]: any;
   };
   insiderHolders?: {
     ownershipList?: Array<{ percentHeld?: number }>;
@@ -177,22 +209,92 @@ export async function GET(
   const upperTicker = ticker.toUpperCase();
 
   try {
+    // Check cache first to avoid hitting Yahoo Finance unnecessarily
+    const cacheKey = getTickerCacheKey(upperTicker);
+    if (isCacheValid(tickerCache, cacheKey)) {
+      const cachedData = getCachedData(tickerCache, cacheKey);
+      if (cachedData) {
+        console.log(`[${upperTicker}] Using cached data (avoiding Yahoo Finance API call)`);
+        return NextResponse.json(cachedData);
+      }
+    }
+
     // Define all independent tasks
     const yahooTask = (async () => {
-      try {
-        const quote = (await yahooFinance.quote(upperTicker)) as YahooQuoteResult;
-        const summary = (await yahooFinance.quoteSummary(upperTicker, {
-          modules: [
-            "defaultKeyStatistics",
-            "insiderHolders",
-            "institutionOwnership",
-            "majorHoldersBreakdown",
-            "summaryProfile",
-          ],
-        })) as YahooSummaryResult;
+      const maxRetries = 3;
+      let retryCount = 0;
+      let quote: YahooQuoteResult | null = null;
+      let summary: YahooSummaryResult | null = null;
+      
+      while (retryCount < maxRetries) {
+        try {
+          // Add delay before retry (longer delays for rate limit errors)
+          if (retryCount > 0) {
+            // Use longer delays for rate limit errors: 5s, 10s, 15s
+            const delay = retryCount === 1 ? 5000 : retryCount === 2 ? 10000 : 15000;
+            console.log(`[${upperTicker}] Retrying Yahoo Finance request (attempt ${retryCount + 1}/${maxRetries}) after ${delay/1000}s delay...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+          
+          quote = (await yahooFinance.quote(upperTicker)) as YahooQuoteResult;
+          summary = (await yahooFinance.quoteSummary(upperTicker, {
+            modules: [
+              "summaryProfile",
+              "defaultKeyStatistics",
+              "financialData",
+              "quoteType",
+              "insiderHolders",
+              "institutionOwnership",
+              "majorHoldersBreakdown",
+            ],
+          })) as YahooSummaryResult;
 
+          // Debug: Log actual structure for debugging (only log full object in dev)
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[${upperTicker}] Raw quote object:`, JSON.stringify(quote, null, 2));
+            if (summary?.defaultKeyStatistics) {
+              console.log(`[${upperTicker}] Raw defaultKeyStatistics:`, JSON.stringify(summary.defaultKeyStatistics, null, 2));
+            }
+          }
+          
+          // Success - break out of retry loop
+          break;
+        } catch (err: any) {
+          retryCount++;
+          const errorMessage = err?.message || String(err);
+          
+          // Check if it's a rate limit error
+          const isRateLimit = errorMessage.includes("Too Many Requests") || 
+                             errorMessage.includes("rate limit") ||
+                             errorMessage.includes("429") ||
+                             (err?.response?.status === 429);
+          
+          if (isRateLimit && retryCount < maxRetries) {
+            console.warn(`[${upperTicker}] Yahoo Finance rate limited (attempt ${retryCount}/${maxRetries}):`, errorMessage);
+            continue; // Retry
+          } else {
+            // Non-rate-limit error or max retries reached
+            console.error(`[${upperTicker}] Yahoo Finance task failed:`, errorMessage);
+            if (retryCount >= maxRetries && isRateLimit) {
+              console.error(`[${upperTicker}] Max retries reached for rate limit - Yahoo Finance may be temporarily unavailable`);
+            }
+            return null; // Give up - cache fallback will be checked in main flow
+          }
+        }
+      }
+      
+      if (!quote || !summary) {
+        return null;
+      }
+
+      // Fetch chart data (with retry logic for rate limits)
+      let chart: any = { quotes: [] };
+      let chartHist: any = { quotes: [] };
+      let hasOptions = false;
+      
+      try {
         const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 180;
-        const chart = await yahooFinance.chart(upperTicker, {
+        chart = await yahooFinance.chart(upperTicker, {
           period1: new Date(Date.now() - SIX_MONTHS_MS),
           period2: new Date(),
           interval: "1d",
@@ -200,51 +302,50 @@ export async function GET(
 
         // 52-week high/low
         const TWO_YEARS = 1000 * 60 * 60 * 24 * 730;
-        const chartHist = await yahooFinance.chart(upperTicker, {
+        chartHist = await yahooFinance.chart(upperTicker, {
           period1: new Date(Date.now() - TWO_YEARS),
           period2: new Date(),
           interval: "1d",
         });
 
         // Options check
-        let hasOptions = false;
         try {
           const yOpt = await yahooFinance.options(upperTicker, {});
           if (yOpt && yOpt.options && yOpt.options.length > 0) hasOptions = true;
         } catch { }
-
-        return { quote, summary, chart, chartHist, hasOptions };
-      } catch (err) {
-        console.error("Yahoo Finance task failed:", err);
-        return null;
+      } catch (chartErr: any) {
+        // Chart data is not critical, log but don't fail
+        console.warn(`[${upperTicker}] Chart data fetch failed (non-critical):`, chartErr?.message);
       }
+
+      return { quote, summary, chart, chartHist, hasOptions };
     })();
 
     const polygonSplitsTask = (async () => {
       try {
-        const polygonKey = process.env.POLYGON_API_KEY;
+  const polygonKey = process.env.POLYGON_API_KEY;
         if (!polygonKey) return [];
 
-        let url: string | null = `https://api.polygon.io/v3/reference/splits?ticker=${upperTicker}&apiKey=${polygonKey}`;
+    let url: string | null = `https://api.polygon.io/v3/reference/splits?ticker=${upperTicker}&apiKey=${polygonKey}`;
         let allSplits: PolygonSplit[] = [];
 
-        while (url) {
-          const splitRes = await fetch(url);
-          if (!splitRes.ok) break;
+    while (url) {
+      const splitRes = await fetch(url);
+      if (!splitRes.ok) break;
           const splitJson: { results?: PolygonSplit[], next_url?: string } = await splitRes.json();
-          allSplits.push(...(splitJson.results || []));
-          url = splitJson.next_url ? `${splitJson.next_url}&apiKey=${polygonKey}` : null;
-        }
+      allSplits.push(...(splitJson.results || []));
+      url = splitJson.next_url ? `${splitJson.next_url}&apiKey=${polygonKey}` : null;
+    }
         return allSplits;
-      } catch (err) {
+} catch (err) {
         console.error("Polygon splits task failed:", err);
         return [];
-      }
+}
     })();
 
     const polygonMetaTask = (async () => {
-      try {
-        const polygonKey = process.env.POLYGON_API_KEY;
+try {
+  const polygonKey = process.env.POLYGON_API_KEY;
         if (!polygonKey) return { meta: null, hasOptions: false };
 
         const [metaRes, optRes] = await Promise.all([
@@ -254,8 +355,8 @@ export async function GET(
 
         const meta = metaRes.ok ? await metaRes.json() : null;
         let hasOptions = false;
-        if (optRes.ok) {
-          const optJson = await optRes.json();
+    if (optRes.ok) {
+      const optJson = await optRes.json();
           if (optJson && Array.isArray(optJson.results) && optJson.results.length > 0) hasOptions = true;
         }
         return { meta, hasOptions };
@@ -266,39 +367,39 @@ export async function GET(
     })();
 
     const secTask = (async () => {
-      try {
-        const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
+    try {
+      const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
           headers: { "User-Agent": "pump-scorecard (garthwoods@gmail.com)", Accept: "application/json" },
-        });
+      });
         if (!cikRes.ok) return { filings: [], secCountry: null };
 
         const cikJson = await cikRes.json();
         const entry = Object.values(cikJson).find((c: unknown) => (c as CikEntry).ticker?.toUpperCase() === upperTicker) as CikEntry | undefined;
         if (!entry) return { filings: [], secCountry: null };
 
-        const cik = entry.cik_str.toString().padStart(10, "0");
+          const cik = entry.cik_str.toString().padStart(10, "0");
         const secRes = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, {
           headers: { "User-Agent": "pump-scorecard", Accept: "application/json" },
         });
 
         if (!secRes.ok) return { filings: [], secCountry: null };
 
-        const secJson = await secRes.json();
-        const biz = parseSecAddress(secJson?.addresses?.business);
-        const mail = parseSecAddress(secJson?.addresses?.mailing);
+            const secJson = await secRes.json();
+            const biz = parseSecAddress(secJson?.addresses?.business);
+            const mail = parseSecAddress(secJson?.addresses?.mailing);
         const secCountry = (biz?.country && biz.country !== "Unknown") ? biz.country : null;
 
-        const recent = secJson?.filings?.recent;
+            const recent = secJson?.filings?.recent;
         let filings: Filing[] = [];
-        if (recent?.form && Array.isArray(recent.form)) {
+            if (recent?.form && Array.isArray(recent.form)) {
           filings = recent.form
-            .map((form: string, idx: number) => ({
-              title: form || "Untitled Filing",
-              date: recent.filingDate[idx] || "Unknown",
+                  .map((form: string, idx: number) => ({
+                    title: form || "Untitled Filing",
+                    date: recent.filingDate[idx] || "Unknown",
               url: `https://www.sec.gov/Archives/edgar/data/${cik}/${recent.accessionNumber[idx].replace(/-/g, "")}/${recent.primaryDocument[idx]}`,
-              businessAddress: biz,
-              mailingAddress: mail,
-            }))
+                    businessAddress: biz,
+                    mailingAddress: mail,
+                  }))
             .sort((a: Filing, b: Filing) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .slice(0, 8);
         }
@@ -310,30 +411,30 @@ export async function GET(
     })();
 
     const promotionsTask = (async () => {
-      try {
-        const promoRes = await fetch(
-          `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${upperTicker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`
-        );
-        if (promoRes.ok) {
-          const promoJson = await promoRes.json();
+    try {
+      const promoRes = await fetch(
+        `https://www.stockpromotiontracker.com/api/stock-promotions?ticker=${upperTicker}&dateRange=all&limit=10&offset=0&sortBy=promotion_date&sortDirection=desc`
+      );
+      if (promoRes.ok) {
+        const promoJson = await promoRes.json();
           return (promoJson?.results || []).map((p: PromotionResult) => ({
-            type: p.type || "Promotion",
-            date: p.promotion_date || "",
-            url: "https://www.stockpromotiontracker.com/",
-          }));
-        }
+          type: p.type || "Promotion",
+          date: p.promotion_date || "",
+          url: "https://www.stockpromotiontracker.com/",
+        }));
+      }
       } catch (err) {
         console.error("Promotions task failed:", err);
-      }
+    }
       return [];
     })();
 
     const fraudTask = (async () => {
-      try {
-        const fraudRes = await fetch(
-          `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
-          { headers: { "User-Agent": "pump-scorecard" } }
-        );
+    try {
+      const fraudRes = await fetch(
+        `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
+        { headers: { "User-Agent": "pump-scorecard" } }
+      );
         if (!fraudRes.ok) return [];
 
         const fraudJson = await fraudRes.json();
@@ -368,11 +469,11 @@ export async function GET(
           }))
           .filter((img: FraudImage) => img.full && img.thumb)
           .sort((a: FraudImage, b: FraudImage) => {
-            if (!a.date && !b.date) return 0;
-            if (!a.date) return 1;
-            if (!b.date) return -1;
-            return new Date(b.date).getTime() - new Date(a.date).getTime();
-          });
+          if (!a.date && !b.date) return 0;
+          if (!a.date) return 1;
+          if (!b.date) return -1;
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        });
       } catch (err) {
         console.error("Fraud task failed:", err);
         return [];
@@ -381,85 +482,85 @@ export async function GET(
 
     const droppinessTask = (async () => {
       try {
-        const EIGHTEEN_MONTHS_MS = 1000 * 60 * 60 * 24 * 547;
-        const startDate = new Date(Date.now() - EIGHTEEN_MONTHS_MS);
-        const endDate = new Date();
-        const startDateStr = startDate.toISOString().slice(0, 10);
-        const endDateStr = endDate.toISOString().slice(0, 10);
-        const polygonKey = process.env.POLYGON_API_KEY;
+  const EIGHTEEN_MONTHS_MS = 1000 * 60 * 60 * 24 * 547;
+  const startDate = new Date(Date.now() - EIGHTEEN_MONTHS_MS);
+  const endDate = new Date();
+  const startDateStr = startDate.toISOString().slice(0, 10);
+  const endDateStr = endDate.toISOString().slice(0, 10);
+  const polygonKey = process.env.POLYGON_API_KEY;
 
         let oneMinBars: PolygonBar[] = [];
-        if (polygonKey) {
-          let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
-          let pageCount = 0;
+  if (polygonKey) {
+    let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
+    let pageCount = 0;
 
           while (url && pageCount < 10) {
-            const res = await fetch(url);
-            if (!res.ok) break;
+      const res = await fetch(url);
+      if (!res.ok) break;
             const json: { results?: PolygonBar[], next_url?: string } = await res.json();
-            if (json.results?.length) {
+      if (json.results?.length) {
               oneMinBars.push(...json.results.map((c: PolygonBar) => ({
                 t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v,
               })));
-            }
-            url = json.next_url ? `${json.next_url}&apiKey=${polygonKey}` : null;
-            pageCount++;
-          }
-        }
+      }
+      url = json.next_url ? `${json.next_url}&apiKey=${polygonKey}` : null;
+      pageCount++;
+    }
+  }
 
         // Aggregate into 8-hour buckets
-        const bucketMs = 1000 * 60 * 60 * 8;
-        const candles: IntradayCandle[] = [];
+  const bucketMs = 1000 * 60 * 60 * 8;
+  const candles: IntradayCandle[] = [];
         let bucket: IntradayCandle | null = null;
 
-        for (const bar of oneMinBars) {
-          const barTime = new Date(bar.t);
-          const bucketTime = Math.floor(barTime.getTime() / bucketMs) * bucketMs;
+  for (const bar of oneMinBars) {
+    const barTime = new Date(bar.t);
+    const bucketTime = Math.floor(barTime.getTime() / bucketMs) * bucketMs;
 
-          if (!bucket || bucket.bucketTime !== bucketTime) {
-            if (bucket) candles.push(bucket);
-            bucket = {
-              bucketTime,
-              date: new Date(bucketTime),
+    if (!bucket || bucket.bucketTime !== bucketTime) {
+      if (bucket) candles.push(bucket);
+      bucket = {
+        bucketTime,
+        date: new Date(bucketTime),
               open: bar.o, high: bar.h, low: bar.l, close: bar.c, volume: bar.v,
-            };
-          } else {
-            bucket.high = Math.max(bucket.high, bar.h);
-            bucket.low = Math.min(bucket.low, bar.l);
-            bucket.close = bar.c;
-            bucket.volume += bar.v;
-          }
-        }
-        if (bucket) candles.push(bucket);
+      };
+    } else {
+      bucket.high = Math.max(bucket.high, bar.h);
+      bucket.low = Math.min(bucket.low, bar.l);
+      bucket.close = bar.c;
+      bucket.volume += bar.v;
+    }
+  }
+  if (bucket) candles.push(bucket);
 
         // Scoring logic
-        let spikeCount = 0;
-        let retraceCount = 0;
+  let spikeCount = 0;
+  let retraceCount = 0;
         const spikesForV2: Array<{ ageDays: number; retraced: boolean }> = [];
         const nowMs = Date.now();
         let droppinessDetail: Array<{ date: string; spikePct: number; retraced: boolean }> = [];
 
-        for (let i = 1; i < candles.length; i++) {
-          const prev = candles[i - 1];
-          const cur = candles[i];
+  for (let i = 1; i < candles.length; i++) {
+    const prev = candles[i - 1];
+    const cur = candles[i];
           if (!prev.close || !cur.close || !cur.high || !cur.open) continue;
 
           const spikePctBetweenBuckets = (cur.high - prev.close) / prev.close;
           const spikePctWithinBucket = (cur.high - cur.open) / cur.open;
           const spikePct = Math.max(spikePctBetweenBuckets, spikePctWithinBucket);
 
-          if (spikePct > 0.2) {
-            spikeCount++;
-            let retraced = false;
-            if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
+    if (spikePct > 0.2) {
+      spikeCount++;
+      let retraced = false;
+      if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
             if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) retraced = true;
 
-            if (retraced) retraceCount++;
-            droppinessDetail.push({
-              date: cur.date.toISOString(),
-              spikePct: +(spikePct * 100).toFixed(1),
-              retraced,
-            });
+      if (retraced) retraceCount++;
+      droppinessDetail.push({
+        date: cur.date.toISOString(),
+        spikePct: +(spikePct * 100).toFixed(1),
+        retraced,
+      });
 
             const ageDays = Math.max(0, (nowMs - cur.date.getTime()) / (1000 * 60 * 60 * 24));
             spikesForV2.push({ ageDays, retraced });
@@ -497,7 +598,7 @@ export async function GET(
         const { fetchRecentNews, formatNewsForSection } = await import('@/utils/fetchNews');
         const newsItems = await fetchRecentNews(upperTicker);
         return formatNewsForSection(newsItems);
-      } catch (err) {
+} catch (err) {
         console.error('News task failed:', err);
         return [];
       }
@@ -546,11 +647,66 @@ export async function GET(
     const insiderTransactions = insiderTransactionsRes.status === 'fulfilled' ? insiderTransactionsRes.value : [];
     const news = newsRes.status === 'fulfilled' ? newsRes.value : [];
 
+    // If Yahoo Finance failed (likely due to rate limit), try to use cached data
+    if (!yahooData || !yahooData.quote || Object.keys(yahooData.quote).length === 0) {
+      console.warn(`[${upperTicker}] Yahoo Finance returned no data or empty quote object`);
+      // Check for cached data as fallback
+      const cachedData = getCachedData(tickerCache, cacheKey);
+      if (cachedData) {
+        console.log(`[${upperTicker}] Falling back to cached data due to Yahoo Finance failure`);
+        return NextResponse.json(cachedData);
+      }
+    }
+
     // Process Yahoo Data
     const quote = yahooData?.quote || {};
     const summary = yahooData?.summary || {};
     const chart = yahooData?.chart || { quotes: [] };
     const chartHist = yahooData?.chartHist || { quotes: [] };
+
+    // Log if Yahoo data is missing for debugging
+    if (!yahooData || Object.keys(quote).length === 0) {
+      console.warn(`[${upperTicker}] Yahoo Finance returned no data or empty quote object`);
+    } else {
+      // Log actual quote keys to see what's available
+      console.log(`[${upperTicker}] Yahoo Finance quote keys:`, Object.keys(quote));
+      console.log(`[${upperTicker}] Yahoo Finance quote sample:`, {
+        regularMarketPrice: quote.regularMarketPrice,
+        marketCap: quote.marketCap,
+        sharesOutstanding: quote.sharesOutstanding,
+        floatShares: quote.floatShares,
+        regularMarketVolume: quote.regularMarketVolume,
+        averageDailyVolume3Month: quote.averageDailyVolume3Month,
+        // Try alternative field names
+        price: (quote as any).price,
+        market_cap: (quote as any).market_cap,
+        shares: (quote as any).shares,
+      });
+      
+      // Log summary defaultKeyStatistics keys
+      if (summary?.defaultKeyStatistics) {
+        console.log(`[${upperTicker}] defaultKeyStatistics keys:`, Object.keys(summary.defaultKeyStatistics));
+        console.log(`[${upperTicker}] defaultKeyStatistics sample:`, {
+          marketCap: (summary.defaultKeyStatistics as any).marketCap,
+          sharesOutstanding: (summary.defaultKeyStatistics as any).sharesOutstanding,
+          floatShares: (summary.defaultKeyStatistics as any).floatShares,
+          currentPrice: (summary.defaultKeyStatistics as any).currentPrice,
+          regularMarketPrice: (summary.defaultKeyStatistics as any).regularMarketPrice,
+          averageVolume: (summary.defaultKeyStatistics as any).averageVolume,
+          averageVolume10days: (summary.defaultKeyStatistics as any).averageVolume10days,
+          volume: (summary.defaultKeyStatistics as any).volume,
+        });
+      }
+      if (summary?.financialData) {
+        console.log(`[${upperTicker}] financialData keys:`, Object.keys(summary.financialData));
+        console.log(`[${upperTicker}] financialData sample:`, {
+          currentPrice: (summary.financialData as any).currentPrice,
+        });
+      }
+      if (summary?.quoteType) {
+        console.log(`[${upperTicker}] quoteType:`, summary.quoteType);
+      }
+    }
 
     // Helper for percentages
     const toPercent = (raw: unknown): number | null => {
@@ -567,6 +723,8 @@ export async function GET(
     let institutionalOwnership = quote?.heldPercentInstitutions ?? null;
 
     const stats = summary?.defaultKeyStatistics || {};
+    const financial = summary?.financialData || {};
+    const quoteType = summary?.quoteType || {};
     const insiders = summary?.insiderHolders || {};
     const institutions = summary?.institutionOwnership || {};
     const holders = summary?.majorHoldersBreakdown || {};
@@ -576,6 +734,21 @@ export async function GET(
     if (institutionalOwnership == null && institutions.ownershipList && Array.isArray(institutions.ownershipList)) institutionalOwnership = institutions.ownershipList[0]?.percentHeld ?? null;
     if (insiderOwnership == null && holders.insidersPercentHeld != null) insiderOwnership = holders.insidersPercentHeld;
     if (institutionalOwnership == null && holders.institutionsPercentHeld != null) institutionalOwnership = holders.institutionsPercentHeld;
+
+    // Try to fill missing fundamentals from multiple sources
+    // Priority: quote -> defaultKeyStatistics -> financialData -> chart data
+    let marketCap = quote.marketCap ?? stats.marketCap ?? null;
+    let sharesOutstanding = quote.sharesOutstanding ?? stats.sharesOutstanding ?? null;
+    let floatShares = quote.floatShares ?? stats.floatShares ?? null;
+    let lastPrice = quote.regularMarketPrice ?? stats.currentPrice ?? stats.regularMarketPrice ?? financial.currentPrice ?? null;
+    let avgVolume = quote.averageDailyVolume3Month ?? stats.averageVolume ?? stats.averageVolume10days ?? stats.averageDailyVolume10Day ?? null;
+    let latestVolume = quote.regularMarketVolume ?? stats.volume ?? null;
+
+    // Get latest volume from chart data as fallback
+    if (!latestVolume && chart?.quotes && Array.isArray(chart.quotes) && chart.quotes.length > 0) {
+      const latestQuote = chart.quotes[chart.quotes.length - 1];
+      latestVolume = (latestQuote as any)?.volume ?? null;
+    }
 
     let companyProfile: CompanyProfile | null = null;
     if (summary?.summaryProfile) {
@@ -680,8 +853,8 @@ export async function GET(
     else if (weightedRiskScore >= 40) summaryVerdict = "Moderate risk";
 
     const summaryText = summaryVerdict === "Low risk"
-      ? "This one looks pretty clean — no major pump-and-dump signals right now."
-      : summaryVerdict === "Moderate risk"
+        ? "This one looks pretty clean — no major pump-and-dump signals right now."
+        : summaryVerdict === "Moderate risk"
         ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
         : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
 
@@ -694,15 +867,15 @@ export async function GET(
       droppinessVerdict = "Spikes often hold — many large moves remained elevated after the initial run-up.";
     }
 
-    return NextResponse.json({
+    const responseData = {
       ticker: upperTicker,
       companyName: quote.longName || quote.shortName || upperTicker,
-      lastPrice: quote.regularMarketPrice ?? null,
-      marketCap: quote.marketCap ?? null,
-      sharesOutstanding: quote.sharesOutstanding ?? null,
-      floatShares: quote.floatShares ?? quote.sharesOutstanding ?? null,
-      avgVolume: quote.averageDailyVolume3Month ?? null,
-      latestVolume: quote.regularMarketVolume ?? null,
+      lastPrice: lastPrice,
+      marketCap: marketCap,
+      sharesOutstanding: sharesOutstanding,
+      floatShares: floatShares ?? sharesOutstanding,
+      avgVolume: avgVolume,
+      latestVolume: latestVolume,
       shortFloat: toPercent(shortFloat),
       insiderOwnership: toPercent(insiderOwnership),
       institutionalOwnership: toPercent(institutionalOwnership),
@@ -735,7 +908,12 @@ export async function GET(
       news,
       sentiment: sentimentData,
       insiderTransactions,
-    });
+    };
+    
+    // Cache the response data before returning (cacheKey already defined at top of try block)
+    setCachedData(tickerCache, cacheKey, responseData);
+    
+    return NextResponse.json(responseData);
 
   } catch (err: unknown) {
     const error = err as Error;

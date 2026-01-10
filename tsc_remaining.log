@@ -1,0 +1,72 @@
+.next/types/validator.ts(99,31): error TS2344: Type 'typeof import("/Users/garthwoods/pump-scorecard/app/api/export-pdf/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/export-pdf">'.
+  Types of property 'GET' are incompatible.
+    Type '(req: Request, context: { params: Promise<{ ticker: string; }>; }) => Promise<NextResponse<{ ticker: string; companyName: any; marketCap: any; sharesOutstanding: any; floatShares: any; shortFloat: any; ... 11 more ...; summaryText: string; }> | NextResponse<...>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{}>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters 'context' and 'context' are incompatible.
+        Type '{ params: Promise<{}>; }' is not assignable to type '{ params: Promise<{ ticker: string; }>; }'.
+          Types of property 'params' are incompatible.
+            Type 'Promise<{}>' is not assignable to type 'Promise<{ ticker: string; }>'.
+              Property 'ticker' is missing in type '{}' but required in type '{ ticker: string; }'.
+app/api/export-pdf/route.ts(66,29): error TS2339: Property 'cik_str' does not exist on type '{}'.
+app/api/scan/[ticker]/route.ts(579,39): error TS2345: Argument of type '(q: YahooQuote) => { date: string; open: number; high: number; low: number; close: number; volume: number; }' is not assignable to parameter of type '((value: never, index: number, array: never[]) => { date: string; open: number; high: number; low: number; close: number; volume: number; }) & ((value: { adjclose?: number | null | undefined; date: Date; ... 4 more ...; volume: number | null; }, index: number, array: { ...; }[]) => { ...; })'.
+  Type '(q: YahooQuote) => { date: string; open: number; high: number; low: number; close: number; volume: number; }' is not assignable to type '(value: { adjclose?: number | null | undefined; date: Date; high: number | null; low: number | null; open: number | null; close: number | null; volume: number | null; }, index: number, array: { ...; }[]) => { ...; }'.
+    Types of parameters 'q' and 'value' are incompatible.
+      Type '{ adjclose?: number | null | undefined; date: Date; high: number | null; low: number | null; open: number | null; close: number | null; volume: number | null; }' is not assignable to type 'YahooQuote'.
+        Types of property 'open' are incompatible.
+          Type 'number | null' is not assignable to type 'number'.
+            Type 'null' is not assignable to type 'number'.
+app/api/scan/[ticker]/route.ts(587,42): error TS2345: Argument of type '(q: YahooQuote) => number' is not assignable to parameter of type '((value: never, index: number, array: never[]) => number) & ((value: { adjclose?: number | null | undefined; date: Date; high: number | null; low: number | null; open: number | null; close: number | null; volume: number | null; }, index: number, array: { ...; }[]) => number)'.
+  Type '(q: YahooQuote) => number' is not assignable to type '(value: { adjclose?: number | null | undefined; date: Date; high: number | null; low: number | null; open: number | null; close: number | null; volume: number | null; }, index: number, array: { ...; }[]) => number'.
+    Types of parameters 'q' and 'value' are incompatible.
+      Type '{ adjclose?: number | null | undefined; date: Date; high: number | null; low: number | null; open: number | null; close: number | null; volume: number | null; }' is not assignable to type 'YahooQuote'.
+        Types of property 'open' are incompatible.
+          Type 'number | null' is not assignable to type 'number'.
+            Type 'null' is not assignable to type 'number'.
+app/api/share/generate/route.ts(71,15): error TS18048: 'baseUrl' is possibly 'undefined'.
+app/api/short-check/export-pdf/route.ts(161,59): error TS7006: Parameter 'a' implicitly has an 'any' type.
+app/api/short-check/export-pdf/route.ts(565,29): error TS2345: Argument of type 'Uint8Array<ArrayBufferLike>' is not assignable to parameter of type 'BodyInit | null | undefined'.
+  Type 'Uint8Array<ArrayBufferLike>' is missing the following properties from type 'URLSearchParams': size, append, delete, get, and 2 more.
+app/page.tsx(129,15): error TS2322: Type 'string' is not assignable to type '"Low risk" | "Moderate risk" | "High risk"'.
+components/CandlestickChart.tsx(180,31): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+components/CandlestickChart.tsx(180,38): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/DroppinessCard.tsx(74,17): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: RadialBarProps): RadialBar', gave the following error.
+    Type '{ minAngle: number; background: true; clockWise: true; dataKey: string; cornerRadius: number; }' is not assignable to type 'IntrinsicAttributes & IntrinsicClassAttributes<RadialBar> & Pick<Readonly<RadialBarProps>, never> & InexactPartial<...> & InexactPartial<...>'.
+      Property 'minAngle' does not exist on type 'IntrinsicAttributes & IntrinsicClassAttributes<RadialBar> & Pick<Readonly<RadialBarProps>, never> & InexactPartial<...> & InexactPartial<...>'.
+  Overload 2 of 2, '(props: RadialBarProps, context: any): RadialBar', gave the following error.
+    Type '{ minAngle: number; background: true; clockWise: true; dataKey: string; cornerRadius: number; }' is not assignable to type 'IntrinsicAttributes & IntrinsicClassAttributes<RadialBar> & Pick<Readonly<RadialBarProps>, never> & InexactPartial<...> & InexactPartial<...>'.
+      Property 'minAngle' does not exist on type 'IntrinsicAttributes & IntrinsicClassAttributes<RadialBar> & Pick<Readonly<RadialBarProps>, never> & InexactPartial<...> & InexactPartial<...>'.
+components/DroppinessChart.tsx(96,23): error TS7006: Parameter 'props' implicitly has an 'any' type.
+components/DroppinessChart.tsx(109,23): error TS7006: Parameter 'props' implicitly has an 'any' type.
+components/ProperCandlestickChart.tsx(185,31): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+components/ProperCandlestickChart.tsx(185,38): error TS7006: Parameter 'index' implicitly has an 'any' type.
+components/SpikeOverlayChart.tsx(62,21): error TS7006: Parameter 'props' implicitly has an 'any' type.
+components/SpikeOverlayChart.tsx(79,15): error TS2322: Type '(v: number) => string' is not assignable to type '(label: ReactNode) => ReactNode'.
+  Types of parameters 'v' and 'label' are incompatible.
+    Type 'ReactNode' is not assignable to type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+lib/cache.ts(32,25): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+lib/ocrParser.ts(745,47): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+lib/ocrParser.ts(745,52): error TS7006: Parameter 'd' implicitly has an 'any' type.
+lib/shareStorage.ts(222,26): error TS2347: Untyped function calls may not accept type arguments.
+lib/shortCheckScoring.ts(1327,5): error TS2345: Argument of type '{ rating: number; category: "High-Priority Short Candidate" | "Moderate Short Candidate" | "Speculative Short Candidate" | "No-Trade"; walkAwayFlags: string[]; scoreBreakdown: ScoreBreakdown; alertCard: string; }' is not assignable to parameter of type 'ShortCheckResult'.
+  Property 'alertLabels' is missing in type '{ rating: number; category: "High-Priority Short Candidate" | "Moderate Short Candidate" | "Speculative Short Candidate" | "No-Trade"; walkAwayFlags: string[]; scoreBreakdown: ScoreBreakdown; alertCard: string; }' but required in type 'ShortCheckResult'.
+lib/summaryGenerator.ts(81,23): error TS2339: Property 'currentPrice' does not exist on type 'ExtractedData'.
+lib/summaryGenerator.ts(82,53): error TS2339: Property 'currentPrice' does not exist on type 'ExtractedData'.
+lib/summaryGenerator.ts(171,50): error TS2339: Property 'debtCashRatio' does not exist on type 'ScoreBreakdown'.
+lib/summaryGenerator.ts(198,23): error TS2339: Property 'currentPrice' does not exist on type 'ExtractedData'.
+lib/summaryGenerator.ts(199,53): error TS2339: Property 'currentPrice' does not exist on type 'ExtractedData'.
+utils/fetchDebtCash.ts(26,9): error TS18048: 'quoteSummary.balanceSheetHistoryQuarterly.balanceSheetStatements.length' is possibly 'undefined'.
+utils/fetchDebtCash.ts(28,22): error TS18048: 'quoteSummary.balanceSheetHistoryQuarterly' is possibly 'undefined'.
+utils/fetchDebtCash.ts(29,16): error TS18048: 'quoteSummary.balanceSheetHistory.balanceSheetStatements.length' is possibly 'undefined'.
+utils/fetchDebtCash.ts(31,22): error TS18048: 'quoteSummary.balanceSheetHistory' is possibly 'undefined'.
+utils/fetchHistoricalOS.ts(124,23): error TS2339: Property 'cik_str' does not exist on type '{}'.
+utils/fetchReverseSplit.ts(24,15): error TS2304: Cannot find name 'cheerio'.
+utils/fetchReverseSplit.ts(28,19): error TS7006: Parameter '_' implicitly has an 'any' type.
+utils/fetchReverseSplit.ts(28,22): error TS7006: Parameter 'el' implicitly has an 'any' type.
+utils/fetchReverseSplit.ts(48,21): error TS2339: Property 'ratio' does not exist on type 'never'.
+utils/fetchReverseSplit.ts(49,21): error TS2339: Property 'price' does not exist on type 'never'.
+utils/fetchReverseSplit.ts(50,22): error TS2339: Property 'status' does not exist on type 'never'.
+utils/fetchReverseSplit.ts(51,33): error TS2339: Property 'ratio' does not exist on type 'never'.
+utils/fetchReverseSplit.ts(51,57): error TS2339: Property 'price' does not exist on type 'never'.
+utils/fetchReverseSplit.ts(51,82): error TS2339: Property 'status' does not exist on type 'never'.

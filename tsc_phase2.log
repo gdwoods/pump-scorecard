@@ -1,0 +1,29 @@
+.next/types/validator.ts(99,31): error TS2344: Type 'typeof import("/Users/garthwoods/pump-scorecard/app/api/export-pdf/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/export-pdf">'.
+  Types of property 'GET' are incompatible.
+    Type '(req: Request, context: { params: Promise<{ ticker: string; }>; }) => Promise<NextResponse<{ ticker: string; companyName: any; marketCap: any; sharesOutstanding: any; floatShares: any; shortFloat: any; ... 11 more ...; summaryText: string; }> | NextResponse<...>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{}>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters 'context' and 'context' are incompatible.
+        Type '{ params: Promise<{}>; }' is not assignable to type '{ params: Promise<{ ticker: string; }>; }'.
+          Types of property 'params' are incompatible.
+            Type 'Promise<{}>' is not assignable to type 'Promise<{ ticker: string; }>'.
+              Property 'ticker' is missing in type '{}' but required in type '{ ticker: string; }'.
+app/api/export-pdf/route.ts(66,29): error TS2339: Property 'cik_str' does not exist on type '{}'.
+app/api/scan/[ticker]/route.ts(579,39): error TS2345: Argument of type '(q: YahooQuote) => { date: string; open: number; high: number; low: number; close: number; volume: number; }' is not assignable to parameter of type '((value: never, index: number, array: never[]) => { date: string; open: number; high: number; low: number; close: number; volume: number; }) & ((value: { adjclose?: number | null | undefined; date: Date; ... 4 more ...; volume: number | null; }, index: number, array: { ...; }[]) => { ...; })'.
+  Type '(q: YahooQuote) => { date: string; open: number; high: number; low: number; close: number; volume: number; }' is not assignable to type '(value: { adjclose?: number | null | undefined; date: Date; high: number | null; low: number | null; open: number | null; close: number | null; volume: number | null; }, index: number, array: { ...; }[]) => { ...; }'.
+    Types of parameters 'q' and 'value' are incompatible.
+      Type '{ adjclose?: number | null | undefined; date: Date; high: number | null; low: number | null; open: number | null; close: number | null; volume: number | null; }' is not assignable to type 'YahooQuote'.
+        Types of property 'open' are incompatible.
+          Type 'number | null' is not assignable to type 'number'.
+            Type 'null' is not assignable to type 'number'.
+app/api/scan/[ticker]/route.ts(587,42): error TS2345: Argument of type '(q: YahooQuote) => number' is not assignable to parameter of type '((value: never, index: number, array: never[]) => number) & ((value: { adjclose?: number | null | undefined; date: Date; high: number | null; low: number | null; open: number | null; close: number | null; volume: number | null; }, index: number, array: { ...; }[]) => number)'.
+  Type '(q: YahooQuote) => number' is not assignable to type '(value: { adjclose?: number | null | undefined; date: Date; high: number | null; low: number | null; open: number | null; close: number | null; volume: number | null; }, index: number, array: { ...; }[]) => number'.
+    Types of parameters 'q' and 'value' are incompatible.
+      Type '{ adjclose?: number | null | undefined; date: Date; high: number | null; low: number | null; open: number | null; close: number | null; volume: number | null; }' is not assignable to type 'YahooQuote'.
+        Types of property 'open' are incompatible.
+          Type 'number | null' is not assignable to type 'number'.
+            Type 'null' is not assignable to type 'number'.
+app/api/share/generate/route.ts(71,15): error TS18048: 'baseUrl' is possibly 'undefined'.
+app/api/short-check/export-pdf/route.ts(161,59): error TS7006: Parameter 'a' implicitly has an 'any' type.
+app/api/short-check/export-pdf/route.ts(565,29): error TS2345: Argument of type 'Uint8Array<ArrayBufferLike>' is not assignable to parameter of type 'BodyInit | null | undefined'.
+  Type 'Uint8Array<ArrayBufferLike>' is missing the following properties from type 'URLSearchParams': size, append, delete, get, and 2 more.
+app/page.tsx(129,15): error TS2322: Type 'string' is not assignable to type '"Low risk" | "Moderate risk" | "High risk"'.
+lib/shareStorage.ts(222,26): error TS2347: Untyped function calls may not accept type arguments.

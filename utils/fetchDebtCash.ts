@@ -1,5 +1,6 @@
 // utils/fetchDebtCash.ts
-import yahooFinance from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
+const yahooFinance = new YahooFinance();
 
 export interface DebtCashData {
   debt: number | null;
