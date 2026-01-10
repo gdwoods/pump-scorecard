@@ -22,11 +22,17 @@ export default function FraudEvidence({
 
   const isOnlyManual =
     items.length > 0 && items.every((it) => (it.caption || "").toLowerCase() === "manual check");
+  
+  const isBlocked =
+    items.length > 0 && items.some((it) => (it.caption || "").toLowerCase().includes("api blocked"));
 
-  const displayed = items.filter((it) => (it.caption || "").toLowerCase() !== "manual check");
+  const displayed = items.filter((it) => {
+    const caption = (it.caption || "").toLowerCase();
+    return caption !== "manual check" && !caption.includes("api blocked");
+  });
 
   const manualUrl =
-    (isOnlyManual && items[0]?.sourceUrl) || "https://www.stopnasdaqchinafraud.com/";
+    (isOnlyManual && items[0]?.sourceUrl) || (isBlocked && items[0]?.sourceUrl) || "https://www.stopnasdaqchinafraud.com/";
 
   const formatDate = (raw: string) => {
     try {
@@ -43,13 +49,32 @@ export default function FraudEvidence({
 
   return (
     <CollapsibleCard title={`🕵️ ${ticker} Fraud Evidence`} defaultOpen={true}>
-      {items.length === 0 || isOnlyManual ? (
-        <p className="text-sm text-gray-700 dark:text-gray-300">
-          No fraud evidence found for this ticker — please manually check at{" "}
-          <a href={manualUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-            stopnasdaqchinafraud.com
-          </a>
-        </p>
+      {items.length === 0 || isOnlyManual || isBlocked ? (
+        <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
+          {isBlocked ? (
+            <>
+              <p className="text-orange-600 dark:text-orange-400 font-semibold">
+                ⚠️ API Currently Blocked
+              </p>
+              <p>
+                The fraud evidence API is currently blocked by bot protection. Evidence may exist for this ticker, but we cannot access it automatically.
+              </p>
+              <p>
+                Please manually check at{" "}
+                <a href={manualUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">
+                  stopnasdaqchinafraud.com
+                </a>
+              </p>
+            </>
+          ) : (
+            <p>
+              No fraud evidence found for this ticker — please manually check at{" "}
+              <a href={manualUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                stopnasdaqchinafraud.com
+              </a>
+            </p>
+          )}
+        </div>
       ) : (
         <ul className="space-y-3">
           {displayed.map((f, i) => (

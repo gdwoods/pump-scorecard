@@ -41,43 +41,56 @@ async function fetchYahooFinanceNews(ticker: string): Promise<NewsItem[]> {
 
     const xmlText = await res.text();
     
-    // Simple XML parsing for RSS feed
+    // Parse RSS feed by extracting items
     const items: NewsItem[] = [];
-    const titleMatches = xmlText.matchAll(/<title><!\[CDATA\[(.*?)\]\]><\/title>/g);
-    const pubDateMatches = xmlText.matchAll(/<pubDate>(.*?)<\/pubDate>/g);
     
-    const titles: string[] = [];
-    const dates: string[] = [];
+    // Match each <item> block
+    const itemMatches = xmlText.matchAll(/<item>(.*?)<\/item>/gs);
     
-    for (const match of titleMatches) {
-      titles.push(match[1].trim());
-    }
-    
-    for (const match of pubDateMatches) {
-      dates.push(match[1].trim());
-    }
-    
-    // Extract links too if available
-    const linkMatches = xmlText.matchAll(/<link>(.*?)<\/link>/g);
-    const links: string[] = [];
-    for (const match of linkMatches) {
-      links.push(match[1].trim());
-    }
-    
-    // Pair titles with dates (skip first title which is usually the feed title)
-    for (let i = 1; i < titles.length && i <= dates.length; i++) {
+    for (const itemMatch of itemMatches) {
+      const itemContent = itemMatch[1];
+      
+      // Extract title (handle both CDATA and plain text)
+      const titleMatch = itemContent.match(/<title>(?:<!\[CDATA\[(.*?)\]\]>|(.*?))<\/title>/s);
+      if (!titleMatch) continue;
+      
+      const headline = (titleMatch[1] || titleMatch[2] || '').trim();
+      if (!headline) continue;
+      
+      // Extract link
+      const linkMatch = itemContent.match(/<link>(.*?)<\/link>/s);
+      const url = linkMatch ? linkMatch[1].trim() : `https://finance.yahoo.com/quote/${ticker}/news`;
+      
+      // Extract pubDate (RFC 822 format: "Sat, 10 Jan 2026 00:43:00 +0000")
+      const pubDateMatch = itemContent.match(/<pubDate>(.*?)<\/pubDate>/s);
+      let dateStr = pubDateMatch ? pubDateMatch[1].trim() : new Date().toISOString();
+      
+      // Convert RFC 822 date to ISO string
+      let date: Date;
+      try {
+        date = new Date(dateStr);
+        // If date parsing fails, use current date
+        if (isNaN(date.getTime())) {
+          date = new Date();
+        }
+      } catch {
+        date = new Date();
+      }
+      
       items.push({
-        headline: titles[i],
-        date: dates[i - 1] || new Date().toISOString(),
+        headline,
+        date: date.toISOString(),
         source: 'Yahoo Finance',
-        url: links[i - 1] || `https://finance.yahoo.com/quote/${ticker}/news`,
+        url,
         publisher: 'Yahoo Finance',
       });
     }
     
-    return items.slice(0, 20); // Limit to 20 most recent
+    const result = items.slice(0, 20); // Limit to 20 most recent
+    console.log(`[News] Yahoo Finance: Found ${result.length} news items for ${ticker}`);
+    return result;
   } catch (err) {
-    console.error('Yahoo Finance news fetch failed:', err);
+    console.error(`[News] Yahoo Finance news fetch failed for ${ticker}:`, err);
     return [];
   }
 }
@@ -149,8 +162,9 @@ export async function fetchRecentNews(ticker: string): Promise<NewsItem[]> {
   try {
     const yahooNews = await fetchYahooFinanceNews(upperTicker);
     allNews.push(...yahooNews);
+    console.log(`[News] Added ${yahooNews.length} items from Yahoo Finance for ${upperTicker}`);
   } catch (err) {
-    console.error('Yahoo Finance news fetch error:', err);
+    console.error(`[News] Yahoo Finance news fetch error for ${upperTicker}:`, err);
   }
 
   // Try Finnhub if API key is available (optional)
@@ -174,13 +188,16 @@ export async function fetchRecentNews(ticker: string): Promise<NewsItem[]> {
   const now = Date.now();
   const fourteenDaysAgo = now - (14 * 24 * 60 * 60 * 1000);
 
-  return allNews
+  const filtered = allNews
     .filter(item => {
       const itemDate = new Date(item.date).getTime();
       return itemDate >= fourteenDaysAgo;
     })
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 30); // Limit to 30 total headlines
+  
+  console.log(`[News] Returning ${filtered.length} filtered news items for ${upperTicker} (from ${allNews.length} total, filtered to last 14 days)`);
+  return filtered;
 }
 
 /**
