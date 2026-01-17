@@ -87,6 +87,11 @@ def save_alerts_to_csv(filings: List[Dict], filepath: str = DILUTION_ALERTS_CSV_
         # Prepare rows for CSV
         rows = []
         for filing in filings:
+            # Skip filings with UNKNOWN ticker
+            ticker = filing.get("ticker", "UNKNOWN")
+            if not ticker or ticker.upper() == "UNKNOWN":
+                continue
+            
             # Extract date (try multiple field names)
             date_str = filing.get("pubDate") or filing.get("date") or filing.get("filing_date", "")
             # Parse and format date
@@ -113,7 +118,7 @@ def save_alerts_to_csv(filings: List[Dict], filepath: str = DILUTION_ALERTS_CSV_
             
             row = {
                 "Date": date_formatted,
-                "Ticker": filing.get("ticker", "UNKNOWN"),
+                "Ticker": ticker,
                 "Form_Type": filing.get("form_type", "UNKNOWN"),
                 "Link_to_Filing": filing.get("link", filing.get("url", "")),
                 "Warrants_Found": warrants_found,

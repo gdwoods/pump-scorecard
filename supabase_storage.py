@@ -166,6 +166,11 @@ def save_alerts_to_db(filings: List[Dict], client: Client, table_name: str = "se
         rows = []
         
         for filing in filings:
+            # Skip filings with UNKNOWN ticker
+            ticker = filing.get("ticker", "UNKNOWN")
+            if not ticker or ticker.upper() == "UNKNOWN":
+                continue
+            
             # Extract date
             date_str = filing.get("pubDate") or filing.get("date") or filing.get("filing_date", "")
             try:
@@ -189,7 +194,7 @@ def save_alerts_to_db(filings: List[Dict], client: Client, table_name: str = "se
             # Build row dictionary matching CSV structure
             row = {
                 "date": date_formatted,
-                "ticker": filing.get("ticker", "UNKNOWN"),
+                "ticker": ticker,
                 "form_type": filing.get("form_type", "UNKNOWN"),
                 "link_to_filing": filing.get("link", filing.get("url", "")),
                 "warrants_found": warrants_found,

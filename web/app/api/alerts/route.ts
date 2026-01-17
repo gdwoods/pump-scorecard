@@ -19,6 +19,9 @@ export async function GET(request: NextRequest) {
       .order('date', { ascending: false })
       .limit(limit);
 
+    // Filter out UNKNOWN tickers
+    query = query.neq('ticker', 'UNKNOWN');
+
     // Apply filters
     if (ticker) {
       query = query.eq('ticker', ticker.toUpperCase());
