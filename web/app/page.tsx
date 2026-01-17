@@ -4,12 +4,15 @@ import { useState, useEffect } from "react";
 import { DilutionAlert, AlertFilters } from "@/types/alert";
 import AlertTable from "@/components/AlertTable";
 import AlertFiltersComponent from "@/components/AlertFilters";
+import AlertDetailModal from "@/components/AlertDetailModal";
 import { Loader2, AlertCircle } from "lucide-react";
 
 export default function Home() {
   const [alerts, setAlerts] = useState<DilutionAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedAlert, setSelectedAlert] = useState<DilutionAlert | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [filters, setFilters] = useState<AlertFilters>({
     limit: 100,
   });
@@ -55,6 +58,16 @@ export default function Home() {
     setFilters({ limit: 100 });
   };
 
+  const handleRowClick = (alert: DilutionAlert) => {
+    setSelectedAlert(alert);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedAlert(null);
+  };
+
   return (
     <div className="min-h-screen p-6 bg-gray-900">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -94,10 +107,19 @@ export default function Home() {
                 {alerts.length} Alert{alerts.length !== 1 ? "s" : ""} Found
               </h2>
             </div>
-            <AlertTable alerts={alerts} />
+            <AlertTable alerts={alerts} onRowClick={handleRowClick} />
           </div>
         )}
       </div>
+
+      {/* Detail Modal */}
+      {selectedAlert && (
+        <AlertDetailModal
+          alert={selectedAlert}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+        />
+      )}
     </div>
   );
 }

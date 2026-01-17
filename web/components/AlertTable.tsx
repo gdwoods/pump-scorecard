@@ -1,13 +1,14 @@
 "use client";
 
 import { DilutionAlert } from "@/types/alert";
-import { ExternalLink, AlertTriangle, TrendingUp, Users } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 interface AlertTableProps {
   alerts: DilutionAlert[];
+  onRowClick?: (alert: DilutionAlert) => void;
 }
 
-export default function AlertTable({ alerts }: AlertTableProps) {
+export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
   if (!alerts || alerts.length === 0) {
     return (
       <div className="bg-gray-800 rounded-lg p-8 text-center">
@@ -54,7 +55,10 @@ export default function AlertTable({ alerts }: AlertTableProps) {
           {alerts.map((alert) => (
             <tr
               key={alert.id}
-              className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors"
+              onClick={() => onRowClick?.(alert)}
+              className={`border-b border-gray-800 transition-colors ${
+                onRowClick ? "cursor-pointer hover:bg-gray-800/70" : "hover:bg-gray-800/50"
+              }`}
             >
               <td className="p-3 text-sm text-gray-300">
                 {new Date(alert.date).toLocaleDateString()}
@@ -95,7 +99,7 @@ export default function AlertTable({ alerts }: AlertTableProps) {
                   )}
                 </div>
               </td>
-              <td className="p-3">
+              <td className="p-3" onClick={(e) => e.stopPropagation()}>
                 {alert.link_to_filing && (
                   <a
                     href={alert.link_to_filing}

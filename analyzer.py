@@ -164,17 +164,18 @@ def search_for_keywords(text: str, keywords: List[str]) -> Set[str]:
 
 def search_for_underwriters(text: str, underwriters: List[str]) -> Set[str]:
     """
-    Searches text for underwriter names (case-insensitive) and returns matches.
+    Searches text for underwriter names in specific offering/underwriting contexts.
     
-    Underwriters are often mentioned in filings for securities offerings.
-    Finding specific underwriters known for dilutive financings is a red flag.
+    Underwriters must appear near context words like "underwriter", "placement agent",
+    "as agent", etc. This prevents false positives from mentions in other contexts
+    (e.g., "maximum" matching "maxim", or "Roth IRA" matching "Roth Capital").
     
     Args:
         text: Text content to search
         underwriters: List of underwriter names to search for
         
     Returns:
-        Set of underwriter names that were found in the text
+        Set of underwriter names that were found in relevant contexts
     """
     if not text:
         return set()
@@ -182,11 +183,77 @@ def search_for_underwriters(text: str, underwriters: List[str]) -> Set[str]:
     text_lower = text.lower()
     found_underwriters = set()
     
+    # Context words that indicate the underwriter is actually serving as an underwriter
+    context_patterns = [
+        r"as\s+(?:our\s+)?(?:exclusive\s+)?underwriter",
+        r"as\s+(?:our\s+)?(?:exclusive\s+)?placement\s+agent",
+        r"as\s+(?:our\s+)?(?:exclusive\s+)?sales\s+agent",
+        r"underwritten\s+by",
+        r"underwritten\s+exclusively\s+by",
+        r"placement\s+agent\s+is",
+        r"underwriter\s+(?:is|of|for|,\s*)",
+        r"acting\s+as\s+(?:our\s+)?(?:exclusive\s+)?underwriter",
+        r"serving\s+as\s+(?:our\s+)?(?:exclusive\s+)?underwriter",
+        r"our\s+underwriter",
+        r"the\s+underwriter",
+        r"underwriting\s+agreement",
+        r"underwriting\s+fee",
+        r"underwriting\s+discount",
+    ]
+    
+    # Compile context patterns
+    context_regexes = [re.compile(pattern, re.IGNORECASE) for pattern in context_patterns]
+    
     for underwriter in underwriters:
-        # Search for the full underwriter name (may be part of company name)
-        pattern = r"\b" + re.escape(underwriter.lower()) + r"\b"
-        if re.search(pattern, text_lower, re.IGNORECASE):
-            found_underwriters.add(underwriter)
+        # Escape the underwriter name for regex
+        underwriter_escaped = re.escape(underwriter.lower())
+        
+        # Search for underwriter name with word boundaries (avoid partial matches)
+        # e.g., "maxim" should NOT match "maximum" or "maximize"
+        underwriter_pattern = r"\b" + underwriter_escaped + r"\b"
+        
+        # Check if underwriter name appears in the text
+        underwriter_matches = list(re.finditer(underwriter_pattern, text_lower, re.IGNORECASE))
+        
+        if not underwriter_matches:
+            continue
+        
+        # Check if any match is near a context word (within 200 characters)
+        for match in underwriter_matches:
+            match_start = match.start()
+            match_end = match.end()
+            
+            # Search for context patterns within 200 chars before or after the match
+            context_window_start = max(0, match_start - 200)
+            context_window_end = min(len(text_lower), match_end + 200)
+            context_window = text_lower[context_window_start:context_window_end]
+            
+            # Check if any context pattern appears in the window
+            for context_regex in context_regexes:
+                if context_regex.search(context_window):
+                    found_underwriters.add(underwriter)
+                    break  # Found context, no need to check other contexts
+            
+            if underwriter in found_underwriters:
+                break  # Already found this underwriter, move to next
+        
+        # Special case: If underwriter appears in "Company Name, LLC" format near context
+        # Some filings list underwriters as "Company Name, LLC, as underwriter"
+        company_name_pattern = r"\b" + underwriter_escaped + r"\s+(?:group|capital|partners|securities|llc|inc|ltd|corp)\b"
+        if re.search(company_name_pattern, text_lower, re.IGNORECASE):
+            # Check if it's near context words (same 200 char window check as above)
+            company_matches = list(re.finditer(company_name_pattern, text_lower, re.IGNORECASE))
+            for match in company_matches:
+                match_start = match.start()
+                match_end = match.end()
+                context_window_start = max(0, match_start - 200)
+                context_window_end = min(len(text_lower), match_end + 200)
+                context_window = text_lower[context_window_start:context_window_end]
+                
+                for context_regex in context_regexes:
+                    if context_regex.search(context_window):
+                        found_underwriters.add(underwriter)
+                        break
     
     return found_underwriters
 
