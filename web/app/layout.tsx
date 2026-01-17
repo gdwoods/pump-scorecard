@@ -18,18 +18,22 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              (function() {
+              !(function() {
                 try {
                   const stored = localStorage.getItem('theme');
                   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                   const shouldBeDark = stored ? stored === 'dark' : (prefersDark || true);
+                  const html = document.documentElement;
                   if (shouldBeDark) {
-                    document.documentElement.classList.add('dark');
+                    html.classList.add('dark');
+                    console.log('[Theme] Applied dark mode on init');
                   } else {
-                    document.documentElement.classList.remove('dark');
+                    html.classList.remove('dark');
+                    console.log('[Theme] Applied light mode on init');
                   }
                 } catch (e) {
                   document.documentElement.classList.add('dark');
+                  console.log('[Theme] Error, defaulting to dark:', e);
                 }
               })();
             `,

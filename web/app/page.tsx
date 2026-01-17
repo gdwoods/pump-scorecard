@@ -341,6 +341,7 @@ export default function Home() {
       // Schedule the actual fetch
       timeoutId = setTimeout(() => {
         if (!isActive) return;
+        console.log(`[Auto-refresh] Fetching new alerts at ${new Date().toLocaleTimeString()}`);
         fetchAlerts(false); // Not initial load
         scheduleNextFetch(); // Schedule next fetch with new random variance
       }, intervalMs);

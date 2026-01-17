@@ -29,15 +29,19 @@ export default function ThemeToggle() {
 
   const toggleTheme = () => {
     const newIsDark = !isDark;
+    console.log(`[ThemeToggle] Toggling from ${isDark ? 'dark' : 'light'} to ${newIsDark ? 'dark' : 'light'}`);
     setIsDark(newIsDark);
     
     // Apply theme to document immediately
+    const html = document.documentElement;
     if (newIsDark) {
-      document.documentElement.classList.add("dark");
+      html.classList.add("dark");
       localStorage.setItem("theme", "dark");
+      console.log('[ThemeToggle] Applied dark mode, classList:', html.classList.toString());
     } else {
-      document.documentElement.classList.remove("dark");
+      html.classList.remove("dark");
       localStorage.setItem("theme", "light");
+      console.log('[ThemeToggle] Applied light mode, classList:', html.classList.toString());
     }
   };
 
