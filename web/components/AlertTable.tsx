@@ -13,8 +13,8 @@ interface AlertTableProps {
 export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
   if (!alerts || alerts.length === 0) {
     return (
-      <div className="bg-gray-800 rounded-lg p-8 text-center">
-        <p className="text-gray-400">No alerts found</p>
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center border border-gray-200 dark:border-gray-700">
+        <p className="text-gray-600 dark:text-gray-400">No alerts found</p>
       </div>
     );
   }
@@ -83,14 +83,14 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-b border-gray-700">
-            <th className="text-left p-3 text-sm font-medium text-gray-400">Date</th>
-            <th className="text-left p-3 text-sm font-medium text-gray-400">Ticker</th>
-            <th className="text-left p-3 text-sm font-medium text-gray-400">Form</th>
-            <th className="text-left p-3 text-sm font-medium text-gray-400">Risk Score</th>
-            <th className="text-left p-3 text-sm font-medium text-gray-400">Offering</th>
-            <th className="text-left p-3 text-sm font-medium text-gray-400">Flags</th>
-            <th className="text-left p-3 text-sm font-medium text-gray-400">Details</th>
+          <tr className="border-b border-gray-200 dark:border-gray-700">
+            <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Date</th>
+            <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Ticker</th>
+            <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Form</th>
+            <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Risk Score</th>
+            <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Offering</th>
+            <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Flags</th>
+            <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Details</th>
           </tr>
         </thead>
         <tbody>
@@ -98,11 +98,11 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
             <tr
               key={alert.id}
               onClick={() => onRowClick?.(alert)}
-              className={`border-b border-gray-800 transition-colors ${
-                onRowClick ? "cursor-pointer hover:bg-gray-800/70" : "hover:bg-gray-800/50"
+              className={`border-b border-gray-200 dark:border-gray-800 transition-colors ${
+                onRowClick ? "cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/70" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
               }`}
             >
-              <td className="p-3 text-sm text-gray-300 dark:text-gray-300">
+              <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
                 {alert.filing_datetime ? (
                   (() => {
                     const dt = formatDateTime(alert.filing_datetime);
@@ -122,11 +122,11 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
                 )}
               </td>
               <td className="p-3">
-                <span className="font-semibold text-white">{alert.ticker}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{alert.ticker}</span>
               </td>
-              <td className="p-3 text-sm text-gray-400">
+              <td className="p-3 text-sm text-gray-600 dark:text-gray-400">
                 <FormTypeTooltip formType={alert.form_type}>
-                  <span className="cursor-help underline decoration-dotted decoration-gray-500 hover:text-gray-300">
+                  <span className="cursor-help underline decoration-dotted decoration-gray-400 dark:decoration-gray-500 hover:text-gray-800 dark:hover:text-gray-300">
                     {alert.form_type}
                   </span>
                 </FormTypeTooltip>
@@ -136,7 +136,7 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
                   {alert.risk_score}
                 </span>
               </td>
-              <td className="p-3 text-sm text-gray-300">
+              <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
                 {formatCurrency(alert.base_offering_amount || alert.offering_amount)}
               </td>
               <td className="p-3">

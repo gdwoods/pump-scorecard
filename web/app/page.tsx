@@ -395,17 +395,17 @@ export default function Home() {
             <div className="relative sound-menu-container">
               <button
                 onClick={() => setShowSoundMenu(!showSoundMenu)}
-                className="p-2 rounded-lg bg-gray-800 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors text-gray-300 hover:text-white"
+                className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
                 title="Sound alert settings"
               >
                 {enableSoundAlert ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
               </button>
               
               {showSoundMenu && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-gray-800 dark:bg-gray-700 rounded-lg shadow-xl border border-gray-700 p-4 z-50">
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-700 rounded-lg shadow-xl border border-gray-300 dark:border-gray-700 p-4 z-50">
                   {/* Enable/Disable Toggle */}
                   <div className="flex items-center justify-between mb-4">
-                    <label className="text-sm text-white font-medium">Sound Alerts</label>
+                    <label className="text-sm text-gray-900 dark:text-white font-medium">Sound Alerts</label>
                     <button
                       onClick={() => {
                         const newValue = !enableSoundAlert;
@@ -435,7 +435,7 @@ export default function Home() {
                           setSelectedSound(newSound);
                           localStorage.setItem("selectedSound", newSound);
                         }}
-                        className="w-full bg-gray-900 dark:bg-gray-800 text-white text-sm rounded-md border border-gray-700 px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         {soundOptions.map((sound) => (
                           <option key={sound.id} value={sound.id}>
@@ -459,12 +459,12 @@ export default function Home() {
             </div>
             
             {/* Polling Status & Controls */}
-            <div className="bg-gray-800 dark:bg-gray-800 rounded-lg p-4 min-w-[200px]">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 min-w-[200px] border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-400">Auto-refresh</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">Auto-refresh</span>
               <button
                 onClick={() => setIsPolling(!isPolling)}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                 title={isPolling ? "Pause auto-refresh" : "Resume auto-refresh"}
               >
                 {isPolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
@@ -473,15 +473,15 @@ export default function Home() {
             {isPolling ? (
               <div className="flex items-center gap-2">
                 <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />
-                <span className="text-sm text-white">
-                  Next refresh in <span className="font-semibold text-blue-400">{countdown}s</span>
+                <span className="text-sm text-gray-900 dark:text-white">
+                  Next refresh in <span className="font-semibold text-blue-600 dark:text-blue-400">{countdown}s</span>
                 </span>
               </div>
             ) : (
-              <div className="text-sm text-gray-500">Paused</div>
+              <div className="text-sm text-gray-600 dark:text-gray-500">Paused</div>
             )}
             {lastUpdate && (
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-gray-600 dark:text-gray-500 mt-1">
                 Last updated: {lastUpdate.toLocaleTimeString()}
               </div>
             )}
@@ -498,9 +498,9 @@ export default function Home() {
 
         {/* Content */}
         {loading ? (
-          <div className="bg-gray-800 rounded-lg p-12 text-center">
-            <Loader2 className="w-8 h-8 text-blue-400 animate-spin mx-auto mb-4" />
-            <p className="text-gray-400">Loading alerts...</p>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
+            <Loader2 className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600 dark:text-gray-400">Loading alerts...</p>
           </div>
         ) : error ? (
           <div className="bg-red-900/20 border border-red-800 rounded-lg p-6">
@@ -511,9 +511,9 @@ export default function Home() {
             <p className="text-red-300">{error}</p>
           </div>
         ) : (
-          <div className="bg-gray-800 rounded-lg p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                 {alerts.length} Alert{alerts.length !== 1 ? "s" : ""} Found
               </h2>
             </div>

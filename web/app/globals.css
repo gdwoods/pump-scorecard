@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-/* Remove CSS variables - using Tailwind classes instead for better dark mode support */
+/* Tailwind v4: Custom variant for class-based dark mode */
+@custom-variant dark (&:where(.dark, .dark *));
+
 body {
   font-family: Arial, Helvetica, sans-serif;
 }
