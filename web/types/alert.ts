@@ -1,6 +1,7 @@
 export interface DilutionAlert {
   id: number;
   date: string;
+  filing_datetime?: string | null; // ISO datetime string (includes time)
   ticker: string;
   form_type: string;
   link_to_filing: string | null;

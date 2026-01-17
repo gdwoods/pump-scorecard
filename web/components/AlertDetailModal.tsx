@@ -58,7 +58,13 @@ export default function AlertDetailModal({ alert, isOpen, onClose }: AlertDetail
                 <span className="cursor-help underline decoration-dotted decoration-gray-500 hover:text-gray-300">
                   {alert.form_type}
                 </span>
-              </FormTypeTooltip> • {new Date(alert.date).toLocaleDateString()}
+              </FormTypeTooltip> • {alert.filing_datetime ? (
+                <>
+                  {new Date(alert.filing_datetime).toLocaleDateString()} at {new Date(alert.filing_datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </>
+              ) : (
+                new Date(alert.date).toLocaleDateString()
+              )}
             </p>
           </div>
           <button
@@ -81,6 +87,19 @@ export default function AlertDetailModal({ alert, isOpen, onClose }: AlertDetail
               <p className={`text-3xl font-bold ${getRiskColor(alert.risk_score)}`}>
                 {alert.risk_score}
               </p>
+              <div className="mt-3 pt-3 border-t border-gray-700">
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  <strong className="text-gray-300">How the Risk Score is Calculated:</strong><br />
+                  The risk score is based on red flag indicators found in the filing:
+                  <br />• Each red flag keyword (warrants, convertible notes, ATM offerings, etc.): +1 point
+                  <br />• Each problematic underwriter found: +2 points
+                  <br />• Toxic debt detected (high-interest loans ≥12%): +3 points
+                  <br />• Management turnover detected: +4 points
+                  <br />• Warrant coverage ≥100%: +2 points
+                  <br />
+                  Higher scores indicate greater dilution risk. Scores ≥15 are very high risk, 10-14 are high risk, and 5-9 are moderate risk.
+                </p>
+              </div>
             </div>
 
             <div className="bg-gray-900 rounded-lg p-4">

@@ -6,6 +6,7 @@ import AlertTable from "@/components/AlertTable";
 import AlertFiltersComponent from "@/components/AlertFilters";
 import AlertDetailModal from "@/components/AlertDetailModal";
 import { Loader2, AlertCircle, RefreshCw, Pause, Play } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Home() {
   const [alerts, setAlerts] = useState<DilutionAlert[]>([]);
@@ -151,19 +152,23 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen p-6 bg-gray-900">
+    <div className="min-h-screen p-6 bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">SEC Dilution Alerts</h1>
-            <p className="text-gray-400">
+            <h1 className="text-4xl font-bold text-white dark:text-white mb-2">SEC Dilution Alerts</h1>
+            <p className="text-gray-400 dark:text-gray-400">
               Short seller alerts for SEC dilution filings and capital raises
             </p>
           </div>
           
-          {/* Polling Status & Controls */}
-          <div className="bg-gray-800 rounded-lg p-4 min-w-[200px]">
+          <div className="flex items-center gap-3">
+            {/* Theme Toggle */}
+            <ThemeToggle />
+            
+            {/* Polling Status & Controls */}
+            <div className="bg-gray-800 dark:bg-gray-800 rounded-lg p-4 min-w-[200px]">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-400">Auto-refresh</span>
               <button
@@ -189,6 +194,7 @@ export default function Home() {
                 Last updated: {lastUpdate.toLocaleTimeString()}
               </div>
             )}
+            </div>
           </div>
         </div>
 

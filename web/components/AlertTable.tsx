@@ -50,7 +50,7 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
             <th className="text-left p-3 text-sm font-medium text-gray-400">Risk Score</th>
             <th className="text-left p-3 text-sm font-medium text-gray-400">Offering</th>
             <th className="text-left p-3 text-sm font-medium text-gray-400">Flags</th>
-            <th className="text-left p-3 text-sm font-medium text-gray-400">Actions</th>
+            <th className="text-left p-3 text-sm font-medium text-gray-400">Details</th>
           </tr>
         </thead>
         <tbody>
@@ -62,8 +62,17 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
                 onRowClick ? "cursor-pointer hover:bg-gray-800/70" : "hover:bg-gray-800/50"
               }`}
             >
-              <td className="p-3 text-sm text-gray-300">
-                {new Date(alert.date).toLocaleDateString()}
+              <td className="p-3 text-sm text-gray-300 dark:text-gray-300">
+                {alert.filing_datetime ? (
+                  <>
+                    <div>{new Date(alert.filing_datetime).toLocaleDateString()}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+                      {new Date(alert.filing_datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </>
+                ) : (
+                  new Date(alert.date).toLocaleDateString()
+                )}
               </td>
               <td className="p-3">
                 <span className="font-semibold text-white">{alert.ticker}</span>

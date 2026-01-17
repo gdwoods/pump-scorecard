@@ -171,17 +171,26 @@ def save_alerts_to_db(filings: List[Dict], client: Client, table_name: str = "se
             if not ticker or ticker.upper() == "UNKNOWN":
                 continue
             
-            # Extract date
+            # Extract date and datetime
             date_str = filing.get("pubDate") or filing.get("date") or filing.get("filing_date", "")
+            date_obj = None
+            date_formatted = datetime.now().strftime("%Y-%m-%d")
+            filing_datetime = None  # Store full datetime string (ISO format)
+            
             try:
                 if date_str:
                     from dateutil import parser
                     date_obj = parser.parse(date_str)
                     date_formatted = date_obj.strftime("%Y-%m-%d")
+                    # Store full ISO datetime string for time display
+                    filing_datetime = date_obj.isoformat()
                 else:
                     date_formatted = datetime.now().strftime("%Y-%m-%d")
+                    filing_datetime = datetime.now().isoformat()
             except:
                 date_formatted = date_str if date_str else datetime.now().strftime("%Y-%m-%d")
+                # Try to preserve original datetime string if parsing failed
+                filing_datetime = date_str if date_str else datetime.now().isoformat()
             
             # Format red flags and underwriters
             red_flags = ", ".join(sorted(filing.get("red_flags_found", set()))) or None
@@ -194,6 +203,7 @@ def save_alerts_to_db(filings: List[Dict], client: Client, table_name: str = "se
             # Build row dictionary matching CSV structure
             row = {
                 "date": date_formatted,
+                "filing_datetime": filing_datetime,  # Full ISO datetime string for time display
                 "ticker": ticker,
                 "form_type": filing.get("form_type", "UNKNOWN"),
                 "link_to_filing": filing.get("link", filing.get("url", "")),
