@@ -43,6 +43,46 @@ export default function AlertDetailModal({ alert, isOpen, onClose }: AlertDetail
     }
   };
 
+  // Format date without timezone conversion (to prevent date shifting)
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return "";
+    // If date is in YYYY-MM-DD format, parse as local date (not UTC)
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const date = new Date(year, month - 1, day); // month is 0-indexed
+      return date.toLocaleDateString();
+    }
+    // Otherwise, use Date constructor (may have timezone issues)
+    return new Date(dateStr).toLocaleDateString();
+  };
+
+  // Format datetime, preserving the date part correctly
+  const formatDateTime = (datetimeStr: string | null | undefined) => {
+    if (!datetimeStr) return null;
+    try {
+      // If it's an ISO datetime string, extract the date part
+      if (datetimeStr.includes("T")) {
+        const datePart = datetimeStr.split("T")[0];
+        const timePart = datetimeStr.split("T")[1]?.split(/[+\-Z]/)[0]; // Remove timezone
+        const [year, month, day] = datePart.split("-").map(Number);
+        const [hours, minutes] = timePart ? timePart.split(":").map(Number) : [0, 0];
+        const date = new Date(year, month - 1, day, hours, minutes);
+        return {
+          date: date.toLocaleDateString(),
+          time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+      }
+      // Fallback
+      const date = new Date(datetimeStr);
+      return {
+        date: date.toLocaleDateString(),
+        time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
@@ -59,11 +99,12 @@ export default function AlertDetailModal({ alert, isOpen, onClose }: AlertDetail
                   {alert.form_type}
                 </span>
               </FormTypeTooltip> • {alert.filing_datetime ? (
-                <>
-                  {new Date(alert.filing_datetime).toLocaleDateString()} at {new Date(alert.filing_datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </>
+                (() => {
+                  const dt = formatDateTime(alert.filing_datetime);
+                  return dt ? `${dt.date} at ${dt.time}` : formatDate(alert.date);
+                })()
               ) : (
-                new Date(alert.date).toLocaleDateString()
+                formatDate(alert.date)
               )}
             </p>
           </div>

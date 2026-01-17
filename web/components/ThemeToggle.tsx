@@ -37,25 +37,13 @@ export default function ThemeToggle() {
     }
   };
 
-  // Don't render until we know the theme (prevents flash)
-  if (isDark === null) {
-    return (
-      <button
-        className="p-2 rounded-lg bg-gray-800 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors text-gray-300 hover:text-white"
-        title="Toggle theme"
-      >
-        <Sun className="w-5 h-5" />
-      </button>
-    );
-  }
-
   return (
     <button
       onClick={toggleTheme}
       className="p-2 rounded-lg bg-gray-800 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors text-gray-300 hover:text-white"
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={isDark === null ? "Toggle theme" : (isDark ? "Switch to light mode" : "Switch to dark mode")}
     >
-      {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+      {isDark === null || isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
     </button>
   );
 }

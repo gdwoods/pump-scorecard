@@ -39,6 +39,46 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
     }
   };
 
+  // Format date without timezone conversion (to prevent date shifting)
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return "";
+    // If date is in YYYY-MM-DD format, parse as local date (not UTC)
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const date = new Date(year, month - 1, day); // month is 0-indexed
+      return date.toLocaleDateString();
+    }
+    // Otherwise, use Date constructor (may have timezone issues)
+    return new Date(dateStr).toLocaleDateString();
+  };
+
+  // Format datetime, preserving the date part correctly
+  const formatDateTime = (datetimeStr: string | null | undefined) => {
+    if (!datetimeStr) return null;
+    try {
+      // If it's an ISO datetime string, extract the date part
+      if (datetimeStr.includes("T")) {
+        const datePart = datetimeStr.split("T")[0];
+        const timePart = datetimeStr.split("T")[1]?.split(/[+\-Z]/)[0]; // Remove timezone
+        const [year, month, day] = datePart.split("-").map(Number);
+        const [hours, minutes] = timePart ? timePart.split(":").map(Number) : [0, 0];
+        const date = new Date(year, month - 1, day, hours, minutes);
+        return {
+          date: date.toLocaleDateString(),
+          time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+      }
+      // Fallback
+      const date = new Date(datetimeStr);
+      return {
+        date: date.toLocaleDateString(),
+        time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
@@ -64,14 +104,21 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
             >
               <td className="p-3 text-sm text-gray-300 dark:text-gray-300">
                 {alert.filing_datetime ? (
-                  <>
-                    <div>{new Date(alert.filing_datetime).toLocaleDateString()}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
-                      {new Date(alert.filing_datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </>
+                  (() => {
+                    const dt = formatDateTime(alert.filing_datetime);
+                    return dt ? (
+                      <>
+                        <div>{dt.date}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+                          {dt.time}
+                        </div>
+                      </>
+                    ) : (
+                      formatDate(alert.date)
+                    );
+                  })()
                 ) : (
-                  new Date(alert.date).toLocaleDateString()
+                  formatDate(alert.date)
                 )}
               </td>
               <td className="p-3">

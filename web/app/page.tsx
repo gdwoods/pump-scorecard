@@ -253,6 +253,26 @@ export default function Home() {
       const data = await response.json();
       const newAlerts = data.alerts || [];
       
+      // Debug logging - client side
+      console.log(`[Client] Fetched ${newAlerts.length} alerts from API`);
+      if (newAlerts.length > 0) {
+        const dates = newAlerts.map(a => a.date).filter(Boolean);
+        const uniqueDates = [...new Set(dates)].sort().reverse();
+        console.log(`[Client] Date range in results: ${uniqueDates[uniqueDates.length - 1]} to ${uniqueDates[0]} (${uniqueDates.length} unique dates)`);
+        
+        // Check for 1/16/2025 specifically
+        const jan16Filings = newAlerts.filter(a => {
+          const dateStr = a.date || '';
+          return dateStr.includes('2025-01-16') || dateStr.includes('2025-01/16') || dateStr.includes('1/16/2025');
+        });
+        if (jan16Filings.length > 0) {
+          console.log(`[Client] ✓ Found ${jan16Filings.length} filing(s) from 1/16/2025`);
+        } else {
+          console.log(`[Client] ⚠️  No filings from 1/16/2025 in returned results`);
+          console.log(`[Client] Sample dates:`, uniqueDates.slice(0, 10));
+        }
+      }
+      
       // Check if we have new alerts (compare alert IDs)
       const currentAlertIds = new Set(alertsRef.current.map(a => a.id));
       const hasNewAlerts = newAlerts.some(alert => !currentAlertIds.has(alert.id));
