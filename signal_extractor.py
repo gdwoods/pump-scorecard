@@ -73,18 +73,44 @@ class SignalExtractor:
         ]
         
         # Management turnover patterns
-        # Look for "Resigned" or "Resignation" near executive titles
+        # Look for ACTUAL resignations (past tense, specific events), not policy language
+        # Exclude boilerplate like "shall tender resignation" or "director shall resign"
         self.resignation_patterns = [
-            # Pattern: "CFO resigned" or "Chief Financial Officer resigned"
+            # Pattern: Executive title + past tense resignation (actual event)
+            # Examples: "CFO resigned on Feb 25", "Chief Financial Officer has resigned"
+            # Must have past tense: "resigned", "has resigned", "had resigned", "tendered resignation"
+            # Exclude future/conditional: "shall resign", "may resign", "will resign", "shall tender"
             re.compile(
-                r'(?:CFO|CEO|CTO|COO|Chief\s+Financial\s+Officer|Chief\s+Executive\s+Officer|Chief\s+Technology\s+Officer|Chief\s+Operating\s+Officer|President|Treasurer|Controller|Auditor|Independent\s+Auditor)[^.]{0,100}?(?:resigned|resignation)',
+                r'(?:CFO|CEO|CTO|COO|Chief\s+Financial\s+Officer|Chief\s+Executive\s+Officer|Chief\s+Technology\s+Officer|Chief\s+Operating\s+Officer|President|Treasurer|Controller|Independent\s+Auditor|Auditor)\s+[^.]{0,80}?(?:resigned|has\s+resigned|had\s+resigned|tendered\s+his|tendered\s+her)(?![^.]{0,50}?shall|may|will)',
                 re.IGNORECASE
             ),
-            # Pattern: "resigned" followed by executive title
+            # Pattern: Person name + title + resigned (specific person resignation)
+            # Example: "John Smith, CFO, resigned"
+            # Must include a person name (capitalized words that aren't common titles)
             re.compile(
-                r'(?:resigned|resignation)[^.]{0,100}?(?:CFO|CEO|CTO|COO|Chief\s+Financial\s+Officer|Chief\s+Executive\s+Officer|Chief\s+Technology\s+Officer|Chief\s+Operating\s+Officer|President|Treasurer|Controller|Auditor|Independent\s+Auditor)',
+                r'[A-Z][a-z]+\s+(?:[A-Z][a-z]+\.?\s+)?(?:CFO|CEO|CTO|COO|Chief\s+Financial\s+Officer|Chief\s+Executive\s+Officer|Chief\s+Technology\s+Officer|Chief\s+Operating\s+Officer|President|Treasurer|Controller|Independent\s+Auditor|Auditor)[^.]{0,50}?(?:resigned|has\s+resigned|had\s+resigned)',
                 re.IGNORECASE
             ),
+            # Pattern: "resigned" + date/month + title (actual event with date)
+            # Example: "resigned on February 25, 2025", "resigned on Feb 25"
+            re.compile(
+                r'(?:resigned|has\s+resigned|had\s+resigned)\s+(?:on|effective)\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^.]{0,100}?(?:CFO|CEO|CTO|COO|Chief\s+Financial\s+Officer|Chief\s+Executive\s+Officer|Chief\s+Technology\s+Officer|Chief\s+Operating\s+Officer|President|Treasurer|Controller|Independent\s+Auditor|Auditor)',
+                re.IGNORECASE
+            ),
+        ]
+        
+        # Patterns to exclude (boilerplate/policy language)
+        self.resignation_exclude_patterns = [
+            # Policy language: "shall tender resignation", "shall resign", "may resign"
+            re.compile(r'shall\s+(?:tender|submit|provide)\s+(?:his|her|their)\s+(?:resignation|conditional\s+resignation)', re.IGNORECASE),
+            re.compile(r'shall\s+resign', re.IGNORECASE),
+            re.compile(r'may\s+resign', re.IGNORECASE),
+            re.compile(r'will\s+resign', re.IGNORECASE),
+            # Policy language about director elections and resignations
+            re.compile(r'(?:incumbent|director)\s+is\s+not\s+elected[^.]{0,100}?resignation', re.IGNORECASE),
+            re.compile(r'nomination\s+and\s+corporate\s+governance[^.]{0,100}?resignation', re.IGNORECASE),
+            # General policy statements
+            re.compile(r'(?:policy|procedure|requirement|guideline)[^.]{0,100}?resignation', re.IGNORECASE),
         ]
         
         # Warrant coverage patterns
@@ -201,8 +227,8 @@ class SignalExtractor:
         """
         Detect management turnover (executive resignations).
         
-        Looks for "Resigned" or "Resignation" within context of executive titles
-        (CFO, CEO, Chief Financial Officer, Auditor, etc.).
+        Looks for ACTUAL resignations (past tense, specific events with dates or names),
+        NOT policy language about future resignation procedures.
         
         Args:
             text: Raw filing text content
@@ -216,11 +242,28 @@ class SignalExtractor:
         text_clean = re.sub(r'<[^>]+>', ' ', text_clean)
         text_clean = re.sub(r'\s+', ' ', text_clean)
         
-        # Try each pattern
+        # First, check if snippet matches exclusion patterns (policy language)
+        # Extract context around potential matches to check for exclusions
         for pattern in self.resignation_patterns:
             matches = list(pattern.finditer(text_clean))
             for match in matches:
-                # Extract context snippet (200 chars around match)
+                # Extract larger context (500 chars) to check for exclusion patterns
+                context_start = max(0, match.start() - 250)
+                context_end = min(len(text_clean), match.end() + 250)
+                context_snippet = text_clean[context_start:context_end]
+                
+                # Check if this matches any exclusion patterns (boilerplate)
+                is_excluded = False
+                for exclude_pattern in self.resignation_exclude_patterns:
+                    if exclude_pattern.search(context_snippet):
+                        is_excluded = True
+                        break
+                
+                # If excluded, skip this match
+                if is_excluded:
+                    continue
+                
+                # Extract context snippet (200 chars around match) for display
                 start = max(0, match.start() - 100)
                 end = min(len(text_clean), match.end() + 100)
                 snippet = text_clean[start:end].strip()
