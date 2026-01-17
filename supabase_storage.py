@@ -41,7 +41,10 @@ def init_supabase() -> Optional[Client]:
     """
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("[Supabase] Warning: SUPABASE_URL or SUPABASE_KEY not set")
+        print(f"[Supabase] Debug: SUPABASE_URL = '{SUPABASE_URL[:50] if SUPABASE_URL else 'None'}...' (length: {len(SUPABASE_URL) if SUPABASE_URL else 0})")
+        print(f"[Supabase] Debug: SUPABASE_KEY = '{SUPABASE_KEY[:20] if SUPABASE_KEY else 'None'}...' (length: {len(SUPABASE_KEY) if SUPABASE_KEY else 0})")
         print("[Supabase] Falling back to CSV storage")
+        print("[Supabase] Note: Make sure SUPABASE_URL and SUPABASE_ANON_KEY secrets are set in GitHub repository settings")
         return None
     
     try:
