@@ -1,0 +1,61 @@
+name: Scan SEC Filings
+
+on:
+  schedule:
+    # Hybrid approach: Every 1 minute during active hours, every 15 minutes during off-hours
+    # Times in UTC: ET is UTC-5 (EST) or UTC-4 (EDT)
+    # Pre-market: ~4 AM ET = 8-9 AM UTC
+    # Market: 9:30 AM - 4 PM ET = 14:30-21:00 UTC
+    # Post-market: ~8 PM ET = 0-1 AM UTC next day
+    
+    # Every 1 minute during active market hours (pre-market, regular, post-market)
+    # Covers 4 AM - 8 PM ET (8:00-23:59 UTC) on weekdays
+    - cron: '* 8-23 * * 1-5'  # Every minute, 8:00-23:59 UTC, Mon-Fri
+    
+    # Every 15 minutes during off-hours on weekdays (8 PM ET - 4 AM ET next day)
+    # Covers 8 PM - 4 AM ET (0:00-7:59 UTC) on weekdays
+    - cron: '*/15 0-7 * * 1-5'  # Every 15 minutes, 0:00-7:59 UTC, Mon-Fri
+    
+    # Every 15 minutes on weekends (markets closed)
+    - cron: '*/15 * * * 0,6'  # Every 15 minutes, all hours, Sat-Sun
+    
+  workflow_dispatch:  # Allow manual trigger from GitHub Actions UI
+
+jobs:
+  scan-filings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # Allow up to 30 minutes for scanning
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+        
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+      
+      - name: Configure environment
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          echo "Environment configured"
+      
+      - name: Run SEC scanner
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          python3 main.py --filing-count 50
+      
+      - name: Check for errors
+        if: failure()
+        run: |
+          echo "❌ Scanner failed - check logs above"
+          exit 1
