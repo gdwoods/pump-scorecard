@@ -2,6 +2,7 @@
 
 import { DilutionAlert } from "@/types/alert";
 import { ExternalLink } from "lucide-react";
+import { hasValidUnderwriter } from "@/lib/alertUtils";
 
 interface AlertTableProps {
   alerts: DilutionAlert[];
@@ -92,7 +93,7 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
                       Warrants
                     </span>
                   )}
-                  {alert.underwriter_found && (
+                  {hasValidUnderwriter(alert.underwriter_found) && (
                     <span className="text-xs px-2 py-1 bg-purple-900/30 text-purple-400 rounded">
                       Underwriter
                     </span>
