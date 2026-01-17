@@ -5,7 +5,7 @@ import { DilutionAlert, AlertFilters } from "@/types/alert";
 import AlertTable from "@/components/AlertTable";
 import AlertFiltersComponent from "@/components/AlertFilters";
 import AlertDetailModal from "@/components/AlertDetailModal";
-import { Loader2, AlertCircle, RefreshCw, Pause, Play } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Home() {
@@ -17,9 +17,211 @@ export default function Home() {
   const [countdown, setCountdown] = useState(15);
   const [isPolling, setIsPolling] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [enableSoundAlert, setEnableSoundAlert] = useState(false);
+  const [selectedSound, setSelectedSound] = useState<string>("default");
+  const [showSoundMenu, setShowSoundMenu] = useState(false);
   const [filters, setFilters] = useState<AlertFilters>({
-    limit: 100,
+    limit: 500, // Increased to ensure we see filings from recent days (1/16, etc.)
   });
+
+  // Sound options configuration
+  type SoundOption = {
+    id: string;
+    name: string;
+    play: (audioContext: AudioContext, startTime: number) => void;
+  };
+
+  const soundOptions: SoundOption[] = [
+    {
+      id: "default",
+      name: "Default Beep",
+      play: (ctx, startTime) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 800;
+        osc.type = "sine";
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.3, startTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.2);
+        osc.start(startTime);
+        osc.stop(startTime + 0.2);
+      },
+    },
+    {
+      id: "high",
+      name: "High Pitch",
+      play: (ctx, startTime) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 1200;
+        osc.type = "sine";
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.3, startTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.15);
+        osc.start(startTime);
+        osc.stop(startTime + 0.15);
+      },
+    },
+    {
+      id: "low",
+      name: "Low Pitch",
+      play: (ctx, startTime) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 400;
+        osc.type = "sine";
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.3, startTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.25);
+        osc.start(startTime);
+        osc.stop(startTime + 0.25);
+      },
+    },
+    {
+      id: "double",
+      name: "Double Beep",
+      play: (ctx, startTime) => {
+        // First beep
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.frequency.value = 800;
+        osc1.type = "sine";
+        gain1.gain.setValueAtTime(0, startTime);
+        gain1.gain.linearRampToValueAtTime(0.3, startTime + 0.01);
+        gain1.gain.linearRampToValueAtTime(0, startTime + 0.1);
+        osc1.start(startTime);
+        osc1.stop(startTime + 0.1);
+        
+        // Second beep
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.frequency.value = 800;
+        osc2.type = "sine";
+        gain2.gain.setValueAtTime(0, startTime + 0.15);
+        gain2.gain.linearRampToValueAtTime(0.3, startTime + 0.16);
+        gain2.gain.linearRampToValueAtTime(0, startTime + 0.25);
+        osc2.start(startTime + 0.15);
+        osc2.stop(startTime + 0.25);
+      },
+    },
+    {
+      id: "triple",
+      name: "Triple Beep",
+      play: (ctx, startTime) => {
+        [0, 0.12, 0.24].forEach((delay) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 800;
+          osc.type = "sine";
+          const beepStart = startTime + delay;
+          gain.gain.setValueAtTime(0, beepStart);
+          gain.gain.linearRampToValueAtTime(0.3, beepStart + 0.01);
+          gain.gain.linearRampToValueAtTime(0, beepStart + 0.08);
+          osc.start(beepStart);
+          osc.stop(beepStart + 0.08);
+        });
+      },
+    },
+    {
+      id: "chime",
+      name: "Chime (Ascending)",
+      play: (ctx, startTime) => {
+        [600, 800, 1000].forEach((freq, index) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = freq;
+          osc.type = "sine";
+          const noteStart = startTime + index * 0.08;
+          gain.gain.setValueAtTime(0, noteStart);
+          gain.gain.linearRampToValueAtTime(0.25, noteStart + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.01, noteStart + 0.15);
+          osc.start(noteStart);
+          osc.stop(noteStart + 0.15);
+        });
+      },
+    },
+  ];
+
+  // Load sound alert preferences from localStorage
+  useEffect(() => {
+    const savedEnabled = localStorage.getItem("enableSoundAlert");
+    const savedSound = localStorage.getItem("selectedSound");
+    if (savedEnabled !== null) {
+      setEnableSoundAlert(savedEnabled === "true");
+    }
+    if (savedSound !== null && soundOptions.find(s => s.id === savedSound)) {
+      setSelectedSound(savedSound);
+    }
+  }, []);
+
+  // Close sound menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showSoundMenu && !target.closest('.sound-menu-container')) {
+        setShowSoundMenu(false);
+      }
+    };
+    
+    if (showSoundMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSoundMenu]);
+
+  // Play selected sound
+  const playAlertSound = useCallback(() => {
+    if (!enableSoundAlert) return;
+    
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const soundOption = soundOptions.find(s => s.id === selectedSound);
+      
+      if (soundOption) {
+        soundOption.play(audioContext, audioContext.currentTime);
+        
+        // Close audio context after sound completes
+        setTimeout(() => {
+          audioContext.close().catch(() => {});
+        }, 500);
+      }
+    } catch (error) {
+      console.log("Web Audio API not available:", error);
+    }
+  }, [enableSoundAlert, selectedSound, soundOptions]);
+
+  // Test sound function (can be called manually)
+  const testSound = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const soundOption = soundOptions.find(s => s.id === selectedSound);
+      
+      if (soundOption) {
+        soundOption.play(audioContext, audioContext.currentTime);
+        
+        // Close audio context after sound completes
+        setTimeout(() => {
+          audioContext.close().catch(() => {});
+        }, 500);
+      }
+    } catch (error) {
+      console.log("Web Audio API not available:", error);
+    }
+  }, [selectedSound, soundOptions]);
 
   // Use ref to track current alerts for comparison
   const alertsRef = useRef<DilutionAlert[]>([]);
@@ -56,9 +258,10 @@ export default function Home() {
       const hasNewAlerts = newAlerts.some(alert => !currentAlertIds.has(alert.id));
       
       if (hasNewAlerts && !isInitialLoad) {
-        // Could show a notification here if desired
         const newCount = newAlerts.filter(a => !currentAlertIds.has(a.id)).length;
         console.log(`New alerts detected: ${newCount}`);
+        // Play sound alert if enabled
+        playAlertSound();
       }
       
       setAlerts(newAlerts);
@@ -69,7 +272,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, playAlertSound]);
 
   // Fetch alerts when filters change
   useEffect(() => {
@@ -138,7 +341,7 @@ export default function Home() {
   };
 
   const handleResetFilters = () => {
-    setFilters({ limit: 100 });
+    setFilters({ limit: 500 }); // Increased default limit
   };
 
   const handleRowClick = (alert: DilutionAlert) => {
@@ -166,6 +369,73 @@ export default function Home() {
           <div className="flex items-center gap-3">
             {/* Theme Toggle */}
             <ThemeToggle />
+            
+            {/* Sound Alert Settings */}
+            <div className="relative sound-menu-container">
+              <button
+                onClick={() => setShowSoundMenu(!showSoundMenu)}
+                className="p-2 rounded-lg bg-gray-800 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors text-gray-300 hover:text-white"
+                title="Sound alert settings"
+              >
+                {enableSoundAlert ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
+              </button>
+              
+              {showSoundMenu && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-gray-800 dark:bg-gray-700 rounded-lg shadow-xl border border-gray-700 p-4 z-50">
+                  {/* Enable/Disable Toggle */}
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="text-sm text-white font-medium">Sound Alerts</label>
+                    <button
+                      onClick={() => {
+                        const newValue = !enableSoundAlert;
+                        setEnableSoundAlert(newValue);
+                        localStorage.setItem("enableSoundAlert", String(newValue));
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        enableSoundAlert ? "bg-blue-600" : "bg-gray-600"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          enableSoundAlert ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  
+                  {/* Sound Selector */}
+                  {enableSoundAlert && (
+                    <>
+                      <label className="block text-xs text-gray-400 mb-2">Sound Type</label>
+                      <select
+                        value={selectedSound}
+                        onChange={(e) => {
+                          const newSound = e.target.value;
+                          setSelectedSound(newSound);
+                          localStorage.setItem("selectedSound", newSound);
+                        }}
+                        className="w-full bg-gray-900 dark:bg-gray-800 text-white text-sm rounded-md border border-gray-700 px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {soundOptions.map((sound) => (
+                          <option key={sound.id} value={sound.id}>
+                            {sound.name}
+                          </option>
+                        ))}
+                      </select>
+                      
+                      {/* Test Button */}
+                      <button
+                        onClick={testSound}
+                        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-2 rounded-md transition-colors"
+                      >
+                        <Volume2 className="w-4 h-4" />
+                        Test Sound
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
             
             {/* Polling Status & Controls */}
             <div className="bg-gray-800 dark:bg-gray-800 rounded-lg p-4 min-w-[200px]">

@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const formType = searchParams.get('formType');
     const minRiskScore = searchParams.get('minRiskScore');
     const daysBack = searchParams.get('daysBack');
-    const limit = parseInt(searchParams.get('limit') || '100');
+    const limit = parseInt(searchParams.get('limit') || '500'); // Increased default to show more filings
 
     // Build query
     let query = supabase
@@ -46,6 +46,14 @@ export async function GET(request: NextRequest) {
         { error: 'Failed to fetch alerts', details: error.message },
         { status: 500 }
       );
+    }
+
+    // Debug logging
+    console.log(`[API] Fetched ${data?.length || 0} alerts from Supabase`);
+    if (data && data.length > 0) {
+      const dates = data.map(a => a.date).filter(Boolean);
+      const uniqueDates = [...new Set(dates)].sort().reverse();
+      console.log(`[API] Date range: ${uniqueDates.slice(-1)[0]} to ${uniqueDates[0]} (${uniqueDates.length} unique dates)`);
     }
 
     return NextResponse.json({ alerts: data || [] });
