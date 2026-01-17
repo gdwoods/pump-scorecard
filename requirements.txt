@@ -1,0 +1,17 @@
+# SEC EDGAR Dilution Alert Scanner - Python Dependencies
+
+# Core dependencies
+requests>=2.31.0          # HTTP library for SEC API requests
+pandas>=2.0.0             # Data manipulation and CSV handling
+
+# Date parsing
+python-dateutil>=2.8.2    # Flexible date parsing for filing dates
+
+# HTML parsing for filing documents
+beautifulsoup4>=4.12.0    # HTML parser for extracting text from filings
+
+# Optional: For better XML/RSS parsing
+lxml>=4.9.0               # Fast XML/HTML parser (optional, for RSS feed parsing)
+
+# Database storage (Supabase)
+supabase>=2.0.0           # Supabase client for PostgreSQL database storage
