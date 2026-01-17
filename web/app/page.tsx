@@ -8,30 +8,14 @@ import AlertDetailModal from "@/components/AlertDetailModal";
 import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
-export default function Home() {
-  const [alerts, setAlerts] = useState<DilutionAlert[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedAlert, setSelectedAlert] = useState<DilutionAlert | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [countdown, setCountdown] = useState(15);
-  const [isPolling, setIsPolling] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [enableSoundAlert, setEnableSoundAlert] = useState(false);
-  const [selectedSound, setSelectedSound] = useState<string>("default");
-  const [showSoundMenu, setShowSoundMenu] = useState(false);
-  const [filters, setFilters] = useState<AlertFilters>({
-    limit: 500, // Increased to ensure we see filings from recent days (1/16, etc.)
-  });
+// Sound options configuration (moved outside component to prevent re-creation on every render)
+type SoundOption = {
+  id: string;
+  name: string;
+  play: (audioContext: AudioContext, startTime: number) => void;
+};
 
-  // Sound options configuration
-  type SoundOption = {
-    id: string;
-    name: string;
-    play: (audioContext: AudioContext, startTime: number) => void;
-  };
-
-  const soundOptions: SoundOption[] = [
+const soundOptions: SoundOption[] = [
     {
       id: "default",
       name: "Default Beep",
@@ -154,7 +138,23 @@ export default function Home() {
         });
       },
     },
-  ];
+];
+
+export default function Home() {
+  const [alerts, setAlerts] = useState<DilutionAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedAlert, setSelectedAlert] = useState<DilutionAlert | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [countdown, setCountdown] = useState(15);
+  const [isPolling, setIsPolling] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [enableSoundAlert, setEnableSoundAlert] = useState(false);
+  const [selectedSound, setSelectedSound] = useState<string>("default");
+  const [showSoundMenu, setShowSoundMenu] = useState(false);
+  const [filters, setFilters] = useState<AlertFilters>({
+    limit: 500, // Increased to ensure we see filings from recent days (1/16, etc.)
+  });
 
   // Load sound alert preferences from localStorage
   useEffect(() => {
@@ -202,7 +202,7 @@ export default function Home() {
     } catch (error) {
       console.log("Web Audio API not available:", error);
     }
-  }, [enableSoundAlert, selectedSound, soundOptions]);
+  }, [enableSoundAlert, selectedSound]); // Removed soundOptions - it's now a constant outside component
 
   // Test sound function (can be called manually)
   const testSound = useCallback(() => {
@@ -221,7 +221,7 @@ export default function Home() {
     } catch (error) {
       console.log("Web Audio API not available:", error);
     }
-  }, [selectedSound, soundOptions]);
+  }, [selectedSound]); // Removed soundOptions - it's now a constant outside component
 
   // Use ref to track current alerts for comparison
   const alertsRef = useRef<DilutionAlert[]>([]);
