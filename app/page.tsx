@@ -13,6 +13,7 @@ import DroppinessScatter from "@/components/DroppinessChart";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
 import SentimentCard from "@/components/SentimentCard";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
+import DilutionTrackerCard from "@/components/DilutionTrackerCard";
 import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import Link from "next/link";
@@ -144,6 +145,7 @@ export default function Page() {
               verdict={result.droppinessVerdict}
             />
             <SentimentCard ticker={result.ticker} sentiment={result.sentiment} />
+            <DilutionTrackerCard ticker={result.ticker} dilutionTracker={result.dilutionTracker} />
           </div>
 
           {/* Score Breakdown and Fundamentals */}

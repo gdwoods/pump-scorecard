@@ -51,6 +51,19 @@ export interface ScanResult {
         messages: any[];
     } | null;
     insiderTransactions: InsiderTransaction[];
+    dilutionTracker: {
+        activities: any[];
+        totalActivities: number;
+        recentActivities: number;
+        totalRaised: number;
+        riskScore: number;
+        categories: {
+            offeringPR: number;
+            privatePlacement: number;
+            prospectusFilings: number;
+            reverseSplits: number;
+        };
+    } | null;
 }
 
 export function useScanner() {

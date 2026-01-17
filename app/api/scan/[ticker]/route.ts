@@ -632,6 +632,19 @@ try {
     const sentimentTask = fetchSentiment(upperTicker);
     const insiderTransactionsTask = fetchInsiderTransactions(upperTicker);
 
+    const dilutionTrackerTask = (async () => {
+      try {
+        const { getDilutionTrackerData } = await import('@/lib/dilutionTracker');
+        console.log(`[${upperTicker}] Fetching DilutionTracker data...`);
+        const dilutionData = await getDilutionTrackerData(upperTicker);
+        console.log(`[${upperTicker}] Found ${dilutionData.totalActivities} dilution activities`);
+        return dilutionData;
+      } catch (err) {
+        console.error(`[${upperTicker}] DilutionTracker task failed:`, err);
+        return null;
+      }
+    })();
+
     // Execute all tasks in parallel
     const [
       yahooRes,
@@ -644,7 +657,8 @@ try {
       borrowRes,
       newsRes,
       sentimentRes,
-      insiderTransactionsRes
+      insiderTransactionsRes,
+      dilutionTrackerRes
     ] = await Promise.allSettled([
       yahooTask,
       polygonSplitsTask,
@@ -656,7 +670,8 @@ try {
       borrowTask,
       newsTask,
       sentimentTask,
-      insiderTransactionsTask
+      insiderTransactionsTask,
+      dilutionTrackerTask
     ]);
 
     // Extract results
@@ -673,6 +688,7 @@ try {
     const sentimentData = sentimentRes.status === 'fulfilled' ? sentimentRes.value : null;
     const insiderTransactions = insiderTransactionsRes.status === 'fulfilled' ? insiderTransactionsRes.value : [];
     const news = newsRes.status === 'fulfilled' ? newsRes.value : [];
+    const dilutionTrackerData = dilutionTrackerRes.status === 'fulfilled' ? dilutionTrackerRes.value : null;
 
     // If Yahoo Finance failed (likely due to rate limit), try to use cached data
     if (!yahooData || !yahooData.quote || Object.keys(yahooData.quote).length === 0) {
@@ -873,6 +889,15 @@ try {
 
     const RISKY = new Set(["China", "Hong Kong", "Malaysia", "Singapore"]);
     if (RISKY.has(country)) weightedRiskScore += 15;
+
+    // DilutionTracker scoring
+    if (dilutionTrackerData) {
+      const dilutionRisk = dilutionTrackerData.riskScore;
+      if (dilutionRisk >= 70) weightedRiskScore += 20; // High dilution risk
+      else if (dilutionRisk >= 40) weightedRiskScore += 10; // Moderate dilution risk
+      else if (dilutionRisk >= 20) weightedRiskScore += 5; // Low dilution risk
+    }
+
     if (weightedRiskScore < 0) weightedRiskScore = 0;
 
     let summaryVerdict: "Low risk" | "Moderate risk" | "High risk" = "Low risk";
@@ -936,6 +961,7 @@ try {
       news,
       sentiment: sentimentData,
       insiderTransactions,
+      dilutionTracker: dilutionTrackerData,
     };
     
     // Cache the response data before returning (cacheKey already defined at top of try block)
