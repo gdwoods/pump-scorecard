@@ -4,6 +4,7 @@ import { DilutionAlert } from "@/types/alert";
 import { X, ExternalLink, AlertTriangle, TrendingUp, Users, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { hasValidUnderwriter } from "@/lib/alertUtils";
+import FormTypeTooltip from "@/components/FormTypeTooltip";
 
 interface AlertDetailModalProps {
   alert: DilutionAlert;
@@ -53,7 +54,11 @@ export default function AlertDetailModal({ alert, isOpen, onClose }: AlertDetail
           <div>
             <h2 className="text-2xl font-bold text-white">{alert.ticker}</h2>
             <p className="text-gray-400 text-sm mt-1">
-              {alert.form_type} • {new Date(alert.date).toLocaleDateString()}
+              <FormTypeTooltip formType={alert.form_type}>
+                <span className="cursor-help underline decoration-dotted decoration-gray-500 hover:text-gray-300">
+                  {alert.form_type}
+                </span>
+              </FormTypeTooltip> • {new Date(alert.date).toLocaleDateString()}
             </p>
           </div>
           <button

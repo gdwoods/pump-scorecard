@@ -3,6 +3,7 @@
 import { DilutionAlert } from "@/types/alert";
 import { ExternalLink } from "lucide-react";
 import { hasValidUnderwriter } from "@/lib/alertUtils";
+import FormTypeTooltip from "@/components/FormTypeTooltip";
 
 interface AlertTableProps {
   alerts: DilutionAlert[];
@@ -67,7 +68,13 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
               <td className="p-3">
                 <span className="font-semibold text-white">{alert.ticker}</span>
               </td>
-              <td className="p-3 text-sm text-gray-400">{alert.form_type}</td>
+              <td className="p-3 text-sm text-gray-400">
+                <FormTypeTooltip formType={alert.form_type}>
+                  <span className="cursor-help underline decoration-dotted decoration-gray-500 hover:text-gray-300">
+                    {alert.form_type}
+                  </span>
+                </FormTypeTooltip>
+              </td>
               <td className="p-3">
                 <span className={`font-semibold ${getRiskColor(alert.risk_score)}`}>
                   {alert.risk_score}
