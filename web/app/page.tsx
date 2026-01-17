@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { DilutionAlert, AlertFilters } from "@/types/alert";
 import AlertTable from "@/components/AlertTable";
 import AlertFiltersComponent from "@/components/AlertFilters";
 import AlertDetailModal from "@/components/AlertDetailModal";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Pause, Play } from "lucide-react";
 
 export default function Home() {
   const [alerts, setAlerts] = useState<DilutionAlert[]>([]);
@@ -13,12 +13,23 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<DilutionAlert | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [countdown, setCountdown] = useState(15);
+  const [isPolling, setIsPolling] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [filters, setFilters] = useState<AlertFilters>({
     limit: 100,
   });
 
-  const fetchAlerts = async () => {
-    setLoading(true);
+  // Use ref to track current alerts for comparison
+  const alertsRef = useRef<DilutionAlert[]>([]);
+  useEffect(() => {
+    alertsRef.current = alerts;
+  }, [alerts]);
+
+  const fetchAlerts = useCallback(async (isInitialLoad = false) => {
+    if (isInitialLoad) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -37,18 +48,89 @@ export default function Home() {
       }
 
       const data = await response.json();
-      setAlerts(data.alerts || []);
+      const newAlerts = data.alerts || [];
+      
+      // Check if we have new alerts (compare alert IDs)
+      const currentAlertIds = new Set(alertsRef.current.map(a => a.id));
+      const hasNewAlerts = newAlerts.some(alert => !currentAlertIds.has(alert.id));
+      
+      if (hasNewAlerts && !isInitialLoad) {
+        // Could show a notification here if desired
+        const newCount = newAlerts.filter(a => !currentAlertIds.has(a.id)).length;
+        console.log(`New alerts detected: ${newCount}`);
+      }
+      
+      setAlerts(newAlerts);
+      setLastUpdate(new Date());
     } catch (err) {
       console.error("Error fetching alerts:", err);
       setError(err instanceof Error ? err.message : "Failed to load alerts");
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
+  // Fetch alerts when filters change
   useEffect(() => {
-    fetchAlerts();
-  }, [filters.ticker, filters.formType, filters.minRiskScore, filters.daysBack]);
+    fetchAlerts(true); // Initial load
+  }, [fetchAlerts]);
+
+  // Auto-polling every 15 seconds (with random variance to avoid 403 errors)
+  useEffect(() => {
+    if (!isPolling) {
+      setCountdown(15);
+      return;
+    }
+
+    let timeoutId: NodeJS.Timeout | null = null;
+    let countdownInterval: NodeJS.Timeout | null = null;
+    let isActive = true;
+
+    const scheduleNextFetch = () => {
+      if (!isActive) return;
+
+      // Clear existing timers
+      if (timeoutId) clearTimeout(timeoutId);
+      if (countdownInterval) clearInterval(countdownInterval);
+
+      // Add random variance: 15 seconds ± 2 seconds (13-17 seconds)
+      // This prevents appearing like a bot with perfectly timed requests
+      const variance = (Math.random() - 0.5) * 4; // -2 to +2 seconds
+      const intervalMs = (15 + variance) * 1000;
+      const intervalSeconds = Math.round(15 + variance);
+      
+      // Set initial countdown
+      setCountdown(intervalSeconds);
+      
+      // Start countdown timer
+      let currentCountdown = intervalSeconds;
+      countdownInterval = setInterval(() => {
+        if (!isActive) return;
+        currentCountdown -= 1;
+        if (currentCountdown <= 0) {
+          if (countdownInterval) clearInterval(countdownInterval);
+        } else {
+          setCountdown(currentCountdown);
+        }
+      }, 1000);
+      
+      // Schedule the actual fetch
+      timeoutId = setTimeout(() => {
+        if (!isActive) return;
+        fetchAlerts(false); // Not initial load
+        scheduleNextFetch(); // Schedule next fetch with new random variance
+      }, intervalMs);
+    };
+
+    scheduleNextFetch();
+
+    return () => {
+      isActive = false;
+      if (timeoutId) clearTimeout(timeoutId);
+      if (countdownInterval) clearInterval(countdownInterval);
+    };
+  }, [isPolling, fetchAlerts]);
+
 
   const handleFiltersChange = (newFilters: AlertFilters) => {
     setFilters(newFilters);
@@ -72,11 +154,42 @@ export default function Home() {
     <div className="min-h-screen p-6 bg-gray-900">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-4xl font-bold text-white mb-2">SEC Dilution Alerts</h1>
-          <p className="text-gray-400">
-            Short seller alerts for SEC dilution filings and capital raises
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-white mb-2">SEC Dilution Alerts</h1>
+            <p className="text-gray-400">
+              Short seller alerts for SEC dilution filings and capital raises
+            </p>
+          </div>
+          
+          {/* Polling Status & Controls */}
+          <div className="bg-gray-800 rounded-lg p-4 min-w-[200px]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-400">Auto-refresh</span>
+              <button
+                onClick={() => setIsPolling(!isPolling)}
+                className="text-gray-400 hover:text-white transition-colors"
+                title={isPolling ? "Pause auto-refresh" : "Resume auto-refresh"}
+              >
+                {isPolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              </button>
+            </div>
+            {isPolling ? (
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />
+                <span className="text-sm text-white">
+                  Next refresh in <span className="font-semibold text-blue-400">{countdown}s</span>
+                </span>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">Paused</div>
+            )}
+            {lastUpdate && (
+              <div className="text-xs text-gray-500 mt-1">
+                Last updated: {lastUpdate.toLocaleTimeString()}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Filters */}
