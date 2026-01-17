@@ -381,8 +381,8 @@ export default function Home() {
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-white dark:text-white mb-2">SEC Dilution Alerts</h1>
-            <p className="text-gray-400 dark:text-gray-400">
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">SEC Dilution Alerts</h1>
+            <p className="text-gray-600 dark:text-gray-400">
               Short seller alerts for SEC dilution filings and capital raises
             </p>
           </div>

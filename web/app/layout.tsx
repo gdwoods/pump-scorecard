@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="antialiased bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+    <html lang="en" suppressHydrationWarning className="bg-white dark:bg-gray-900">
+      <body className="antialiased bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
         {/* Blocking script to initialize theme before React hydration */}
         <script
           dangerouslySetInnerHTML={{
