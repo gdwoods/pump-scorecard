@@ -107,17 +107,16 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
                   )}
                 </div>
               </td>
-              <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                {alert.link_to_filing && (
-                  <a
-                    href={alert.link_to_filing}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                )}
+              <td className="p-3" onClick={(e) => {
+                e.stopPropagation();
+                onRowClick?.(alert);
+              }}>
+                <button
+                  className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1 transition-colors"
+                  title="View details"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </button>
               </td>
             </tr>
           ))}

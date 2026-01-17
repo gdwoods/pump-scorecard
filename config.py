@@ -26,12 +26,15 @@ LATEST_FILINGS_JSON_URL = f"{SEC_BASE_URL}/cgi-bin/browse-edgar?action=getcurren
 # 424B4: Prospectus supplement
 # 424B5: Prospectus supplement (often for shelf offerings)
 # 8-K: Current report (may disclose financing arrangements)
+# EFFECT: Notice of effectiveness - indicates a registration statement (S-1/S-3) has become effective
+#         and the company can now sell the registered securities
 RELEVANT_FORM_TYPES = [
     "S-1",
     "S-3",
     "424B4",
     "424B5",
     "8-K",
+    "EFFECT",
 ]
 
 # Red Flag Keywords: Terms commonly associated with dilution events

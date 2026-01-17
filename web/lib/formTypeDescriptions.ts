@@ -23,6 +23,10 @@ export const FORM_TYPE_DESCRIPTIONS: Record<string, string> = {
   "10-Q": "Quarterly report filed by public companies. Contains unaudited financial statements and management discussion. Less relevant for dilution alerts but may contain relevant information.",
   
   "10-K": "Annual report filed by public companies. Contains audited financial statements and comprehensive company information. Less relevant for dilution alerts but may contain relevant information.",
+  
+  "EFFECT": "Notice of Effectiveness - indicates that a registration statement (typically S-1 or S-3) has become effective. This means the company can now legally sell the registered securities. A key milestone that makes the dilution mechanism active.",
+  
+  "EFFECT-U": "Notice of Effectiveness - indicates that a registration statement has become effective and the company can now sell the registered securities. A key milestone that makes the dilution mechanism active.",
 };
 
 /**

@@ -19,7 +19,7 @@ import pandas as pd
 
 from config import DILUTION_ALERTS_CSV_PATH, DATA_DIR
 from universe_builder import build_or_load_universe
-from filing_scanner import scan_latest_filings
+from filing_scanner import scan_latest_filings, scan_filings_by_form_type
 from analyzer import analyze_filings
 from filing_parser import parse_filing_details
 from supabase_storage import init_supabase, save_alerts_to_db
@@ -251,8 +251,34 @@ def run_scanner(force_refresh_universe: bool = False, filing_count: int = 100):
     print(f"[Main] ✓ Loaded universe with {len(universe_df)} companies\n")
     
     # Step 2: Scan latest filings
+    # Enhanced: Scan both general feed and by specific form types for better coverage
     print("[Main] Step 2: Scanning latest SEC filings...")
-    filings = scan_latest_filings(universe_df, count=filing_count)
+    
+    # Strategy 1: Get general feed (covers mixed form types)
+    general_filings = scan_latest_filings(universe_df, count=filing_count)
+    
+    # Strategy 2: Also scan each relevant form type individually (better coverage)
+    # This helps catch filings that might be missed by the general feed
+    from config import RELEVANT_FORM_TYPES
+    form_type_filings = []
+    for form_type in RELEVANT_FORM_TYPES:
+        print(f"[Main] Scanning {form_type} filings...")
+        filings_by_form = scan_filings_by_form_type(form_type, count=50, days_back=3)
+        if filings_by_form:
+            # Enrich with tickers
+            from filing_scanner import enrich_filings_with_tickers
+            enriched = enrich_filings_with_tickers(filings_by_form, universe_df)
+            form_type_filings.extend(enriched)
+    
+    # Combine and deduplicate by link (same filing might appear in both)
+    all_filings = general_filings.copy()
+    existing_links = {f.get("link") for f in general_filings if f.get("link")}
+    for filing in form_type_filings:
+        if filing.get("link") not in existing_links:
+            all_filings.append(filing)
+            existing_links.add(filing.get("link"))
+    
+    filings = all_filings
     
     if not filings:
         print("[Main] ⚠️  No relevant filings found in this scan")
