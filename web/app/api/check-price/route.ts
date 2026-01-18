@@ -38,7 +38,34 @@ export async function GET(request: NextRequest) {
 
       const html = await response.text();
 
-      // Try to extract price from fin-streamer element (most reliable)
+      // Method 1: Try to extract from embedded JSON data (most reliable)
+      // Yahoo Finance embeds quote data in a script tag with root.App.main
+      // Look for regularMarketPrice in quoteSummary
+      const jsonPatterns = [
+        // Pattern 1: "regularMarketPrice":{"raw":123.45,"fmt":"$123.45"}
+        /"regularMarketPrice"\s*:\s*\{[^}]*"raw"\s*:\s*([\d\.]+)/,
+        // Pattern 2: "regularMarketPreviousClose":{"raw":123.45,"fmt":"$123.45"}
+        /"regularMarketPreviousClose"\s*:\s*\{[^}]*"raw"\s*:\s*([\d\.]+)/,
+        // Pattern 3: Simple format "regularMarketPrice":123.45 (without raw/fmt)
+        /"regularMarketPrice"\s*:\s*([\d\.]+)(?![^}]*"(?:marketCap|volume|averageVolume))/,
+      ];
+
+      for (const pattern of jsonPatterns) {
+        const matches = html.match(pattern);
+        if (matches && matches[1]) {
+          const price = parseFloat(matches[1]);
+          if (!isNaN(price) && price >= 0.001 && price <= 50000) {
+            console.log(`[Price Check] Found price for ${tickerUpper} via JSON: $${price}`);
+            return NextResponse.json({
+              ticker: tickerUpper,
+              price,
+              found: true,
+            });
+          }
+        }
+      }
+
+      // Method 2: Try fin-streamer element
       const finStreamerMatch = html.match(
         /<fin-streamer[^>]+data-field="regularMarketPrice"[^>]+data-symbol="[^"]+"[^>]*value="([\d,\.]+)"/
       );
@@ -48,6 +75,7 @@ export async function GET(request: NextRequest) {
         const price = parseFloat(priceStr);
         
         if (!isNaN(price) && price >= 0.001 && price <= 50000) {
+          console.log(`[Price Check] Found price for ${tickerUpper} via fin-streamer: $${price}`);
           return NextResponse.json({
             ticker: tickerUpper,
             price,
@@ -56,15 +84,12 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Fallback: Try to extract from JSON data in page
-      const jsonPriceMatch = html.match(
-        /"regularMarketPrice"\s*:\s*\{[^{}]{0,200}"raw"\s*:\s*([\d\.]+)/
-      );
-
-      if (jsonPriceMatch) {
-        const price = parseFloat(jsonPriceMatch[1]);
-        
-        if (!isNaN(price) && price >= 0.001 && price <= 1000) {
+      // Method 3: Try FinStreamer data object
+      const finStreamerDataMatch = html.match(/FinStreamer\s*:\s*\{[^}]*"price"\s*:\s*([\d\.]+)/);
+      if (finStreamerDataMatch) {
+        const price = parseFloat(finStreamerDataMatch[1]);
+        if (!isNaN(price) && price >= 0.001 && price <= 50000) {
+          console.log(`[Price Check] Found price for ${tickerUpper} via FinStreamer data: $${price}`);
           return NextResponse.json({
             ticker: tickerUpper,
             price,

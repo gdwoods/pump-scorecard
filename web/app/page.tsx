@@ -7,7 +7,7 @@ import AlertTable from "@/components/AlertTable";
 import AlertFiltersComponent from "@/components/AlertFilters";
 import AlertDetailModal from "@/components/AlertDetailModal";
 import QuickStartModal from "@/components/QuickStartModal";
-import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star, HelpCircle, BookOpen, Radio, BarChart3 } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star, HelpCircle, BookOpen, Radio, BarChart3, X } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getWatchlist } from "@/lib/watchlist";
 import { useRealtimeAlerts } from "@/hooks/useRealtimeAlerts";
@@ -725,6 +725,20 @@ export default function Home() {
                         {!hasFiling && (
                           <span className="text-xs opacity-75">(no filings yet)</span>
                         )}
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const { removeFromWatchlist } = await import("@/lib/watchlist");
+                            const success = await removeFromWatchlist(ticker);
+                            if (success) {
+                              handleWatchlistChange();
+                            }
+                          }}
+                          className="ml-1 hover:bg-black/10 dark:hover:bg-white/10 rounded-full p-0.5 transition-colors"
+                          title="Remove from watchlist"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
                     );
                   })}
