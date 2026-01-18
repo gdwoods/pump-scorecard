@@ -27,16 +27,16 @@ export default function AlertFiltersComponent({
   const hasActiveFilters = filters.ticker || filters.formType || filters.minRiskScore || filters.daysBack;
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4 space-y-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-4 border border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Filter className="w-5 h-5 text-gray-400" />
-          <h3 className="text-lg font-semibold text-white">Filters</h3>
+          <Filter className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>
         </div>
         {hasActiveFilters && (
           <button
             onClick={onReset}
-            className="text-sm text-gray-400 hover:text-white flex items-center gap-1"
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center gap-1"
           >
             <X className="w-4 h-4" />
             Clear
@@ -47,30 +47,30 @@ export default function AlertFiltersComponent({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Ticker Search */}
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
             Ticker
           </label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400" />
             <input
               type="text"
               placeholder="e.g., FCHS"
               value={filters.ticker || ""}
               onChange={(e) => updateFilter("ticker", e.target.value.toUpperCase())}
-              className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
 
         {/* Form Type */}
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
             Form Type
           </label>
           <select
             value={filters.formType || ""}
             onChange={(e) => updateFilter("formType", e.target.value)}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Forms</option>
             <option value="S-1">S-1</option>
@@ -84,13 +84,13 @@ export default function AlertFiltersComponent({
 
         {/* Days Back */}
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
             Days Back
           </label>
           <select
             value={filters.daysBack || ""}
             onChange={(e) => updateFilter("daysBack", e.target.value ? parseInt(e.target.value) : undefined)}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Time</option>
             <option value="7">Last 7 days</option>
@@ -104,7 +104,7 @@ export default function AlertFiltersComponent({
       <div>
         <button
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="text-sm text-blue-400 hover:text-blue-300"
+          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
         >
           {showAdvanced ? "Hide" : "Show"} Advanced Filters
         </button>
@@ -112,7 +112,7 @@ export default function AlertFiltersComponent({
         {showAdvanced && (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
                 Minimum Risk Score
               </label>
               <input
@@ -122,7 +122,7 @@ export default function AlertFiltersComponent({
                 placeholder="0"
                 value={filters.minRiskScore || ""}
                 onChange={(e) => updateFilter("minRiskScore", e.target.value ? parseInt(e.target.value) : undefined)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>

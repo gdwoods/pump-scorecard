@@ -427,7 +427,7 @@ export default function Home() {
                   {/* Sound Selector */}
                   {enableSoundAlert && (
                     <>
-                      <label className="block text-xs text-gray-400 mb-2">Sound Type</label>
+                      <label className="block text-xs text-gray-700 dark:text-gray-400 mb-2">Sound Type</label>
                       <select
                         value={selectedSound}
                         onChange={(e) => {

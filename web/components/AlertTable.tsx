@@ -124,9 +124,9 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
               <td className="p-3">
                 <span className="font-semibold text-gray-900 dark:text-white">{alert.ticker}</span>
               </td>
-              <td className="p-3 text-sm text-gray-600 dark:text-gray-400">
+              <td className="p-3 text-sm text-gray-700 dark:text-gray-400">
                 <FormTypeTooltip formType={alert.form_type}>
-                  <span className="cursor-help underline decoration-dotted decoration-gray-400 dark:decoration-gray-500 hover:text-gray-800 dark:hover:text-gray-300">
+                  <span className="cursor-help underline decoration-dotted decoration-gray-500 dark:decoration-gray-500 hover:text-gray-900 dark:hover:text-gray-300">
                     {alert.form_type}
                   </span>
                 </FormTypeTooltip>
