@@ -39,6 +39,15 @@ export default function CompanyProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Debug: Log when selectedAlert changes
+  useEffect(() => {
+    if (selectedAlert) {
+      console.log('[CompanyPage] selectedAlert set:', selectedAlert.ticker, selectedAlert.id);
+    } else {
+      console.log('[CompanyPage] selectedAlert cleared');
+    }
+  }, [selectedAlert]);
+
   useEffect(() => {
     if (!ticker) return;
 
@@ -276,6 +285,7 @@ export default function CompanyProfilePage() {
       {selectedAlert && (
         <AlertDetailModal
           alert={selectedAlert}
+          isOpen={!!selectedAlert}
           onClose={() => setSelectedAlert(null)}
         />
       )}
