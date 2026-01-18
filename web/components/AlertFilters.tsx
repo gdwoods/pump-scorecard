@@ -1,27 +1,49 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Filter, X, Star } from "lucide-react";
+import { Search, Filter, X, Star, Plus } from "lucide-react";
 import { AlertFilters } from "@/types/alert";
+import { addToWatchlist, getWatchlist } from "@/lib/watchlist";
 
 interface AlertFiltersProps {
   filters: AlertFilters;
   onFiltersChange: (filters: AlertFilters) => void;
   onReset: () => void;
+  onWatchlistChange?: () => void;
 }
 
 export default function AlertFiltersComponent({
   filters,
   onFiltersChange,
   onReset,
+  onWatchlistChange,
 }: AlertFiltersProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [manualTicker, setManualTicker] = useState("");
+  const [addingTicker, setAddingTicker] = useState(false);
 
   const updateFilter = (key: keyof AlertFilters, value: string | number | boolean | undefined) => {
     onFiltersChange({
       ...filters,
       [key]: value || undefined,
     });
+  };
+
+  const handleAddTicker = async (ticker: string) => {
+    if (!ticker.trim()) return;
+    
+    setAddingTicker(true);
+    try {
+      const success = await addToWatchlist(ticker.trim());
+      if (success) {
+        setManualTicker("");
+        onWatchlistChange?.();
+      }
+    } catch (error) {
+      console.error("Error adding ticker:", error);
+    } finally {
+      setAddingTicker(false);
+    }
   };
 
   const hasActiveFilters = filters.ticker || filters.formType || filters.minRiskScore || filters.daysBack || filters.watchlistOnly;
@@ -116,6 +138,46 @@ export default function AlertFiltersComponent({
             <span className="text-sm font-medium">Watchlist Only</span>
           </button>
         </div>
+      </div>
+
+      {/* Manual Ticker Input */}
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
+          Add Ticker to Watchlist
+        </label>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="e.g., AAPL, TSLA"
+              value={manualTicker}
+              onChange={(e) => setManualTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+              onKeyPress={(e) => {
+                if (e.key === "Enter" && manualTicker.trim()) {
+                  handleAddTicker(manualTicker.trim());
+                }
+              }}
+              className="w-full pl-10 pr-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              maxLength={10}
+            />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400" />
+          </div>
+          <button
+            onClick={() => {
+              if (manualTicker.trim()) {
+                handleAddTicker(manualTicker.trim());
+              }
+            }}
+            disabled={!manualTicker.trim() || addingTicker}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-md transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            {addingTicker ? "Adding..." : "Add"}
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          Add any ticker symbol to your watchlist, even if it doesn't have filings yet
+        </p>
       </div>
 
       {/* Advanced Filters */}

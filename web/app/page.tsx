@@ -5,7 +5,7 @@ import { DilutionAlert, AlertFilters } from "@/types/alert";
 import AlertTable from "@/components/AlertTable";
 import AlertFiltersComponent from "@/components/AlertFilters";
 import AlertDetailModal from "@/components/AlertDetailModal";
-import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2 } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getWatchlist } from "@/lib/watchlist";
 
@@ -517,6 +517,7 @@ export default function Home() {
           filters={filters}
           onFiltersChange={handleFiltersChange}
           onReset={handleResetFilters}
+          onWatchlistChange={handleWatchlistChange}
         />
 
         {/* Content */}
@@ -545,6 +546,42 @@ export default function Home() {
                 )}
               </h2>
             </div>
+
+            {/* Show watchlist summary when watchlist filter is active */}
+            {filters.watchlistOnly && watchlistTickers.size > 0 && (
+              <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <h3 className="text-sm font-semibold text-yellow-900 dark:text-yellow-300 mb-3">
+                  My Watchlist ({watchlistTickers.size} ticker{watchlistTickers.size !== 1 ? "s" : ""})
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {Array.from(watchlistTickers).sort().map((ticker) => {
+                    const hasFiling = alerts.some(alert => alert.ticker.toUpperCase() === ticker);
+                    return (
+                      <div
+                        key={ticker}
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-2 ${
+                          hasFiling
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600"
+                        }`}
+                      >
+                        <Star className="w-3.5 h-3.5 fill-current text-yellow-500" />
+                        <span>{ticker}</span>
+                        {!hasFiling && (
+                          <span className="text-xs opacity-75">(no filings yet)</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {Array.from(watchlistTickers).some(ticker => !alerts.some(alert => alert.ticker.toUpperCase() === ticker)) && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-3">
+                    💡 Tickers shown in gray don't have filings yet. They'll appear below when filings are detected.
+                  </p>
+                )}
+              </div>
+            )}
+
             <AlertTable alerts={filteredAlerts} onRowClick={handleRowClick} onWatchlistChange={handleWatchlistChange} />
           </div>
         )}
