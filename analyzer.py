@@ -19,6 +19,9 @@ from config import (
     SEC_BASE_URL,
     RED_FLAG_KEYWORDS,
     UNDERWRITERS,
+    HIGH_RISK_UNDERWRITERS,
+    MEDIUM_RISK_UNDERWRITERS,
+    LOWER_RISK_UNDERWRITERS,
     SEC_REQUEST_DELAY,
     MAX_RETRIES,
     RETRY_DELAY,
@@ -258,28 +261,50 @@ def search_for_underwriters(text: str, underwriters: List[str]) -> Set[str]:
     return found_underwriters
 
 
-def calculate_risk_score(found_keywords: Set[str], found_underwriters: Set[str]) -> int:
+def calculate_risk_score(found_keywords: Set[str], found_underwriters: Set[str], filing_text: str = "") -> int:
     """
     Calculates a risk score based on red flags found in the filing.
     
     Risk scoring logic:
     - Each red flag keyword found: +1 point
-    - Each problematic underwriter found: +2 points
+    - High-risk underwriters: +2 points each
+    - Medium-risk underwriters: +1 point (unless toxic terms present, then +2)
+    - Lower-risk underwriters: +0 points (unless co-managing with high-risk, then ignore lower-risk)
     - Higher score = higher risk of dilution
-    
-    This is a simple scoring mechanism. You can adjust the weights
-    or add more sophisticated logic based on your research needs.
     
     Args:
         found_keywords: Set of red flag keywords found
         found_underwriters: Set of underwriters found
+        filing_text: Optional filing text to check for toxic terms (warrants, ATM) with medium-risk underwriters
         
     Returns:
         Integer risk score (higher = more risky)
     """
     keyword_score = len(found_keywords)
-    underwriter_score = len(found_underwriters) * 2  # Underwriters weighted more heavily
     
+    # Categorize found underwriters
+    found_high_risk = {uw for uw in found_underwriters if uw.lower() in [h.lower() for h in HIGH_RISK_UNDERWRITERS]}
+    found_medium_risk = {uw for uw in found_underwriters if uw.lower() in [m.lower() for m in MEDIUM_RISK_UNDERWRITERS]}
+    found_lower_risk = {uw for uw in found_underwriters if uw.lower() in [l.lower() for l in LOWER_RISK_UNDERWRITERS]}
+    
+    # Calculate underwriter scores
+    high_risk_score = len(found_high_risk) * 2
+    
+    # Medium-risk: +1 point, but +2 if toxic terms (warrants, ATM) are present
+    medium_risk_score = 0
+    if found_medium_risk:
+        text_lower = filing_text.lower() if filing_text else ""
+        has_toxic_terms = any(term in text_lower for term in ["warrant", "at-the-market", "atm offering"])
+        medium_risk_score = len(found_medium_risk) * (2 if has_toxic_terms else 1)
+    
+    # Lower-risk: 0 points when alone, but if high-risk co-managers exist, ignore lower-risk
+    # (Don't subtract, just don't add - high-risk toxicity overrides)
+    lower_risk_score = 0 if found_high_risk else 0  # Always 0, high-risk overrides
+    
+    # Exception: If Oppenheimer/William Blair co-manage with Wainwright/Maxim, high-risk takes precedence
+    # This is already handled by the logic above (if high-risk exists, lower-risk gets 0)
+    
+    underwriter_score = high_risk_score + medium_risk_score + lower_risk_score
     total_score = keyword_score + underwriter_score
     
     return total_score
@@ -381,7 +406,7 @@ def analyze_filing(filing: Dict) -> Dict:
     found_underwriters = search_for_underwriters(filing_text, UNDERWRITERS)
     
     # Calculate risk score (enhanced with short seller signals)
-    base_risk_score = calculate_risk_score(found_keywords, found_underwriters)
+    base_risk_score = calculate_risk_score(found_keywords, found_underwriters, filing_text)
     
     # Add risk points for short seller signals
     if short_seller_signals.get('high_interest_debt'):

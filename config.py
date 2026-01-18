@@ -78,7 +78,9 @@ RED_FLAG_KEYWORDS = [
 
 # Underwriters and Placement Agents: Firms known for structuring dilutive financings
 # These firms often participate in transactions that may be red flags for short sellers
-UNDERWRITERS = [
+
+# High-risk underwriters (+2 points when found)
+HIGH_RISK_UNDERWRITERS = [
     "maxim",
     "wainwright",
     "aegis",
@@ -93,7 +95,36 @@ UNDERWRITERS = [
     "noble financial",
     "collier securities",
     "ventures securities",
+    # New additions (2024-2025 deal flow)
+    "univest securities",
+    "ef hutton",  # EF Hutton / Benchmark (same ecosystem)
+    "benchmark company",  # EF Hutton / Benchmark (same ecosystem)
+    "benchmark",  # Catch standalone "Benchmark" references
+    "joseph gunnar",
+    "spartan capital",
+    "dominion capital",
+    "kingswood capital",
+    "laidlaw",
+    "laidlaw & company",
 ]
+
+# Medium-risk underwriters (+1 point, unless toxic terms present, then +2)
+# These are larger banks but have specific desks that do aggressive financing
+MEDIUM_RISK_UNDERWRITERS = [
+    "cantor",  # Cantor Fitzgerald - larger bank but has aggressive SPAC/Biotech desk
+    "cantor fitzgerald",
+]
+
+# Lower-risk underwriters (0 points when alone, but don't override high-risk co-managers)
+# These are legitimate mid-market banks that often lead quality small-cap deals
+# However, if they co-manage with high-risk underwriters, the high-risk underwriter's score takes precedence
+LOWER_RISK_UNDERWRITERS = [
+    "oppenheimer",
+    "william blair",
+]
+
+# Combined list for search (all underwriters to search for)
+UNDERWRITERS = HIGH_RISK_UNDERWRITERS + MEDIUM_RISK_UNDERWRITERS + LOWER_RISK_UNDERWRITERS
 
 # SEC Rate Limiting
 # The SEC allows approximately 10 requests per second per IP address
