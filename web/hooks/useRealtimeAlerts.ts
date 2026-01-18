@@ -24,8 +24,17 @@ export function useRealtimeAlerts({
   const channelRef = useRef<any>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const onNewAlertRef = useRef(onNewAlert);
+  const onErrorRef = useRef(onError);
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const maxReconnectAttempts = 5;
   const reconnectDelayMs = 3000;
+
+  // Keep refs up to date
+  useEffect(() => {
+    onNewAlertRef.current = onNewAlert;
+    onErrorRef.current = onError;
+  }, [onNewAlert, onError]);
 
   const cleanup = useCallback(() => {
     if (channelRef.current) {
@@ -37,13 +46,31 @@ export function useRealtimeAlerts({
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
     reconnectAttemptsRef.current = 0;
   }, []);
 
   const connect = useCallback(() => {
-    // Check if Supabase is configured
-    if (!supabase || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      console.warn('[Realtime] Supabase not configured, Realtime unavailable');
+    // Check if Supabase is configured (check supabase client directly)
+    if (!supabase) {
+      console.warn('[Realtime] Supabase client not available, Realtime unavailable');
+      setStatus('unavailable');
+      return;
+    }
+
+    // Check if we can access the supabase URL (client-side check)
+    try {
+      const url = (supabase as any).supabaseUrl;
+      if (!url || url.includes('placeholder')) {
+        console.warn('[Realtime] Supabase not configured, Realtime unavailable');
+        setStatus('unavailable');
+        return;
+      }
+    } catch (e) {
+      console.warn('[Realtime] Supabase check failed, Realtime unavailable');
       setStatus('unavailable');
       return;
     }
@@ -59,6 +86,22 @@ export function useRealtimeAlerts({
 
     console.log('[Realtime] Connecting to Supabase Realtime...');
     setStatus('connecting');
+
+    // Set a timeout to detect if connection is stuck (10 seconds)
+    connectionTimeoutRef.current = setTimeout(() => {
+      // Check if still in connecting state
+      setStatus((currentStatus) => {
+        if (currentStatus === 'connecting') {
+          console.warn('[Realtime] Connection timeout, marking as unavailable');
+          cleanup();
+          if (onErrorRef.current) {
+            onErrorRef.current(new Error('Realtime connection timeout'));
+          }
+          return 'unavailable';
+        }
+        return currentStatus;
+      });
+    }, 10000);
 
     try {
       // Subscribe to INSERT events on sec_filing_alerts table
@@ -77,20 +120,26 @@ export function useRealtimeAlerts({
             // Convert payload to DilutionAlert type
             const newAlert: DilutionAlert = payload.new as DilutionAlert;
             
-            // Call callback with new alert
-            onNewAlert(newAlert);
+            // Call callback with new alert using ref (avoids dependency issues)
+            onNewAlertRef.current(newAlert);
           }
         )
-        .subscribe((status) => {
-          console.log('[Realtime] Subscription status:', status);
+        .subscribe((subscriptionStatus) => {
+          // Clear timeout on status update
+          if (connectionTimeoutRef.current) {
+            clearTimeout(connectionTimeoutRef.current);
+            connectionTimeoutRef.current = null;
+          }
           
-          if (status === 'SUBSCRIBED') {
+          console.log('[Realtime] Subscription status:', subscriptionStatus);
+          
+          if (subscriptionStatus === 'SUBSCRIBED') {
             setStatus('connected');
             reconnectAttemptsRef.current = 0; // Reset reconnect attempts on successful connection
             console.log('[Realtime] Successfully connected');
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          } else if (subscriptionStatus === 'CHANNEL_ERROR' || subscriptionStatus === 'TIMED_OUT') {
             setStatus('error');
-            console.error('[Realtime] Connection error:', status);
+            console.error('[Realtime] Connection error:', subscriptionStatus);
             
             // Attempt to reconnect
             if (reconnectAttemptsRef.current < maxReconnectAttempts) {
@@ -102,11 +151,11 @@ export function useRealtimeAlerts({
             } else {
               console.error('[Realtime] Max reconnect attempts reached, Realtime unavailable');
               setStatus('unavailable');
-              if (onError) {
-                onError(new Error('Realtime connection failed after multiple attempts'));
+              if (onErrorRef.current) {
+                onErrorRef.current(new Error('Realtime connection failed after multiple attempts'));
               }
             }
-          } else if (status === 'CLOSED') {
+          } else if (subscriptionStatus === 'CLOSED') {
             setStatus('disconnected');
             console.log('[Realtime] Connection closed');
           }
@@ -114,13 +163,20 @@ export function useRealtimeAlerts({
 
       channelRef.current = channel;
     } catch (error) {
+      // Clear timeout on error
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+        connectionTimeoutRef.current = null;
+      }
+      
       console.error('[Realtime] Error setting up subscription:', error);
-      setStatus('error');
-      if (onError) {
-        onError(error instanceof Error ? error : new Error('Unknown Realtime error'));
+      setStatus('unavailable'); // Change to unavailable instead of error for stuck connections
+      cleanup();
+      if (onErrorRef.current) {
+        onErrorRef.current(error instanceof Error ? error : new Error('Unknown Realtime error'));
       }
     }
-  }, [enabled, onNewAlert, onError, cleanup]);
+  }, [enabled, cleanup]);
 
   useEffect(() => {
     if (enabled) {

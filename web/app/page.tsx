@@ -255,15 +255,23 @@ export default function Home() {
     }
   }, [filters, watchlistTickers, playAlertSound]);
 
-  // Realtime subscription hook
+  // Realtime subscription hook - use ref for handleNewAlert to prevent reconnect loops
+  const handleNewAlertRef = useRef(handleNewAlert);
+  useEffect(() => {
+    handleNewAlertRef.current = handleNewAlert;
+  }, [handleNewAlert]);
+
   const { status: realtimeStatus, connect: connectRealtime, disconnect: disconnectRealtime } = useRealtimeAlerts({
     enabled: isPolling, // Enable Realtime when polling is enabled
-    onNewAlert: handleNewAlert,
-    onError: (error) => {
+    onNewAlert: useCallback((newAlert: DilutionAlert) => {
+      // Use ref to call latest version without causing reconnections
+      handleNewAlertRef.current(newAlert);
+    }, []),
+    onError: useCallback((error: Error) => {
       console.error('[Realtime] Error:', error);
       // Don't set global error, just log it
       // Polling will handle fallback
-    },
+    }, []),
   });
 
   // Close sound menu when clicking outside
