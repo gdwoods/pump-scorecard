@@ -22,8 +22,9 @@ from universe_builder import build_or_load_universe
 from filing_scanner import scan_latest_filings, scan_filings_by_form_type
 from analyzer import analyze_filings
 from filing_parser import parse_filing_details
-from price_filter import filter_filings_by_price
+from price_filter import filter_filings_by_price, fetch_current_stock_price
 from supabase_storage import init_supabase, save_alerts_to_db
+from update_price_7days import update_price_tracking
 
 
 def save_alerts(filings: List[Dict], filepath: str = DILUTION_ALERTS_CSV_PATH) -> bool:
@@ -320,11 +321,70 @@ def run_scanner(force_refresh_universe: bool = False, filing_count: int = 100, m
     
     analyzed_filings = parsed_filings
     
+    # Step 3.7: Fetch stock prices at filing time for new filings only
+    # Note: Only fetch if filing doesn't already have price_at_filing (to preserve original price)
+    print("[Main] Step 3.7: Fetching stock prices at filing time (for new filings only)...")
+    import time
+    client = init_supabase()
+    new_filings_count = 0
+    
+    for i, filing in enumerate(analyzed_filings):
+        ticker = filing.get("ticker", "")
+        if not ticker or ticker.upper() == "UNKNOWN":
+            continue
+        
+        # Check if filing already exists in database (has price_at_filing)
+        existing_price = None
+        if client:
+            try:
+                date_str = filing.get("pubDate") or filing.get("date", "")
+                form_type = filing.get("form_type", "")
+                if date_str and form_type:
+                    from dateutil import parser
+                    try:
+                        date_obj = parser.parse(date_str)
+                        date_formatted = date_obj.strftime("%Y-%m-%d")
+                        existing = client.table("sec_filing_alerts").select('price_at_filing').eq(
+                            'ticker', ticker.upper()
+                        ).eq('date', date_formatted).eq('form_type', form_type).execute()
+                        
+                        if existing.data and len(existing.data) > 0:
+                            existing_price = existing.data[0].get('price_at_filing')
+                    except:
+                        pass
+            except Exception as e:
+                # If check fails, assume it's new and fetch price
+                pass
+        
+        # Only fetch price if filing doesn't already have price_at_filing in DB
+        if not existing_price:
+            price = fetch_current_stock_price(ticker)
+            if price:
+                filing["price_at_filing"] = price
+                new_filings_count += 1
+                print(f"[Main]   {ticker}: ${price:.2f} (at filing - NEW)")
+            # Add delay to respect Yahoo Finance rate limits
+            if i < len(analyzed_filings) - 1:
+                time.sleep(0.5)  # 500ms delay between price fetches
+        else:
+            # Preserve existing price
+            filing["price_at_filing"] = existing_price
+    
+    print(f"[Main] ✓ Price tracking complete ({new_filings_count} new filings, {len(analyzed_filings) - new_filings_count} preserved)\n")
+    
     # Filter to only filings with red flags (optional - you can remove this filter)
     red_flag_filings = [f for f in analyzed_filings if f.get("has_red_flags", False)]
     
     print(f"[Main] ✓ Analysis complete: {len(red_flag_filings)} filings with red flags found")
     print(f"[Main] ✓ After price filtering: {len(analyzed_filings)} filings to save\n")
+    
+    # Step 3.8: Update price_7days_later for older filings
+    print("[Main] Step 3.8: Updating 7-day prices for older filings...")
+    client = init_supabase()
+    if client:
+        updated_count = update_price_tracking(client)
+        if updated_count > 0:
+            print(f"[Main] ✓ Updated {updated_count} filings with 7-day prices\n")
     
     # Step 4: Save results (to Supabase if configured, otherwise CSV)
     print("[Main] Step 4: Saving results...")

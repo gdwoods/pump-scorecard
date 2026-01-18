@@ -233,6 +233,9 @@ def save_alerts_to_db(filings: List[Dict], client: Client, table_name: str = "se
                 "private_placement_shares": filing.get("private_placement_shares"),
                 "private_placement_amount": filing.get("private_placement_amount"),
                 "additional_dilutions": filing.get("additional_dilutions"),
+                # Price tracking
+                "price_at_filing": filing.get("price_at_filing"),
+                "price_7days_later": filing.get("price_7days_later"),
                 "created_at": datetime.now().isoformat(),
             }
             

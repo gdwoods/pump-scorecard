@@ -169,6 +169,7 @@ export default function AlertTable({ alerts, onRowClick, onWatchlistChange }: Al
             <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Ticker</th>
             <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Form</th>
             <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Risk Score</th>
+            <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Price</th>
             <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Offering</th>
             <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Flags</th>
             <th className="text-left p-3 text-sm font-medium text-gray-600 dark:text-gray-400">Details</th>
@@ -244,6 +245,44 @@ export default function AlertTable({ alerts, onRowClick, onWatchlistChange }: Al
                 <span className={`font-semibold ${getRiskColor(alert.risk_score)}`}>
                   {alert.risk_score}
                 </span>
+              </td>
+              <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
+                <div className="space-y-1">
+                  {alert.price_at_filing ? (
+                    <div>
+                      <span className="text-xs text-gray-500 dark:text-gray-500">At Filing:</span>{" "}
+                      <span className="font-medium">${alert.price_at_filing.toFixed(2)}</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 dark:text-gray-600">-</div>
+                  )}
+                  {alert.price_7days_later ? (
+                    <div>
+                      <span className="text-xs text-gray-500 dark:text-gray-500">+7 Days:</span>{" "}
+                      <span className={`font-medium ${
+                        alert.price_at_filing 
+                          ? (alert.price_7days_later >= alert.price_at_filing 
+                              ? "text-green-600 dark:text-green-400" 
+                              : "text-red-600 dark:text-red-400")
+                          : ""
+                      }`}>
+                        ${alert.price_7days_later.toFixed(2)}
+                      </span>
+                      {alert.price_at_filing && (
+                        <span className={`text-xs ml-1 ${
+                          alert.price_7days_later >= alert.price_at_filing
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}>
+                          ({alert.price_7days_later >= alert.price_at_filing ? "+" : ""}
+                          {((alert.price_7days_later - alert.price_at_filing) / alert.price_at_filing * 100).toFixed(1)}%)
+                        </span>
+                      )}
+                    </div>
+                  ) : alert.price_at_filing ? (
+                    <div className="text-xs text-gray-400 dark:text-gray-600">Pending...</div>
+                  ) : null}
+                </div>
               </td>
               <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
                 {formatCurrency(alert.base_offering_amount || alert.offering_amount)}

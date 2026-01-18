@@ -26,6 +26,8 @@ export interface DilutionAlert {
   private_placement_shares: string | null;
   private_placement_amount: string | null;
   additional_dilutions: string | null;
+  price_at_filing: number | null;
+  price_7days_later: number | null;
   created_at: string;
   updated_at: string;
 }
