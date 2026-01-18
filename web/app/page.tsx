@@ -5,7 +5,8 @@ import { DilutionAlert, AlertFilters } from "@/types/alert";
 import AlertTable from "@/components/AlertTable";
 import AlertFiltersComponent from "@/components/AlertFilters";
 import AlertDetailModal from "@/components/AlertDetailModal";
-import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star } from "lucide-react";
+import QuickStartModal from "@/components/QuickStartModal";
+import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star, HelpCircle } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getWatchlist } from "@/lib/watchlist";
 
@@ -147,6 +148,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<DilutionAlert | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isQuickStartOpen, setIsQuickStartOpen] = useState(false);
   const [countdown, setCountdown] = useState(15);
   const [isPolling, setIsPolling] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -403,11 +405,20 @@ export default function Home() {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">SEC Dilution Alerts</h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Short seller alerts for SEC dilution filings and capital raises
-            </p>
+          <div className="flex items-start gap-3">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">SEC Dilution Alerts</h1>
+              <p className="text-gray-600 dark:text-gray-400">
+                Short seller alerts for SEC dilution filings and capital raises
+              </p>
+            </div>
+            <button
+              onClick={() => setIsQuickStartOpen(true)}
+              className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mt-1"
+              title="Getting Started Guide"
+            >
+              <HelpCircle className="w-5 h-5" />
+            </button>
           </div>
           
           <div className="flex items-center gap-3">
@@ -595,6 +606,12 @@ export default function Home() {
           onClose={handleCloseModal}
         />
       )}
+
+      {/* Quick Start Modal */}
+      <QuickStartModal
+        isOpen={isQuickStartOpen}
+        onClose={() => setIsQuickStartOpen(false)}
+      />
     </div>
   );
 }
