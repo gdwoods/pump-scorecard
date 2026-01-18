@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Filter, X } from "lucide-react";
+import { Search, Filter, X, Star } from "lucide-react";
 import { AlertFilters } from "@/types/alert";
 
 interface AlertFiltersProps {
@@ -17,14 +17,14 @@ export default function AlertFiltersComponent({
 }: AlertFiltersProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const updateFilter = (key: keyof AlertFilters, value: string | number | undefined) => {
+  const updateFilter = (key: keyof AlertFilters, value: string | number | boolean | undefined) => {
     onFiltersChange({
       ...filters,
       [key]: value || undefined,
     });
   };
 
-  const hasActiveFilters = filters.ticker || filters.formType || filters.minRiskScore || filters.daysBack;
+  const hasActiveFilters = filters.ticker || filters.formType || filters.minRiskScore || filters.daysBack || filters.watchlistOnly;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-4 border border-gray-200 dark:border-gray-700">
@@ -44,7 +44,7 @@ export default function AlertFiltersComponent({
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Ticker Search */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
@@ -97,6 +97,24 @@ export default function AlertFiltersComponent({
             <option value="30">Last 30 days</option>
             <option value="90">Last 90 days</option>
           </select>
+        </div>
+
+        {/* Watchlist Toggle */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
+            Watchlist
+          </label>
+          <button
+            onClick={() => updateFilter("watchlistOnly", !filters.watchlistOnly)}
+            className={`w-full px-3 py-2 rounded-md border transition-colors flex items-center justify-center gap-2 ${
+              filters.watchlistOnly
+                ? "bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400"
+                : "bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600"
+            }`}
+          >
+            <Star className={`w-4 h-4 ${filters.watchlistOnly ? "fill-current" : ""}`} />
+            <span className="text-sm font-medium">Watchlist Only</span>
+          </button>
         </div>
       </div>
 

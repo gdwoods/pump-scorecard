@@ -7,6 +7,7 @@ import AlertFiltersComponent from "@/components/AlertFilters";
 import AlertDetailModal from "@/components/AlertDetailModal";
 import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
+import { getWatchlist } from "@/lib/watchlist";
 
 // Sound options configuration (moved outside component to prevent re-creation on every render)
 type SoundOption = {
@@ -155,6 +156,7 @@ export default function Home() {
   const [filters, setFilters] = useState<AlertFilters>({
     limit: 500, // Increased to ensure we see filings from recent days (1/16, etc.)
   });
+  const [watchlistTickers, setWatchlistTickers] = useState<Set<string>>(new Set());
 
   // Load sound alert preferences from localStorage
   useEffect(() => {
@@ -293,6 +295,27 @@ export default function Home() {
       setLoading(false);
     }
   }, [filters, playAlertSound]);
+
+  // Load watchlist on mount and when filters change (to refresh watchlist state)
+  useEffect(() => {
+    const loadWatchlist = async () => {
+      const watched = await getWatchlist();
+      setWatchlistTickers(new Set(watched));
+    };
+    loadWatchlist();
+  }, [filters.watchlistOnly]); // Reload when watchlist filter changes
+
+  // Filter alerts by watchlist if filter is active
+  const filteredAlerts = filters.watchlistOnly
+    ? alerts.filter(alert => watchlistTickers.has(alert.ticker.toUpperCase()))
+    : alerts;
+
+  const handleWatchlistChange = useCallback(() => {
+    // Reload watchlist when changed
+    getWatchlist().then(watched => {
+      setWatchlistTickers(new Set(watched));
+    });
+  }, []);
 
   // Fetch alerts when filters change
   useEffect(() => {
@@ -514,10 +537,15 @@ export default function Home() {
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                {alerts.length} Alert{alerts.length !== 1 ? "s" : ""} Found
+                {filteredAlerts.length} Alert{filteredAlerts.length !== 1 ? "s" : ""} Found
+                {filters.watchlistOnly && (
+                  <span className="ml-2 text-sm font-normal text-yellow-600 dark:text-yellow-400">
+                    (Watchlist: {watchlistTickers.size} ticker{watchlistTickers.size !== 1 ? "s" : ""})
+                  </span>
+                )}
               </h2>
             </div>
-            <AlertTable alerts={alerts} onRowClick={handleRowClick} />
+            <AlertTable alerts={filteredAlerts} onRowClick={handleRowClick} onWatchlistChange={handleWatchlistChange} />
           </div>
         )}
       </div>

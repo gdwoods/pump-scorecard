@@ -1,16 +1,58 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { DilutionAlert } from "@/types/alert";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Star } from "lucide-react";
 import { hasValidUnderwriter } from "@/lib/alertUtils";
 import FormTypeTooltip from "@/components/FormTypeTooltip";
+import { isTickerWatched, toggleWatchlist } from "@/lib/watchlist";
 
 interface AlertTableProps {
   alerts: DilutionAlert[];
   onRowClick?: (alert: DilutionAlert) => void;
+  onWatchlistChange?: () => void;
 }
 
-export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
+export default function AlertTable({ alerts, onRowClick, onWatchlistChange }: AlertTableProps) {
+  const [watchedTickers, setWatchedTickers] = useState<Set<string>>(new Set());
+
+  // Load watchlist state for all unique tickers in alerts
+  useEffect(() => {
+    const loadWatchlistState = async () => {
+      const uniqueTickers = [...new Set(alerts.map(a => a.ticker.toUpperCase()))];
+      const watchlistChecks = await Promise.all(
+        uniqueTickers.map(ticker => isTickerWatched(ticker).then(watched => ({ ticker, watched })))
+      );
+      const watchedSet = new Set(
+        watchlistChecks.filter(check => check.watched).map(check => check.ticker)
+      );
+      setWatchedTickers(watchedSet);
+    };
+
+    if (alerts.length > 0) {
+      loadWatchlistState();
+    }
+  }, [alerts]);
+
+  const handleWatchlistToggle = async (ticker: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent row click
+    const tickerUpper = ticker.toUpperCase();
+    const success = await toggleWatchlist(tickerUpper);
+    if (success) {
+      const isWatched = watchedTickers.has(tickerUpper);
+      setWatchedTickers(prev => {
+        const next = new Set(prev);
+        if (isWatched) {
+          next.delete(tickerUpper);
+        } else {
+          next.add(tickerUpper);
+        }
+        return next;
+      });
+      onWatchlistChange?.();
+    }
+  };
+
   if (!alerts || alerts.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center border border-gray-200 dark:border-gray-700">
@@ -122,7 +164,20 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
                 )}
               </td>
               <td className="p-3">
-                <span className="font-semibold text-gray-900 dark:text-white">{alert.ticker}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-900 dark:text-white">{alert.ticker}</span>
+                  <button
+                    onClick={(e) => handleWatchlistToggle(alert.ticker, e)}
+                    className={`p-1 rounded transition-colors ${
+                      watchedTickers.has(alert.ticker.toUpperCase())
+                        ? "text-yellow-500 dark:text-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-300"
+                        : "text-gray-400 dark:text-gray-500 hover:text-yellow-500 dark:hover:text-yellow-400"
+                    }`}
+                    title={watchedTickers.has(alert.ticker.toUpperCase()) ? "Remove from watchlist" : "Add to watchlist"}
+                  >
+                    <Star className={`w-4 h-4 ${watchedTickers.has(alert.ticker.toUpperCase()) ? "fill-current" : ""}`} />
+                  </button>
+                </div>
               </td>
               <td className="p-3 text-sm text-gray-700 dark:text-gray-400">
                 <FormTypeTooltip formType={alert.form_type}>

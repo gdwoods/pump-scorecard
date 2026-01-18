@@ -36,4 +36,5 @@ export interface AlertFilters {
   minRiskScore?: number;
   daysBack?: number;
   limit?: number;
+  watchlistOnly?: boolean;
 }
