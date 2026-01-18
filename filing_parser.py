@@ -243,7 +243,30 @@ def extract_offering_amount(text: str) -> Optional[str]:
             amounts.sort()
             return f"${amounts[0]:,}"
     
-    # Priority 3: Fallback patterns
+    # Priority 3: 8-K specific patterns (announcement-style language)
+    # 8-K filings often announce offerings with different wording
+    eight_k_patterns = [
+        # "sold X shares for gross proceeds of $Y" or "sold $Y of shares"
+        r'(?:sold|purchased|issued).{0,200}?(?:gross\s+proceeds|proceeds|for|at|amount\s+of)[:\s]*\$([\d,]{7,}(?:,\d{3})*)',
+        # "entered into purchase agreement for $Y" or "agreement to purchase up to $Y"
+        r'(?:entered\s+into|executed|signed).{0,200}?(?:purchase\s+agreement|common\s+stock\s+purchase).{0,200}?(?:for|up\s+to|maximum)[:\s]*\$([\d,]{7,}(?:,\d{3})*)',
+        # "total offering size of $Y" or "aggregate offering proceeds of $Y"
+        r'(?:total\s+offering\s+size|aggregate\s+offering\s+proceeds|total\s+proceeds|offering\s+size)[:\s]*\$([\d,]{7,}(?:,\d{3})*)',
+    ]
+    
+    for pattern in eight_k_patterns:
+        matches = re.findall(pattern, text_clean, re.IGNORECASE | re.DOTALL)
+        if matches:
+            for match in matches:
+                try:
+                    amount_str = match.replace(',', '')
+                    amount = int(amount_str)
+                    if 10_000_000 <= amount <= 500_000_000:
+                        return f"${amount:,}"
+                except ValueError:
+                    continue
+    
+    # Priority 4: Fallback patterns
     fallback_patterns = [
         r'\$[\d,]+(?:,\d{3})*(?:\s*(?:million|billion|M|B))?\b',
         r'(?:up to|maximum|aggregate|proposed)[:\s]*\$[\d,]+(?:,\d{3})*',
@@ -301,6 +324,10 @@ def extract_share_price(text: str) -> Optional[str]:
         r'\$\d+\.\d{2}(?:\s*-\s*\$\d+\.\d{2})?\s*(?:per\s*)?share',
         r'price[:\s]*\$?\d+\.\d{2}(?:\s*-\s*\$?\d+\.\d{2})?',
         r'between\s+\$?\d+\.\d{2}\s+and\s+\$?\d+\.\d{2}\s+per\s*share',
+        # 8-K patterns: "priced at $X per share" or "sold at $X per share"
+        r'(?:priced|sold|purchased|issued)\s+at\s+\$?\d+\.\d{2}(?:\s*per\s*share)?',
+        # "purchase price of $X per share"
+        r'purchase\s+price[:\s]*\$?\d+\.\d{2}(?:\s*per\s*share)?',
     ]
     
     for pattern in patterns:
@@ -340,6 +367,10 @@ def extract_number_of_shares(text: str) -> Optional[str]:
         r'[\d,]+(?:,\d{3})*\s+shares',
         # "10 million shares"
         r'[\d,]+(?:\s*(?:million|billion|M|B))?\s+shares',
+        # 8-K patterns: "sold X shares" or "issued X shares" or "purchased X shares"
+        r'(?:sold|issued|purchased|to\s+purchase)[:\s]+[\d,]+(?:,\d{3})*\s+(?:shares?\s+of\s+common\s+stock|shares?)',
+        # "up to X shares" (common in purchase agreements)
+        r'up\s+to\s+[\d,]+(?:,\d{3})*\s+shares',
     ]
     
     for pattern in patterns:
