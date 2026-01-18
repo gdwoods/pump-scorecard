@@ -246,23 +246,29 @@ def extract_offering_amount(text: str) -> Optional[str]:
     # Priority 3: 8-K specific patterns (announcement-style language)
     # 8-K filings often announce offerings with different wording
     eight_k_patterns = [
+        # Convertible debt conversion: "converted $Y into X shares" or "converting $Y...into X shares"
+        r'(?:converted|converting).{0,300}?\$([\d,]{4,}(?:,\d{3})*).{0,300}?(?:into|for)\s+[\d,]+(?:,\d{3})*\s+shares',
         # "sold X shares for gross proceeds of $Y" or "sold $Y of shares"
         r'(?:sold|purchased|issued).{0,200}?(?:gross\s+proceeds|proceeds|for|at|amount\s+of)[:\s]*\$([\d,]{7,}(?:,\d{3})*)',
         # "entered into purchase agreement for $Y" or "agreement to purchase up to $Y"
         r'(?:entered\s+into|executed|signed).{0,200}?(?:purchase\s+agreement|common\s+stock\s+purchase).{0,200}?(?:for|up\s+to|maximum)[:\s]*\$([\d,]{7,}(?:,\d{3})*)',
         # "total offering size of $Y" or "aggregate offering proceeds of $Y"
         r'(?:total\s+offering\s+size|aggregate\s+offering\s+proceeds|total\s+proceeds|offering\s+size)[:\s]*\$([\d,]{7,}(?:,\d{3})*)',
+        # Convertible note: "principal amount of $Y" followed by conversion language
+        r'principal\s+amount\s+of\s+\$([\d,]{4,}(?:,\d{3})*).{0,500}?(?:converted|converting|into)',
     ]
     
     for pattern in eight_k_patterns:
         matches = re.findall(pattern, text_clean, re.IGNORECASE | re.DOTALL)
         if matches:
             for match in matches:
-                try:
-                    amount_str = match.replace(',', '')
-                    amount = int(amount_str)
-                    if 10_000_000 <= amount <= 500_000_000:
-                        return f"${amount:,}"
+            try:
+                amount_str = match.replace(',', '')
+                amount = int(amount_str)
+                # Lower threshold for convertible note conversions (can be smaller amounts)
+                # Still exclude very small amounts (< $1,000) which are likely noise
+                if 1_000 <= amount <= 500_000_000:
+                    return f"${amount:,}"
                 except ValueError:
                     continue
     
@@ -371,6 +377,10 @@ def extract_number_of_shares(text: str) -> Optional[str]:
         r'(?:sold|issued|purchased|to\s+purchase)[:\s]+[\d,]+(?:,\d{3})*\s+(?:shares?\s+of\s+common\s+stock|shares?)',
         # "up to X shares" (common in purchase agreements)
         r'up\s+to\s+[\d,]+(?:,\d{3})*\s+shares',
+        # Convertible note conversion: "converted $X into Y shares" or "converting...into Y shares"
+        r'(?:converted|converting).{0,300}?(?:into|for)\s+([\d,]+(?:,\d{3})*)\s+(?:shares?\s+of\s+(?:the\s+)?(?:company\'s\s+)?common\s+stock|shares?)',
+        # "converted $X...into Y shares" - extract shares after "into"
+        r'into\s+([\d,]+(?:,\d{3})*)\s+(?:shares?\s+of\s+(?:the\s+)?(?:company\'s\s+)?common\s+stock|shares?)(?:\.|,|\s)',
     ]
     
     for pattern in patterns:
@@ -1113,6 +1123,52 @@ def parse_filing_details(filing: Dict, known_underwriters: List[str] = None, max
             dilution_summary_parts.append(f"Private Placement: {', '.join(private_parts)}")
     
     dilution_summary = "; ".join(dilution_summary_parts) if dilution_summary_parts else None
+    
+    # Calculate missing values if we have partial data
+    # This helps with 8-K filings where information might be scattered
+    if not offering_amount and share_price and number_of_shares:
+        # Try to calculate offering_amount = shares × price
+        try:
+            # Extract numeric price
+            price_match = re.search(r'([\d\.]+)', share_price)
+            # Extract numeric shares
+            shares_match = re.search(r'([\d,]+(?:,\d{3})*)', number_of_shares)
+            
+            if price_match and shares_match:
+                price = float(price_match.group(1))
+                shares_str = shares_match.group(1).replace(',', '')
+                shares = int(shares_str)
+                calculated_amount = price * shares
+                
+                # Validate calculated amount is reasonable
+                if 10_000_000 <= calculated_amount <= 500_000_000:
+                    offering_amount = f"${calculated_amount:,.0f}"
+                    print(f"[Filing Parser] Calculated offering amount: {offering_amount} (from {shares:,} shares × ${price:.2f})")
+        except (ValueError, AttributeError) as e:
+            pass  # Silently fail if calculation doesn't work
+    
+    if not share_price and offering_amount and number_of_shares:
+        # Try to calculate price = offering_amount / shares
+        try:
+            # Extract numeric amount (remove $ and commas)
+            amount_match = re.search(r'([\d,]+(?:,\d{3})*)', offering_amount.replace('$', ''))
+            # Extract numeric shares
+            shares_match = re.search(r'([\d,]+(?:,\d{3})*)', number_of_shares)
+            
+            if amount_match and shares_match:
+                amount_str = amount_match.group(1).replace(',', '')
+                amount = float(amount_str)
+                shares_str = shares_match.group(1).replace(',', '')
+                shares = int(shares_str)
+                
+                if shares > 0:
+                    calculated_price = amount / shares
+                    # Validate calculated price is reasonable (allow very low prices for penny stocks/conversions)
+                    if 0.0001 <= calculated_price <= 1000:
+                        share_price = f"${calculated_price:.2f} per share"
+                        print(f"[Filing Parser] Calculated share price: {share_price} (from {offering_amount} / {shares:,} shares)")
+        except (ValueError, AttributeError, ZeroDivisionError) as e:
+            pass  # Silently fail if calculation doesn't work
     
     result = {
         "base_offering_amount": offering_amount,  # Renamed from offering_amount
