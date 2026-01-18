@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { DilutionAlert, AlertFilters } from "@/types/alert";
 import AlertTable from "@/components/AlertTable";
 import AlertFiltersComponent from "@/components/AlertFilters";
 import AlertDetailModal from "@/components/AlertDetailModal";
 import QuickStartModal from "@/components/QuickStartModal";
-import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star, HelpCircle } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star, HelpCircle, BookOpen } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getWatchlist } from "@/lib/watchlist";
 
@@ -419,6 +420,13 @@ export default function Home() {
             >
               <HelpCircle className="w-5 h-5" />
             </button>
+            <Link
+              href="/education"
+              className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mt-1"
+              title="SEC Filings Education"
+            >
+              <BookOpen className="w-5 h-5" />
+            </Link>
           </div>
           
           <div className="flex items-center gap-3">
