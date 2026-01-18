@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Filter, X, Star, Plus, AlertTriangle } from "lucide-react";
+import { Search, Filter, X, Star, Plus, HelpCircle } from "lucide-react";
 import { AlertFilters } from "@/types/alert";
 import { addToWatchlist, getWatchlist } from "@/lib/watchlist";
 
@@ -21,9 +21,8 @@ export default function AlertFiltersComponent({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [manualTicker, setManualTicker] = useState("");
   const [addingTicker, setAddingTicker] = useState(false);
-  const [priceWarning, setPriceWarning] = useState<{
+  const [infoNotification, setInfoNotification] = useState<{
     ticker: string;
-    price: number;
   } | null>(null);
 
   const updateFilter = (key: keyof AlertFilters, value: string | number | boolean | undefined) => {
@@ -38,14 +37,14 @@ export default function AlertFiltersComponent({
     
     const tickerUpper = ticker.trim().toUpperCase();
 
-    // If user confirmed the warning, skip price check and add directly
+    // If user confirmed the notification, add directly
     if (confirmed) {
       setAddingTicker(true);
       try {
         const success = await addToWatchlist(tickerUpper);
         if (success) {
           setManualTicker("");
-          setPriceWarning(null);
+          setInfoNotification(null);
           onWatchlistChange?.();
         }
       } catch (error) {
@@ -56,33 +55,25 @@ export default function AlertFiltersComponent({
       return;
     }
 
-    // First-time add: always check price (even if ticker has existing filings)
-    // because scanner won't fetch NEW filings for stocks over $20
+    // Check if ticker already has filings in the database
     setAddingTicker(true);
     try {
-      // Always check current stock price
-      const priceResponse = await fetch(`/api/check-price?ticker=${tickerUpper}`);
-      const priceData = await priceResponse.json();
-      
-      console.log(`[Watchlist] Price check for ${tickerUpper}:`, priceData);
-      
-      if (priceData.found && priceData.price !== null && priceData.price >= 20.0) {
-        // Show warning if price >= $20
-        console.log(`[Watchlist] Showing warning for ${tickerUpper} (price: $${priceData.price})`);
-        setPriceWarning({ ticker: tickerUpper, price: priceData.price });
+      const alertsResponse = await fetch(`/api/alerts?ticker=${tickerUpper}&limit=1`);
+      const alertsData = await alertsResponse.json();
+      const hasExistingFilings = alertsData.alerts && alertsData.alerts.length > 0;
+
+      // If ticker doesn't have existing filings, show informational notification
+      if (!hasExistingFilings) {
+        setInfoNotification({ ticker: tickerUpper });
         setAddingTicker(false);
-        return;
-      } else if (!priceData.found) {
-        console.log(`[Watchlist] Could not fetch price for ${tickerUpper}, allowing add`);
-      } else if (priceData.price !== null && priceData.price < 20.0) {
-        console.log(`[Watchlist] ${tickerUpper} price $${priceData.price} is under $20, allowing add`);
+        return; // Don't add yet - show notification first
       }
 
-      // Price is fine or ticker has existing filings - add to watchlist
+      // Ticker has existing filings - add to watchlist directly
       const success = await addToWatchlist(tickerUpper);
       if (success) {
         setManualTicker("");
-        setPriceWarning(null);
+        setInfoNotification(null);
         onWatchlistChange?.();
       }
     } catch (error) {
@@ -196,7 +187,7 @@ export default function AlertFiltersComponent({
           <div className="relative flex-1">
             <input
               type="text"
-              placeholder="e.g., AAPL, TSLA"
+              placeholder="e.g., RVRC, FCHS"
               value={manualTicker}
               onChange={(e) => setManualTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
               onKeyPress={(e) => {
@@ -223,38 +214,38 @@ export default function AlertFiltersComponent({
           </button>
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          Add any ticker symbol to your watchlist, even if it doesn't have filings yet
+          Add ticker symbols to monitor for new filings. Note: Only stocks trading under $20 will generate alerts.
         </p>
       </div>
 
-      {/* Price Warning Modal */}
-      {priceWarning && (
+      {/* Info Notification Modal */}
+      {infoNotification && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-yellow-300 dark:border-yellow-700">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-blue-300 dark:border-blue-700">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-6 h-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+              <HelpCircle className="w-6 h-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  High Stock Price Warning
+                  About the $20 Threshold
                 </h3>
                 <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-                  <strong>{priceWarning.ticker}</strong> is currently trading at <strong>${priceWarning.price.toFixed(2)}</strong>, which is above the $20 threshold.
+                  You're adding <strong>{infoNotification.ticker}</strong> to your watchlist. This ticker doesn't currently have any filings in the database.
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  The app only monitors companies trading below $20. Adding this ticker to your watchlist won't generate new filing alerts since the scanner excludes stocks over $20.
+                  <strong>Important:</strong> The SEC scanner only monitors companies trading below $20. If {infoNotification.ticker} is currently trading above $20, you won't receive new filing alerts for this ticker, even though it's in your watchlist.
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
-                      handleAddTicker(priceWarning.ticker, true);
+                      handleAddTicker(infoNotification.ticker, true);
                     }}
-                    className="flex-1 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md transition-colors font-medium"
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium"
                   >
-                    Add Anyway
+                    Add to Watchlist
                   </button>
                   <button
                     onClick={() => {
-                      setPriceWarning(null);
+                      setInfoNotification(null);
                       setAddingTicker(false);
                     }}
                     className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-md transition-colors"
