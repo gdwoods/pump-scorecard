@@ -142,22 +142,22 @@ export default function AlertTable({ alerts, onRowClick }: AlertTableProps) {
               <td className="p-3">
                 <div className="flex flex-wrap gap-1">
                   {alert.toxic_debt_detected && (
-                    <span className="text-xs px-2 py-1 bg-red-900/30 text-red-400 rounded">
+                    <span className="text-xs px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded font-medium">
                       Toxic Debt
                     </span>
                   )}
                   {alert.management_turnover && (
-                    <span className="text-xs px-2 py-1 bg-orange-900/30 text-orange-400 rounded">
+                    <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded font-medium">
                       Resignation
                     </span>
                   )}
                   {alert.warrants_found && (
-                    <span className="text-xs px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded">
+                    <span className="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded font-medium">
                       Warrants
                     </span>
                   )}
                   {hasValidUnderwriter(alert.underwriter_found) && (
-                    <span className="text-xs px-2 py-1 bg-purple-900/30 text-purple-400 rounded">
+                    <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded font-medium">
                       Underwriter
                     </span>
                   )}
