@@ -262,13 +262,13 @@ def extract_offering_amount(text: str) -> Optional[str]:
         matches = re.findall(pattern, text_clean, re.IGNORECASE | re.DOTALL)
         if matches:
             for match in matches:
-            try:
-                amount_str = match.replace(',', '')
-                amount = int(amount_str)
-                # Lower threshold for convertible note conversions (can be smaller amounts)
-                # Still exclude very small amounts (< $1,000) which are likely noise
-                if 1_000 <= amount <= 500_000_000:
-                    return f"${amount:,}"
+                try:
+                    amount_str = match.replace(',', '')
+                    amount = int(amount_str)
+                    # Lower threshold for convertible note conversions (can be smaller amounts)
+                    # Still exclude very small amounts (< $1,000) which are likely noise
+                    if 1_000 <= amount <= 500_000_000:
+                        return f"${amount:,}"
                 except ValueError:
                     continue
     
