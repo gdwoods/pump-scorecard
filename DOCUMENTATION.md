@@ -135,19 +135,49 @@ The system detects several categories of short-seller red flags:
 
 **What it is**: Investment banks known for facilitating dilutive offerings
 
-**Target Underwriters**:
+**High-Risk Underwriters** (+2 points each):
 - Maxim Group / Maxim Group LLC
 - H.C. Wainwright & Co.
 - Aegis Capital Corp.
+- Roth Capital Partners
+- Ladenburg Thalmann
+- Network 1 Financial
+- WestPark Capital
+- Chardan Capital Markets
+- Ascendiant Capital Markets
+- Dawson James Securities
+- ThinkEquity
+- Noble Financial Capital Markets
+- Collier Securities
+- Ventures Securities
+- Univest Securities
+- EF Hutton / Benchmark Company
+- Joseph Gunnar & Co.
+- Spartan Capital Securities
+- Dominion Capital
+- Kingswood Capital Markets
+- Laidlaw & Company
+
+**Medium-Risk Underwriters** (+1 point normally, +2 if toxic terms present):
+- Cantor Fitzgerald (has aggressive SPAC/Biotech financing desk)
+
+**Lower-Risk Underwriters** (0 points when alone, but tracked for context):
+- Oppenheimer & Co.
+- William Blair
 
 **Why it matters**:
-- These underwriters specialize in microcap financing
+- High-risk underwriters specialize in microcap financing
 - Often associated with aggressive dilution programs
 - Their involvement signals high dilution risk
+- Medium-risk underwriters are larger banks but have specific aggressive financing desks
+- Lower-risk underwriters are legitimate mid-market banks, but co-management with high-risk firms increases risk
 
-**Risk Score Impact**: +2 points per underwriter
+**Risk Score Impact**: 
+- High-risk: +2 points per underwriter
+- Medium-risk: +1 point (or +2 if toxic terms like warrants/convertibles present)
+- Lower-risk: 0 points when alone (doesn't override high-risk co-managers)
 
-**Note**: System requires context (e.g., "as underwriter" or "underwritten by") to avoid false positives.
+**Note**: System requires context (e.g., "as underwriter" or "underwritten by") to avoid false positives. EF Hutton and Benchmark Company are treated as the same ecosystem.
 
 ### 4. Warrant Coverage
 
@@ -186,7 +216,8 @@ Risk scores are calculated using a **weighted additive model**:
 | Signal | Points | Description |
 |--------|--------|-------------|
 | Red Flag Keyword | +1 each | Each dilution-related keyword found |
-| Toxic Underwriter | +2 each | Each toxic underwriter detected |
+| Toxic Underwriter (High-Risk) | +2 each | Each high-risk underwriter detected (Maxim, Wainwright, Aegis, etc.) |
+| Toxic Underwriter (Medium-Risk) | +1 or +2 | Medium-risk underwriter (+1 normally, +2 if toxic terms present) |
 | Toxic Debt | +3 | Interest rate ≥12% on notes/debentures |
 | Management Turnover | +4 | Executive resignation detected |
 | Warrant Coverage ≥100% | +2 | High warrant coverage percentage |

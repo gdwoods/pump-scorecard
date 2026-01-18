@@ -636,7 +636,8 @@ if warrant_coverage and parse_percentage(warrant_coverage) >= 100:
 | Signal | Points | Description |
 |--------|--------|-------------|
 | Red Flag Keyword | +1 each | Keywords like "Warrant", "Convertible Note", "ATM" |
-| Toxic Underwriter | +2 each | Maxim, Wainwright, Aegis Capital detected |
+| Toxic Underwriter (High-Risk) | +2 each | High-risk underwriters (Maxim, Wainwright, Aegis, Roth, Ladenburg, Network 1, WestPark, Chardan, Ascendiant, Dawson James, ThinkEquity, Noble, Collier, Ventures, Univest, EF Hutton/Benchmark, Joseph Gunnar, Spartan, Dominion, Kingswood, Laidlaw) |
+| Toxic Underwriter (Medium-Risk) | +1 or +2 | Medium-risk underwriters (Cantor Fitzgerald: +1 normally, +2 if toxic terms present) |
 | Toxic Debt | +3 | Interest rate ≥12% on notes/debentures |
 | Management Turnover | +4 | Executive resignation detected |
 | Warrant Coverage ≥100% | +2 | Warrant coverage percentage ≥100% |
@@ -710,16 +711,44 @@ Score = 2 (keywords) + 2 (underwriter) + 3 (toxic debt) + 2 (high warrant covera
 
 ### Underwriter Detection (`analyzer.py`)
 
-**Target Underwriters**:
+**High-Risk Underwriters** (+2 points):
 - Maxim Group / Maxim Group LLC
 - H.C. Wainwright & Co.
 - Aegis Capital Corp.
+- Roth Capital Partners
+- Ladenburg Thalmann
+- Network 1 Financial
+- WestPark Capital
+- Chardan Capital Markets
+- Ascendiant Capital Markets
+- Dawson James Securities
+- ThinkEquity
+- Noble Financial Capital Markets
+- Collier Securities
+- Ventures Securities
+- Univest Securities
+- EF Hutton / Benchmark Company
+- Joseph Gunnar & Co.
+- Spartan Capital Securities
+- Dominion Capital
+- Kingswood Capital Markets
+- Laidlaw & Company
+
+**Medium-Risk Underwriters** (+1 normally, +2 if toxic terms present):
+- Cantor Fitzgerald
+
+**Lower-Risk Underwriters** (0 points when alone, tracked for context):
+- Oppenheimer & Co.
+- William Blair
 
 **Context Requirement**:
 - Must appear within 200 characters of: "as underwriter", "underwritten by", "serving as"
 - Filters out: incidental mentions (e.g., "maximum" matching "maxim")
+- EF Hutton and Benchmark Company treated as same ecosystem
 
 **Output**: String `underwriter_found` (underwriter name or None)
+
+**Scoring Logic**: `analyzer.py::calculate_risk_score()` applies different point values based on underwriter category (high-risk +2, medium-risk +1/+2, lower-risk 0)
 
 ### Warrant Coverage Extraction (`signal_extractor.py`)
 
@@ -866,8 +895,11 @@ RELEVANT_FORM_TYPES = ["S-1", "S-3", "424B4", "424B5", "8-K", "EFFECT"]
 # Red Flag Keywords
 RED_FLAG_KEYWORDS = ["warrant", "convertible note", ...]
 
-# Target Underwriters
-TARGET_UNDERWRITERS = ["Maxim", "Wainwright", "Aegis"]
+# Underwriters (categorized by risk level)
+HIGH_RISK_UNDERWRITERS = ["maxim", "wainwright", "aegis", "roth capital", ...]
+MEDIUM_RISK_UNDERWRITERS = ["cantor", "cantor fitzgerald"]
+LOWER_RISK_UNDERWRITERS = ["oppenheimer", "william blair"]
+UNDERWRITERS = HIGH_RISK_UNDERWRITERS + MEDIUM_RISK_UNDERWRITERS + LOWER_RISK_UNDERWRITERS
 ```
 
 ### Next.js Configuration
