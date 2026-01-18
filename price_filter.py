@@ -55,18 +55,43 @@ def fetch_share_price_from_filing(filing_text: str) -> Optional[float]:
 
 def fetch_current_stock_price(ticker: str) -> Optional[float]:
     """
-    Fetches current stock price from Yahoo Finance or other free API.
+    Fetches current stock price from Yahoo Finance using yfinance library.
     
-    This is a fallback if we can't extract price from filing.
-    Uses a simple HTTP request to get current price.
+    This fetches the actual current market price of the stock (not the offering price from filings).
+    Uses the yfinance library for reliable price fetching.
     
     Args:
         ticker: Stock ticker symbol
         
     Returns:
-        Current stock price as float, or None if fetch fails
+        Current stock price as float, or None if fetch fails or price is invalid
     """
-    # Try Yahoo Finance quote endpoint (simple HTML scraping)
+    # Try using yfinance library first (most reliable)
+    try:
+        import yfinance as yf
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        
+        # Get current price from info dict
+        # yfinance provides 'currentPrice' or 'regularMarketPrice'
+        price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose')
+        
+        if price is not None:
+            try:
+                price_float = float(price)
+                # Validate price is reasonable
+                if 0.001 <= price_float <= 50000:
+                    return price_float
+            except (ValueError, TypeError):
+                pass
+    except ImportError:
+        # yfinance not installed, fall back to HTML parsing
+        pass
+    except Exception as e:
+        # yfinance failed, fall back to HTML parsing
+        pass
+    
+    # Fallback: Try Yahoo Finance quote endpoint (HTML scraping) if yfinance not available
     url = f"https://finance.yahoo.com/quote/{ticker}"
     
     try:
@@ -76,31 +101,47 @@ def fetch_current_stock_price(ticker: str) -> Optional[float]:
         response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
-            # Extract price from HTML - look for price element
-            # Yahoo Finance stores price in various places, try common patterns
-            price_match = re.search(r'"regularMarketPrice":{"raw":([\d\.]+)', response.text)
-            if price_match:
+            text = response.text
+            
+            # Extract from fin-streamer element (Yahoo Finance's price display component)
+            # This is more reliable than JSON parsing
+            fin_streamer_match = re.search(
+                r'<fin-streamer[^>]+data-field="regularMarketPrice"[^>]+data-symbol="[^"]+"[^>]*value="([\d,\.]+)"',
+                text
+            )
+            if fin_streamer_match:
                 try:
-                    return float(price_match.group(1))
-                except ValueError:
+                    price_str = fin_streamer_match.group(1).replace(',', '')
+                    price = float(price_str)
+                    if 0.001 <= price <= 50000:
+                        return price
+                except (ValueError, IndexError):
                     pass
             
-            # Fallback: look for price in meta tags or other locations
-            price_match = re.search(r'<span[^>]*>(\$)?([\d,\.]+)<\/span>', response.text)
-            if price_match:
+            # Alternative: Try to find price in a specific context
+            # Look for the price near "regularMarketPrice" in JSON data
+            # But be very careful - match only the price field, not other numeric fields
+            json_price_match = re.search(
+                r'"regularMarketPrice"\s*:\s*\{[^{}]{0,200}"raw"\s*:\s*([\d\.]+)',
+                text
+            )
+            if json_price_match:
                 try:
-                    price_str = price_match.group(2).replace(',', '')
-                    return float(price_str)
-                except ValueError:
+                    price = float(json_price_match.group(1))
+                    # Stricter validation for regex-extracted prices
+                    if 0.001 <= price <= 1000:
+                        return price
+                except (ValueError, IndexError):
                     pass
+            
     except Exception as e:
-        # Silently fail - price lookup is optional
-        pass
+        # Log error for debugging (but don't crash)
+        print(f"[Price Filter] Error fetching price for {ticker}: {e}")
     
     return None
 
 
-def check_filing_price_filter(filing: Dict, max_price: float = 10.0) -> Optional[float]:
+def check_filing_price_filter(filing: Dict, max_price: float = 20.0) -> Optional[float]:
     """
     Checks if a filing's stock price is under the max price threshold.
     
@@ -110,7 +151,7 @@ def check_filing_price_filter(filing: Dict, max_price: float = 10.0) -> Optional
     
     Args:
         filing: Filing dictionary with ticker and optionally filing_text
-        max_price: Maximum price threshold (default: $10.00)
+        max_price: Maximum price threshold (default: $20.00)
         
     Returns:
         Share price if found and under threshold, None if over threshold or not found
@@ -139,7 +180,7 @@ def check_filing_price_filter(filing: Dict, max_price: float = 10.0) -> Optional
     return None
 
 
-def filter_filings_by_price(filings: list, max_price: float = 10.0, fetch_prices: bool = True) -> list:
+def filter_filings_by_price(filings: list, max_price: float = 20.0, fetch_prices: bool = True) -> list:
     """
     Filters a list of filings to only those with share prices under max_price.
     
@@ -150,7 +191,7 @@ def filter_filings_by_price(filings: list, max_price: float = 10.0, fetch_prices
     
     Args:
         filings: List of filing dictionaries
-        max_price: Maximum price threshold (default: $10.00)
+        max_price: Maximum price threshold (default: $20.00)
         fetch_prices: If True, fetch current prices for filings without price in text
         
     Returns:
@@ -194,7 +235,7 @@ if __name__ == "__main__":
     }
     
     print("Testing price filter...")
-    price = check_filing_price_filter(test_filing, max_price=10.0)
+    price = check_filing_price_filter(test_filing, max_price=20.0)
     print(f"Price check result: {price}")
     
     # Test with a higher price
@@ -202,5 +243,5 @@ if __name__ == "__main__":
         "ticker": "AAPL",
         "form_type": "S-1",
     }
-    price2 = check_filing_price_filter(test_filing2, max_price=10.0)
+    price2 = check_filing_price_filter(test_filing2, max_price=20.0)
     print(f"AAPL price check result: {price2}")

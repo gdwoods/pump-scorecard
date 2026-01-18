@@ -22,6 +22,7 @@ from universe_builder import build_or_load_universe
 from filing_scanner import scan_latest_filings, scan_filings_by_form_type
 from analyzer import analyze_filings
 from filing_parser import parse_filing_details
+from price_filter import filter_filings_by_price
 from supabase_storage import init_supabase, save_alerts_to_db
 
 
@@ -221,7 +222,7 @@ def save_alerts_to_csv(filings: List[Dict], filepath: str = DILUTION_ALERTS_CSV_
         return False
 
 
-def run_scanner(force_refresh_universe: bool = False, filing_count: int = 100):
+def run_scanner(force_refresh_universe: bool = False, filing_count: int = 100, max_price: float = 20.0):
     """
     Main function: Runs the complete dilution detection pipeline.
     
@@ -286,14 +287,44 @@ def run_scanner(force_refresh_universe: bool = False, filing_count: int = 100):
     
     print(f"[Main] ✓ Found {len(filings)} relevant filings\n")
     
+    # Step 2.5: Filter by current stock price (BEFORE analysis to save time)
+    # This filters based on the company's current stock price, not the offering price in the filing
+    if max_price:
+        print(f"[Main] Step 2.5: Filtering by current stock price (max: ${max_price:.2f})...")
+        initial_count = len(filings)
+        filings = filter_filings_by_price(filings, max_price=max_price, fetch_prices=True)
+        filtered_count = initial_count - len(filings)
+        if filtered_count > 0:
+            print(f"[Main] Filtered out {filtered_count} filings for companies trading >= ${max_price:.2f}\n")
+    
+    if not filings:
+        print("[Main] ⚠️  No filings remaining after price filter")
+        return
+    
     # Step 3: Analyze filings for red flags
     print("[Main] Step 3: Analyzing filings for dilution red flags...")
     analyzed_filings = analyze_filings(filings)
     
+    # Step 3.5: Parse filing details (extract offering amounts, etc.)
+    print("[Main] Step 3.5: Parsing filing details...")
+    parsed_filings = []
+    
+    for filing in analyzed_filings:
+        # Parse filing details (extracts offering amount, share price from filing, etc.)
+        # Note: We already filtered by CURRENT stock price, this extracts OFFERING price from filing
+        parsed_data = parse_filing_details(filing, max_price=None)  # Don't filter again, already done
+        
+        # Merge parsed data into filing
+        filing.update(parsed_data)
+        parsed_filings.append(filing)
+    
+    analyzed_filings = parsed_filings
+    
     # Filter to only filings with red flags (optional - you can remove this filter)
     red_flag_filings = [f for f in analyzed_filings if f.get("has_red_flags", False)]
     
-    print(f"[Main] ✓ Analysis complete: {len(red_flag_filings)} filings with red flags found\n")
+    print(f"[Main] ✓ Analysis complete: {len(red_flag_filings)} filings with red flags found")
+    print(f"[Main] ✓ After price filtering: {len(analyzed_filings)} filings to save\n")
     
     # Step 4: Save results (to Supabase if configured, otherwise CSV)
     print("[Main] Step 4: Saving results...")
@@ -335,11 +366,18 @@ if __name__ == "__main__":
         default=100,
         help="Number of latest filings to scan (default: 100)"
     )
+            parser.add_argument(
+                "--max-price",
+                type=float,
+                default=20.0,
+                help="Maximum stock price to include (default: 20.0)"
+            )
     
     args = parser.parse_args()
     
     # Run the scanner
     run_scanner(
         force_refresh_universe=args.refresh_universe,
-        filing_count=args.filing_count
+        filing_count=args.filing_count,
+        max_price=args.max_price
     )

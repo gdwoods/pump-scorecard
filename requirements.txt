@@ -15,3 +15,6 @@ lxml>=4.9.0               # Fast XML/HTML parser (optional, for RSS feed parsing
 
 # Database storage (Supabase)
 supabase>=2.0.0           # Supabase client for PostgreSQL database storage
+
+# Stock price fetching (Yahoo Finance)
+yfinance>=0.2.0           # Yahoo Finance API for reliable stock price fetching
