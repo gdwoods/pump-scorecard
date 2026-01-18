@@ -274,11 +274,18 @@ export default function AlertTable({ alerts, onRowClick, onWatchlistChange }: Al
               </td>
               <td className="p-3">
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRowClick?.(alert);
+                    e.preventDefault();
+                    console.log('[AlertTable] Details button clicked for alert:', alert.ticker, alert.id);
+                    if (onRowClick) {
+                      onRowClick(alert);
+                    } else {
+                      console.warn('[AlertTable] onRowClick is not defined');
+                    }
                   }}
-                  className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1 transition-colors"
+                  className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1 transition-colors cursor-pointer"
                   title="View details"
                 >
                   <ExternalLink className="w-4 h-4" />
