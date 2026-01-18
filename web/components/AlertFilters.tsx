@@ -89,19 +89,20 @@ export default function AlertFiltersComponent({
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">
             Form Type
           </label>
-          <select
-            value={filters.formType || ""}
-            onChange={(e) => updateFilter("formType", e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Forms</option>
-            <option value="S-1">S-1</option>
-            <option value="S-1/A">S-1/A</option>
-            <option value="S-3">S-3</option>
-            <option value="424B4">424B4</option>
-            <option value="424B5">424B5</option>
-            <option value="8-K">8-K</option>
-          </select>
+                  <select
+                    value={filters.formType || ""}
+                    onChange={(e) => updateFilter("formType", e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Forms</option>
+                    <option value="S-1">S-1</option>
+                    <option value="S-1/A">S-1/A</option>
+                    <option value="S-3">S-3</option>
+                    <option value="424B4">424B4</option>
+                    <option value="424B5">424B5</option>
+                    <option value="8-K">8-K</option>
+                    <option value="EFFECT">EFFECT</option>
+                  </select>
         </div>
 
         {/* Days Back */}
