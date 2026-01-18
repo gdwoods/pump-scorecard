@@ -228,11 +228,18 @@ SEC Dilution Alerts is an automated monitoring system designed for short sellers
 - **Integration**: Calls `signal_extractor.py` for advanced signals
 
 #### `price_filter.py`
-- **Purpose**: Filter filings by stock price threshold
+- **Purpose**: Filter filings by stock price threshold and fetch current stock prices
 - **Functions**:
-  - `get_stock_price()` - Fetch current price via Yahoo Finance (unofficial API)
-  - `filter_by_price()` - Filter filings where price < threshold
-- **Usage**: Optional pre-filtering to focus on low-priced stocks (common dilution targets)
+  - `fetch_current_stock_price()` - Fetch current price via Yahoo Finance (yfinance library or HTML scraping)
+  - `check_filing_price_filter()` - Filter filings where price < threshold
+  - `fetch_share_price_from_filing()` - Extract share price from filing text
+- **Usage**: Pre-filtering to focus on low-priced stocks (common dilution targets), price tracking for dilution impact analysis
+
+#### `update_price_7days.py`
+- **Purpose**: Update price_7days_later for filings that are 7+ days old
+- **Functions**:
+  - `update_price_tracking()` - Finds filings ≥7 days old without 7-day price, fetches current price, updates database
+- **Usage**: Called automatically on each scanner run to populate 7-day prices for older filings
 
 #### `main.py`
 - **Purpose**: Main entry point and orchestration
@@ -241,11 +248,13 @@ SEC Dilution Alerts is an automated monitoring system designed for short sellers
   - **Pipeline Steps**:
     1. Build/refresh company universe
     2. Scan latest filings (general feed + form-type-specific)
-    3. Filter by price (optional, default < $10)
+    3. Filter by price (optional, default < $20)
     4. Parse filing details
     5. Analyze for red flags and signals
     6. Calculate risk scores
-    7. Save to CSV + Supabase (dual-write)
+    7. Fetch price_at_filing for new filings (preserves existing prices)
+    8. Update price_7days_later for filings 7+ days old
+    9. Save to CSV + Supabase (dual-write)
 
 #### `supabase_storage.py`
 - **Purpose**: Database interaction layer
@@ -268,10 +277,43 @@ SEC Dilution Alerts is an automated monitoring system designed for short sellers
 - **Data Flow**: Fetches from `/api/alerts` → filters client-side → displays in table
 
 #### `app/api/alerts/route.ts` (API Route)
-- **Purpose**: Server-side Supabase query
+- **Purpose**: Server-side Supabase query for dilution alerts
 - **Endpoints**: GET with query parameters (ticker, formType, minRiskScore, daysBack, limit)
 - **Sorting**: Primary by date, secondary by filing_datetime
 - **Filtering**: Excludes UNKNOWN tickers, applies query filters
+- **Returns**: Array of DilutionAlert objects with all fields including price tracking
+
+#### `app/api/company/[ticker]/route.ts` (API Route)
+- **Purpose**: Fetch company-specific statistics and filing sequence
+- **Endpoints**: GET `/api/company/[ticker]`
+- **Returns**: CompanyStats object with:
+  - Total filings, average/max risk scores
+  - Total offering amount, unique underwriters
+  - Form type breakdown
+  - Chronological filing sequence
+- **Error Handling**: Returns 404 if no filings found for ticker
+
+#### `app/api/underwriters/route.ts` (API Route)
+- **Purpose**: Fetch underwriter analytics and statistics
+- **Endpoints**: GET `/api/underwriters`
+- **Returns**: Array of UnderwriterStats objects with:
+  - Filing count, risk score statistics
+  - Unique companies count
+  - Total offering amount
+  - Recent activity (last 30 days)
+
+#### `app/api/analytics/route.ts` (API Route)
+- **Purpose**: Fetch aggregated data for charts
+- **Endpoints**: GET with query parameters (type, daysBack, ticker)
+- **Types**: `risk-distribution`, `offering-trends`, `filing-timeline`
+- **Returns**: Structured data for Recharts components
+- **Aggregations**: Performs SQL aggregations in Supabase queries
+
+#### `app/api/check-price/route.ts` (API Route)
+- **Purpose**: Check stock price for watchlist validation
+- **Endpoints**: GET with query parameter (ticker)
+- **Returns**: Current stock price from Yahoo Finance
+- **Usage**: Used by watchlist to warn users about $20 threshold
 
 #### `components/AlertTable.tsx`
 - **Purpose**: Display alerts in tabular format
@@ -280,6 +322,7 @@ SEC Dilution Alerts is an automated monitoring system designed for short sellers
   - Form type tooltips
   - Date/time display
   - Risk score color coding
+  - Price column showing price_at_filing and price_7days_later with percentage change
   - Flag badges (Toxic Debt, Resignation, Warrants, Underwriter)
 
 #### `components/AlertFilters.tsx`
@@ -295,6 +338,48 @@ SEC Dilution Alerts is an automated monitoring system designed for short sellers
 - **Purpose**: Getting started guide for new users
 - **Content**: Feature overview, risk score explanation, usage tips
 
+#### `app/page.tsx` (Main Dashboard)
+- **Purpose**: Main alerts dashboard with real-time updates
+- **Features**:
+  - Auto-refresh polling (15s intervals with random variance)
+  - Supabase Realtime integration (with polling fallback)
+  - Client-side filtering
+  - Watchlist integration
+  - Sound alerts for new filings
+  - Theme toggle (dark/light mode)
+  - Navigation links to other pages
+- **State Management**: React hooks (useState, useEffect, useCallback, useRef)
+- **Data Flow**: Fetches from `/api/alerts` → filters client-side → displays in table
+
+#### `app/company/[ticker]/page.tsx` (Company Profile)
+- **Purpose**: Display company-specific filing history and statistics
+- **Features**:
+  - Company statistics (total filings, risk scores, offering amounts)
+  - Filing timeline visualization
+  - Form type breakdown
+  - Complete filings table for the ticker
+- **Data Sources**: `/api/company/[ticker]` and `/api/alerts?ticker=[ticker]`
+- **Navigation**: Accessible by clicking ticker in alerts table
+
+#### `app/underwriters/page.tsx` (Underwriter Analytics)
+- **Purpose**: Display statistics on underwriters
+- **Features**:
+  - Underwriter statistics table
+  - Sortable columns
+  - Color-coded risk scores
+  - Links back to main dashboard
+- **Data Source**: `/api/underwriters`
+
+#### `app/analytics/page.tsx` (Analytics & Charts)
+- **Purpose**: Display data visualizations and charts
+- **Features**:
+  - Time period filter (30, 60, 90, 180, 365 days, all time)
+  - Three chart components:
+    - Risk Score Distribution Chart
+    - Offering Trends Chart
+    - Filing Timeline Chart
+- **Data Source**: `/api/analytics` with type parameter
+
 #### `app/education/page.tsx`
 - **Purpose**: Educational content about SEC filings
 - **Content**: Filing type descriptions, implications, timeline diagrams
@@ -306,6 +391,34 @@ SEC Dilution Alerts is an automated monitoring system designed for short sellers
   - `getWatchlist()` - Fetch all watched tickers from Supabase
   - `toggleWatchlist()` - Add/remove ticker
 - **Storage**: Supabase `user_watchlists` table keyed by user_id (UUID)
+
+#### `hooks/useRealtimeAlerts.ts`
+- **Purpose**: React hook for Supabase Realtime subscriptions
+- **Features**:
+  - Subscribes to INSERT events on `sec_filing_alerts` table
+  - Automatic reconnection with exponential backoff
+  - Connection status tracking (connecting, connected, disconnected, error, unavailable)
+  - Graceful fallback if Supabase not configured
+  - Callback-based alert handling
+- **Usage**: Used in main dashboard for instant updates
+
+#### `components/charts/RiskScoreDistributionChart.tsx`
+- **Purpose**: Bar chart showing risk score distribution
+- **Library**: Recharts (BarChart)
+- **Data**: Aggregated from `/api/analytics?type=risk-distribution`
+- **Features**: Shows count of filings in each risk range (0-4, 5-9, 10-14, 15+)
+
+#### `components/charts/OfferingTrendsChart.tsx`
+- **Purpose**: Line chart showing offering amount trends over time
+- **Library**: Recharts (LineChart)
+- **Data**: Aggregated from `/api/analytics?type=offering-trends`
+- **Features**: Monthly aggregation, shows average offering amount and filing count
+
+#### `components/charts/FilingTimelineChart.tsx`
+- **Purpose**: Timeline visualization of filing sequences
+- **Library**: Recharts (custom timeline)
+- **Data**: Aggregated from `/api/analytics?type=filing-timeline`
+- **Features**: Shows filing progression (S-1/S-3 → EFFECT → 424B4/424B5) for top tickers
 
 ---
 
@@ -371,6 +484,10 @@ CREATE TABLE sec_filing_alerts (
     warrant_coverage TEXT,               -- Warrant coverage percentage
     warrants_per_share TEXT,             -- Warrants per share
     
+    -- Price Tracking
+    price_at_filing NUMERIC(10, 4),      -- Stock price at filing time (captured when first detected)
+    price_7days_later NUMERIC(10, 4),    -- Stock price 7 days after filing date (captured on subsequent scans)
+    
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -383,6 +500,7 @@ CREATE INDEX idx_sec_filing_alerts_date ON sec_filing_alerts(date DESC);
 CREATE INDEX idx_sec_filing_alerts_ticker ON sec_filing_alerts(ticker);
 CREATE INDEX idx_sec_filing_alerts_risk_score ON sec_filing_alerts(risk_score DESC);
 CREATE INDEX idx_sec_filing_alerts_form_type ON sec_filing_alerts(form_type);
+CREATE INDEX idx_price_tracking_update ON sec_filing_alerts(date) WHERE price_7days_later IS NULL;
 ```
 
 **Purpose**: Stores parsed filing data and analysis results.
@@ -437,14 +555,34 @@ main.py → supabase_storage.py → Supabase PostgreSQL
 Browser → /api/alerts → Supabase Client → PostgreSQL → JSON Response → Frontend
 ```
 
-**API Endpoint**: `GET /api/alerts`
+**API Endpoints**:
 
-**Query Parameters**:
-- `ticker` - Filter by ticker symbol
-- `formType` - Filter by form type (S-1, S-3, etc.)
-- `minRiskScore` - Minimum risk score threshold
-- `daysBack` - Limit to last N days
-- `limit` - Max results (default: 500)
+#### `/api/alerts` (GET)
+- **Query Parameters**:
+  - `ticker` - Filter by ticker symbol
+  - `formType` - Filter by form type (S-1, S-3, etc.)
+  - `minRiskScore` - Minimum risk score threshold
+  - `daysBack` - Limit to last N days
+  - `limit` - Max results (default: 500)
+
+#### `/api/company/[ticker]` (GET)
+- **Path Parameter**: `ticker` - Stock ticker symbol
+- **Returns**: CompanyStats object with statistics and filing sequence
+
+#### `/api/underwriters` (GET)
+- **Returns**: Array of UnderwriterStats objects
+
+#### `/api/analytics` (GET)
+- **Query Parameters**:
+  - `type` - Chart type: `risk-distribution`, `offering-trends`, `filing-timeline`
+  - `daysBack` - Time period filter (optional)
+  - `ticker` - Filter by specific ticker (optional)
+- **Returns**: Structured data for chart components
+
+#### `/api/check-price` (GET)
+- **Query Parameters**:
+  - `ticker` - Stock ticker symbol
+- **Returns**: Current stock price (number)
 
 **Response Format**:
 ```json
@@ -800,11 +938,16 @@ sec_scraper/
 ├── analyzer.py                     # Filing analysis and risk scoring
 ├── config.py                       # Configuration constants
 ├── create_supabase_tables.sql      # Database schema
+├── add_price_tracking_columns.sql  # SQL schema for price tracking
 ├── filing_parser.py                # Filing document parsing
 ├── filing_scanner.py               # SEC filing discovery
 ├── main.py                         # Main entry point
 ├── price_filter.py                 # Stock price filtering
+├── update_price_7days.py           # 7-day price tracking updates
 ├── requirements.txt                # Python dependencies
+├── signal_extractor.py             # Advanced signal detection
+├── supabase_storage.py             # Database interaction
+└── universe_builder.py             # Company universe management
 ├── signal_extractor.py             # Advanced signal detection
 ├── supabase_storage.py             # Database interaction
 └── universe_builder.py             # Company universe management
@@ -850,6 +993,15 @@ sec_scraper/
 - **Storage**: Preferences saved in localStorage (enable/disable, selected sound)
 - **Playback**: Generates sounds dynamically using AudioContext and OscillatorNode
 - **Timing**: Only plays on new alert detection (not on manual refresh)
+
+**Supabase Realtime**:
+- **Technology**: Supabase Realtime (WebSocket-based)
+- **Subscription**: Subscribes to INSERT events on `sec_filing_alerts` table
+- **Connection Management**: Automatic reconnection with exponential backoff (max 5 attempts)
+- **Status Tracking**: Shows connection status in UI (connecting, connected, disconnected, error)
+- **Fallback**: Automatically falls back to polling if Realtime unavailable
+- **Implementation**: Custom React hook (`useRealtimeAlerts`) with ref-based callbacks
+- **Performance**: Instant updates without polling overhead when connected
 
 **API Caching**:
 - Next.js API routes cache responses (default 60s)
@@ -940,6 +1092,41 @@ if 10_000_000 <= amount <= 500_000_000:
 
 **Implementation**: `filing_parser.py::find_original_s1_filing()`
 
+### Price Tracking
+
+**Purpose**: Track stock price impact of dilution events over time
+
+**Implementation**:
+1. **At Filing Price Capture**:
+   - When filing is first detected, check if `price_at_filing` already exists in database
+   - If new filing (no existing price), fetch current stock price from Yahoo Finance
+   - Store in `price_at_filing` column
+   - If existing filing found, preserve original `price_at_filing` (don't overwrite)
+
+2. **7-Day Price Updates**:
+   - On each scanner run, query filings where `date <= 7_days_ago` AND `price_7days_later IS NULL`
+   - For each qualifying filing, fetch current stock price
+   - Update `price_7days_later` column
+   - Group by ticker to avoid redundant price fetches
+
+**Modules**:
+- `main.py` - Orchestrates price_at_filing capture (checks DB first, preserves existing)
+- `update_price_7days.py` - Handles 7-day price updates
+- `price_filter.py` - Provides `fetch_current_stock_price()` using yfinance library
+
+**Database Schema**:
+```sql
+price_at_filing NUMERIC(10, 4),      -- Stock price at filing time
+price_7days_later NUMERIC(10, 4),    -- Stock price 7 days later
+```
+
+**Index**: `idx_price_tracking_update` on `date` WHERE `price_7days_later IS NULL` for efficient querying
+
+**Frontend Display**:
+- Price column shows both prices with color coding (green for gains, red for losses)
+- Percentage change calculated automatically: `((price_7days_later - price_at_filing) / price_at_filing * 100)`
+- "Pending..." shown for filings < 7 days old
+
 ### Deduplication Strategy
 
 **Database Level**:
@@ -955,14 +1142,16 @@ if 10_000_000 <= amount <= 500_000_000:
 ## Future Enhancements
 
 **Potential Improvements**:
-1. **Real-time WebSocket** updates (replace polling)
-2. **Email/SMS alerts** for watchlist tickers
-3. **Historical analysis** (dilution trends over time)
-4. **ML-based signal detection** (improve accuracy)
-5. **Multi-user authentication** (replace anonymous UUIDs)
-6. **Export functionality** (CSV/PDF reports)
-7. **API for external integrations**
-8. **Backtesting** dilution prediction accuracy
+1. **Email/SMS alerts** for watchlist tickers
+2. **ML-based signal detection** (improve accuracy)
+3. **Multi-user authentication** (replace anonymous UUIDs)
+4. **Export functionality** (CSV/PDF reports)
+5. **API for external integrations**
+6. **Backtesting** dilution prediction accuracy
+7. **Historical price data** (more accurate price_at_filing using historical prices)
+8. **Additional chart types** (underwriter trends, form type distribution)
+9. **Alert notifications** (browser push notifications)
+10. **Advanced filtering** (date ranges, multiple tickers, custom risk ranges)
 
 ---
 
@@ -990,5 +1179,5 @@ if 10_000_000 <= amount <= 500_000_000:
 ---
 
 **Last Updated**: January 2026  
-**Version**: 1.0.0  
+**Version**: 1.1.0  
 **Maintainer**: gdwoods@gmail.com

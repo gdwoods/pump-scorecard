@@ -10,9 +10,15 @@ SEC Dilution Alerts is an automated monitoring system designed to help traders, 
 - **Dilution Detection**: Identifies capital raises through equity offerings (S-1, S-3, 424B4, 424B5 filings)
 - **Red Flag Analysis**: Detects toxic debt, management turnover, toxic underwriters, and warrant coverage
 - **Risk Scoring**: Calculates a risk score (0-20+) based on multiple signals
+- **Price Tracking**: Automatically captures stock price at filing time and 7 days later to track dilution impact
+- **Company Profiles**: Detailed pages for each ticker showing filing history, statistics, and timeline
+- **Underwriter Analytics**: Statistics on the most active underwriters in dilution events
+- **Analytics & Charts**: Visual insights including risk score distribution, offering trends, and filing timelines
 - **Ticker Watchlists**: Personal watchlists for monitoring specific companies
 - **Web Dashboard**: Modern, responsive interface with filtering, sorting, and alerts
 - **Sound Alerts**: Configurable audible notifications when new filings are detected
+- **Realtime Updates**: Supabase Realtime for instant updates (with polling fallback)
+- **Dark/Light Mode**: Theme toggle with persistent preferences
 - **Education Resources**: Comprehensive guides on SEC filings and their implications
 
 ---
@@ -47,7 +53,10 @@ This tool helps you identify these events **before** they fully impact the marke
 - **Automated Scanning**: GitHub Actions runs the Python scraper on a schedule
   - **Market Hours** (4 AM - 8 PM ET, weekdays): Every 1 minute
   - **Off-Hours**: Every 15 minutes
-- **Web App Polling**: Dashboard auto-refreshes every 15 seconds (±2s variance)
+- **Supabase Realtime**: Primary method for instant updates (subscribes to database INSERT events)
+  - **Connection Status**: Shows "Connected" when Realtime is active
+  - **Fallback**: Automatically falls back to polling if Realtime unavailable
+- **Web App Polling**: Dashboard auto-refreshes every 15 seconds (±2s variance) when Realtime unavailable, or every 5 minutes as backup
 - **Notifications**: Optional sound alerts when new filings are detected
 
 ---
@@ -375,6 +384,28 @@ The system uses publicly available SEC EDGAR (Electronic Data Gathering, Analysi
 - Warrant information
 - Links to full SEC filing
 
+### Price Tracking
+
+**Purpose**: Track how dilution events impact stock prices over time
+
+**How It Works**:
+- **At Filing**: Stock price is captured when the filing is first detected
+- **7 Days Later**: Stock price is automatically updated 7 days after the filing date
+- **Display**: Main table shows both prices with color-coded percentage change
+
+**Price Column Display**:
+- **"At Filing"**: Price when filing was detected (always shown if available)
+- **"+7 Days"**: Price 7 days after filing date (shown in green if up, red if down)
+- **Percentage Change**: Automatic calculation showing price movement
+- **"Pending..."**: Shown for filings less than 7 days old
+
+**Use Cases**:
+- Identify dilution impact on stock price
+- Track short-term price movements after dilution filings
+- Compare price performance across different filings
+
+**Note**: Prices are fetched from Yahoo Finance and represent the current market price at the time of detection. For filings less than 7 days old, the 7-day price will be populated automatically on subsequent scans.
+
 ### Filtering & Search
 
 **Available Filters**:
@@ -385,6 +416,112 @@ The system uses publicly available SEC EDGAR (Electronic Data Gathering, Analysi
 - **Minimum Risk Score**: Filter by risk threshold (advanced)
 
 **Client-Side Filtering**: Filters applied in browser for instant results (no API delay)
+
+### Company Profile Pages
+
+**Access**: Click on any ticker symbol in the alerts table, or navigate to `/company/[ticker]`
+
+**Features**:
+- **Company Statistics**:
+  - Total filings count
+  - Average and maximum risk scores
+  - Total offering amount across all filings
+  - Unique underwriters involved
+  - Form type breakdown (S-1, S-3, 424B4, etc.)
+  - First and last filing dates
+
+- **Filing Timeline**: Chronological sequence of all filings for the ticker
+  - Shows progression: S-1 → EFFECT → 424B4/424B5
+  - Color-coded by form type
+  - Clickable links to each filing
+
+- **All Filings Table**: Complete list of all filings for the company
+  - Same table format as main dashboard
+  - Filterable and sortable
+  - Click any filing to see full details
+
+**Use Cases**:
+- Research a specific company's dilution history
+- Track filing sequences to predict dilution timing
+- Identify patterns (frequent filers, multiple underwriters)
+- Compare risk scores across different filings
+
+### Underwriter Analytics
+
+**Access**: Click "Underwriters" link in header, or navigate to `/underwriters`
+
+**Features**:
+- **Statistics Table**: Shows all underwriters with:
+  - Total filing count
+  - Average, maximum, and minimum risk scores
+  - Number of unique companies
+  - Total offering amount facilitated
+  - Recent activity (filings in last 30 days)
+
+- **Sorting**: Sort by any column (filing count, risk score, etc.)
+- **Color Coding**: Risk scores use same color scheme as main dashboard
+
+**Use Cases**:
+- Identify the most active underwriters in dilution events
+- Compare risk levels across different underwriters
+- Track which underwriters work with which companies
+- Research underwriter patterns and deal structures
+
+### Analytics & Charts
+
+**Access**: Click "Analytics" link in header, or navigate to `/analytics`
+
+**Features**:
+- **Time Period Filter**: Filter charts by time period (30, 60, 90, 180, 365 days, or all time)
+
+- **Risk Score Distribution Chart**:
+  - Bar chart showing count of filings in each risk score range
+  - Ranges: 0-4 (Low), 5-9 (Moderate), 10-14 (High), 15+ (Very High)
+  - Shows average and median risk scores
+  - Helps identify overall risk trends
+
+- **Offering Trends Chart**:
+  - Line chart showing average offering amount over time (monthly)
+  - Tracks dilution activity trends
+  - Shows filing count per period
+  - Helps identify periods of high dilution activity
+
+- **Filing Timeline Chart**:
+  - Visual timeline showing filing sequences for top tickers
+  - Shows progression: S-1/S-3 → EFFECT → 424B4/424B5
+  - Color-coded by form type
+  - Helps visualize dilution patterns
+
+**Use Cases**:
+- Identify overall dilution trends in the market
+- Compare risk levels across time periods
+- Visualize filing sequences and patterns
+- Research which companies are most active
+
+### Navigation & Pages
+
+**Main Dashboard** (`/`):
+- Alerts table with all filings
+- Filters and search
+- Watchlist management
+- Sound alerts configuration
+- Auto-refresh status
+
+**Company Profile** (`/company/[ticker]`):
+- Company-specific statistics and filing history
+- Access by clicking ticker in alerts table
+
+**Underwriters** (`/underwriters`):
+- Underwriter statistics and analytics
+- Access via header link
+
+**Analytics** (`/analytics`):
+- Charts and visualizations
+- Access via header link
+
+**Education** (`/education`):
+- Comprehensive guide to SEC filing types
+- Access via header link (book icon)
 
 ---
 
@@ -566,9 +703,32 @@ A: "Warrants Found" is a broad keyword search, while "Has Warrants" uses structu
 **Q: How accurate is the stock price filtering?**
 A: Price data comes from Yahoo Finance (unofficial API) and may be delayed or inaccurate. Use as a rough filter, not for precise price information.
 
+**Q: When is the "7 Days Later" price populated?**
+A: The 7-day price is automatically updated on subsequent scans once the filing date is 7+ days old. For newly detected filings, you'll see "Pending..." until 7 days have passed.
+
+**Q: How are prices tracked?**
+A: The system captures the current stock price from Yahoo Finance when a filing is first detected (as "At Filing"), and then automatically fetches the price again 7 days after the filing date (as "7 Days Later").
+
+**Q: What is Supabase Realtime and how does it work?**
+A: Supabase Realtime is a feature that provides instant database updates via WebSocket connections. When the Python scraper adds a new filing to the database, the web app receives an instant notification without needing to poll. If Realtime is unavailable, the app automatically falls back to polling every 15 seconds.
+
+**Q: How do I view all filings for a specific company?**
+A: Click on any ticker symbol in the alerts table to navigate to the company profile page. This shows all filings for that ticker, along with statistics and a filing timeline.
+
+**Q: What information is shown on the Underwriters page?**
+A: The Underwriters page shows statistics for each underwriter, including total filing count, average risk scores, number of unique companies, total offering amounts, and recent activity. This helps identify which underwriters are most active in dilution events.
+
+**Q: What charts are available on the Analytics page?**
+A: The Analytics page includes three charts: Risk Score Distribution (bar chart showing filing counts by risk level), Offering Trends (line chart showing average offering amounts over time), and Filing Timeline (visual timeline of filing sequences for top tickers).
+
 ---
 
 ## Version History
+
+- **v1.1.0** (January 2026)
+  - Added price tracking (at filing time and 7 days later)
+  - Price column in main table with color-coded percentage changes
+  - Automatic 7-day price updates for older filings
 
 - **v1.0.0** (January 2026)
   - Initial release
