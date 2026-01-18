@@ -121,6 +121,45 @@ export default function AlertTable({ alerts, onRowClick, onWatchlistChange }: Al
     }
   };
 
+  // Check if a filing is from today
+  const isNewToday = (alert: DilutionAlert): boolean => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
+
+      // Check filing_datetime first (more precise)
+      if (alert.filing_datetime) {
+        let filingDate: Date;
+        if (alert.filing_datetime.includes("T")) {
+          const datePart = alert.filing_datetime.split("T")[0];
+          const [year, month, day] = datePart.split("-").map(Number);
+          filingDate = new Date(year, month - 1, day);
+        } else {
+          filingDate = new Date(alert.filing_datetime);
+        }
+        filingDate.setHours(0, 0, 0, 0);
+        return filingDate.getTime() === today.getTime();
+      }
+
+      // Fallback to date field
+      if (alert.date) {
+        if (alert.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [year, month, day] = alert.date.split("-").map(Number);
+          const filingDate = new Date(year, month - 1, day);
+          filingDate.setHours(0, 0, 0, 0);
+          return filingDate.getTime() === today.getTime();
+        }
+        const filingDate = new Date(alert.date);
+        filingDate.setHours(0, 0, 0, 0);
+        return filingDate.getTime() === today.getTime();
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
@@ -145,27 +184,42 @@ export default function AlertTable({ alerts, onRowClick, onWatchlistChange }: Al
               }`}
             >
               <td className="p-3 text-sm text-gray-700 dark:text-gray-300">
-                {alert.filing_datetime ? (
-                  (() => {
-                    const dt = formatDateTime(alert.filing_datetime);
-                    return dt ? (
-                      <>
-                        <div>{dt.date}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
-                          {dt.time}
-                        </div>
-                      </>
+                <div className="flex items-center gap-2">
+                  <div>
+                    {alert.filing_datetime ? (
+                      (() => {
+                        const dt = formatDateTime(alert.filing_datetime);
+                        return dt ? (
+                          <>
+                            <div>{dt.date}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+                              {dt.time}
+                            </div>
+                          </>
+                        ) : (
+                          formatDate(alert.date)
+                        );
+                      })()
                     ) : (
                       formatDate(alert.date)
-                    );
-                  })()
-                ) : (
-                  formatDate(alert.date)
-                )}
+                    )}
+                  </div>
+                  {isNewToday(alert) && (
+                    <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded font-medium whitespace-nowrap">
+                      New Today
+                    </span>
+                  )}
+                </div>
               </td>
               <td className="p-3">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-900 dark:text-white">{alert.ticker}</span>
+                  <a
+                    href={`/company/${alert.ticker}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
+                  >
+                    {alert.ticker}
+                  </a>
                   <button
                     onClick={(e) => handleWatchlistToggle(alert.ticker, e)}
                     className={`p-1 rounded transition-colors ${
