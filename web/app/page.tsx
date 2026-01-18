@@ -7,9 +7,10 @@ import AlertTable from "@/components/AlertTable";
 import AlertFiltersComponent from "@/components/AlertFilters";
 import AlertDetailModal from "@/components/AlertDetailModal";
 import QuickStartModal from "@/components/QuickStartModal";
-import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star, HelpCircle, BookOpen } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star, HelpCircle, BookOpen, Radio, BarChart3 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getWatchlist } from "@/lib/watchlist";
+import { useRealtimeAlerts } from "@/hooks/useRealtimeAlerts";
 
 // Sound options configuration (moved outside component to prevent re-creation on every render)
 type SoundOption = {
@@ -161,6 +162,12 @@ export default function Home() {
   });
   const [watchlistTickers, setWatchlistTickers] = useState<Set<string>>(new Set());
 
+  // Use ref to track current alerts for comparison
+  const alertsRef = useRef<DilutionAlert[]>([]);
+  useEffect(() => {
+    alertsRef.current = alerts;
+  }, [alerts]);
+
   // Load sound alert preferences from localStorage
   useEffect(() => {
     const savedEnabled = localStorage.getItem("enableSoundAlert");
@@ -172,21 +179,6 @@ export default function Home() {
       setSelectedSound(savedSound);
     }
   }, []);
-
-  // Close sound menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (showSoundMenu && !target.closest('.sound-menu-container')) {
-        setShowSoundMenu(false);
-      }
-    };
-    
-    if (showSoundMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showSoundMenu]);
 
   // Play selected sound
   const playAlertSound = useCallback(() => {
@@ -209,6 +201,86 @@ export default function Home() {
     }
   }, [enableSoundAlert, selectedSound]); // Removed soundOptions - it's now a constant outside component
 
+  // Handle new alerts from Realtime
+  const handleNewAlert = useCallback((newAlert: DilutionAlert) => {
+    console.log('[Realtime] Processing new alert:', newAlert.ticker, newAlert.form_type);
+    
+    // Check if this alert is already in our list (shouldn't happen, but safety check)
+    const existingAlert = alertsRef.current.find(a => a.id === newAlert.id);
+    if (existingAlert) {
+      console.log('[Realtime] Alert already exists, skipping');
+      return;
+    }
+
+    // Apply current filters to determine if this alert should be shown
+    let shouldShow = true;
+    
+    if (filters.ticker && newAlert.ticker.toUpperCase() !== filters.ticker.toUpperCase()) {
+      shouldShow = false;
+    }
+    
+    if (filters.formType && newAlert.form_type !== filters.formType) {
+      shouldShow = false;
+    }
+    
+    if (filters.minRiskScore !== undefined && newAlert.risk_score < filters.minRiskScore) {
+      shouldShow = false;
+    }
+    
+    if (filters.watchlistOnly && !watchlistTickers.has(newAlert.ticker.toUpperCase())) {
+      shouldShow = false;
+    }
+
+    // Add to alerts list (prepend to show newest first)
+    setAlerts(prev => {
+      // Check again in case state was updated
+      const exists = prev.find(a => a.id === newAlert.id);
+      if (exists) return prev;
+      
+      const updated = [newAlert, ...prev];
+      // Keep within limit if specified
+      if (filters.limit) {
+        return updated.slice(0, filters.limit);
+      }
+      return updated;
+    });
+    
+    // Update last update time
+    setLastUpdate(new Date());
+    
+    // Play sound alert if enabled and alert passes filters
+    if (shouldShow) {
+      console.log('[Realtime] New alert visible, playing sound');
+      playAlertSound();
+    }
+  }, [filters, watchlistTickers, playAlertSound]);
+
+  // Realtime subscription hook
+  const { status: realtimeStatus, connect: connectRealtime, disconnect: disconnectRealtime } = useRealtimeAlerts({
+    enabled: isPolling, // Enable Realtime when polling is enabled
+    onNewAlert: handleNewAlert,
+    onError: (error) => {
+      console.error('[Realtime] Error:', error);
+      // Don't set global error, just log it
+      // Polling will handle fallback
+    },
+  });
+
+  // Close sound menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showSoundMenu && !target.closest('.sound-menu-container')) {
+        setShowSoundMenu(false);
+      }
+    };
+    
+    if (showSoundMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSoundMenu]);
+
   // Test sound function (can be called manually)
   const testSound = useCallback(() => {
     try {
@@ -227,12 +299,6 @@ export default function Home() {
       console.log("Web Audio API not available:", error);
     }
   }, [selectedSound]); // Removed soundOptions - it's now a constant outside component
-
-  // Use ref to track current alerts for comparison
-  const alertsRef = useRef<DilutionAlert[]>([]);
-  useEffect(() => {
-    alertsRef.current = alerts;
-  }, [alerts]);
 
   const fetchAlerts = useCallback(async (isInitialLoad = false) => {
     if (isInitialLoad) {
@@ -325,12 +391,18 @@ export default function Home() {
     fetchAlerts(true); // Initial load
   }, [fetchAlerts]);
 
-  // Auto-polling every 15 seconds (with random variance to avoid 403 errors)
+  // Fallback polling: Only used when Realtime is unavailable or disconnected
+  // With Realtime, we still poll occasionally to ensure we didn't miss anything
   useEffect(() => {
     if (!isPolling) {
       setCountdown(15);
       return;
     }
+
+    // If Realtime is connected, use longer polling interval as backup (5 minutes)
+    // If Realtime is unavailable/error, use shorter interval (15 seconds) as primary
+    const useRealtime = realtimeStatus === 'connected';
+    const pollingInterval = useRealtime ? 300 : 15; // 5 minutes vs 15 seconds
 
     let timeoutId: NodeJS.Timeout | null = null;
     let countdownInterval: NodeJS.Timeout | null = null;
@@ -343,31 +415,42 @@ export default function Home() {
       if (timeoutId) clearTimeout(timeoutId);
       if (countdownInterval) clearInterval(countdownInterval);
 
-      // Add random variance: 15 seconds ± 2 seconds (13-17 seconds)
+      // Add random variance: ± 2 seconds
       // This prevents appearing like a bot with perfectly timed requests
       const variance = (Math.random() - 0.5) * 4; // -2 to +2 seconds
-      const intervalMs = (15 + variance) * 1000;
-      const intervalSeconds = Math.round(15 + variance);
+      const intervalMs = (pollingInterval + variance) * 1000;
+      const intervalSeconds = Math.round(pollingInterval + variance);
       
-      // Set initial countdown
-      setCountdown(intervalSeconds);
+      // Set initial countdown (only show if not using Realtime)
+      if (!useRealtime) {
+        setCountdown(intervalSeconds);
+      } else {
+        // Hide countdown when Realtime is active
+        setCountdown(-1);
+      }
       
-      // Start countdown timer
-      let currentCountdown = intervalSeconds;
-      countdownInterval = setInterval(() => {
-        if (!isActive) return;
-        currentCountdown -= 1;
-        if (currentCountdown <= 0) {
-          if (countdownInterval) clearInterval(countdownInterval);
-        } else {
-          setCountdown(currentCountdown);
-        }
-      }, 1000);
+      // Start countdown timer (only if not using Realtime)
+      if (!useRealtime) {
+        let currentCountdown = intervalSeconds;
+        countdownInterval = setInterval(() => {
+          if (!isActive) return;
+          currentCountdown -= 1;
+          if (currentCountdown <= 0) {
+            if (countdownInterval) clearInterval(countdownInterval);
+          } else {
+            setCountdown(currentCountdown);
+          }
+        }, 1000);
+      }
       
       // Schedule the actual fetch
       timeoutId = setTimeout(() => {
         if (!isActive) return;
-        console.log(`[Auto-refresh] Fetching new alerts at ${new Date().toLocaleTimeString()}`);
+        if (useRealtime) {
+          console.log(`[Polling] Backup check (Realtime active, polling every ${pollingInterval}s)`);
+        } else {
+          console.log(`[Polling] Primary check (Realtime unavailable, polling every ${pollingInterval}s)`);
+        }
         fetchAlerts(false); // Not initial load
         scheduleNextFetch(); // Schedule next fetch with new random variance
       }, intervalMs);
@@ -380,7 +463,7 @@ export default function Home() {
       if (timeoutId) clearTimeout(timeoutId);
       if (countdownInterval) clearInterval(countdownInterval);
     };
-  }, [isPolling, fetchAlerts]);
+  }, [isPolling, fetchAlerts, realtimeStatus]);
 
 
   const handleFiltersChange = (newFilters: AlertFilters) => {
@@ -426,6 +509,13 @@ export default function Home() {
               title="SEC Filings Education"
             >
               <BookOpen className="w-5 h-5" />
+            </Link>
+            <Link
+              href="/analytics"
+              className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mt-1"
+              title="Analytics & Charts"
+            >
+              <BarChart3 className="w-5 h-5" />
             </Link>
           </div>
           
@@ -501,32 +591,70 @@ export default function Home() {
             </div>
             
             {/* Polling Status & Controls */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 min-w-[200px] border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Auto-refresh</span>
-              <button
-                onClick={() => setIsPolling(!isPolling)}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-                title={isPolling ? "Pause auto-refresh" : "Resume auto-refresh"}
-              >
-                {isPolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              </button>
-            </div>
-            {isPolling ? (
-              <div className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />
-                <span className="text-sm text-gray-900 dark:text-white">
-                  Next refresh in <span className="font-semibold text-blue-600 dark:text-blue-400">{countdown}s</span>
-                </span>
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 min-w-[240px] border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Auto-refresh</span>
+                <button
+                  onClick={() => setIsPolling(!isPolling)}
+                  className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                  title={isPolling ? "Pause auto-refresh" : "Resume auto-refresh"}
+                >
+                  {isPolling ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                </button>
               </div>
-            ) : (
-              <div className="text-sm text-gray-600 dark:text-gray-500">Paused</div>
-            )}
-            {lastUpdate && (
-              <div className="text-xs text-gray-600 dark:text-gray-500 mt-1">
-                Last updated: {lastUpdate.toLocaleTimeString()}
-              </div>
-            )}
+              
+              {/* Realtime Status */}
+              {isPolling && (
+                <div className="mb-2 flex items-center gap-2">
+                  {realtimeStatus === 'connected' && (
+                    <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                      <Radio className="w-3.5 h-3.5 fill-current" />
+                      <span className="font-medium">Real-time Active</span>
+                    </div>
+                  )}
+                  {realtimeStatus === 'connecting' && (
+                    <div className="flex items-center gap-1.5 text-xs text-yellow-600 dark:text-yellow-400">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Connecting...</span>
+                    </div>
+                  )}
+                  {(realtimeStatus === 'error' || realtimeStatus === 'disconnected') && (
+                    <div className="flex items-center gap-1.5 text-xs text-orange-600 dark:text-orange-400">
+                      <Radio className="w-3.5 h-3.5" />
+                      <span>Using Polling</span>
+                    </div>
+                  )}
+                  {realtimeStatus === 'unavailable' && (
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      <Radio className="w-3.5 h-3.5" />
+                      <span>Realtime Unavailable</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Polling Countdown (only show if not using Realtime) */}
+              {isPolling && realtimeStatus !== 'connected' && countdown >= 0 && (
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />
+                  <span className="text-sm text-gray-900 dark:text-white">
+                    Next refresh in <span className="font-semibold text-blue-600 dark:text-blue-400">{countdown}s</span>
+                  </span>
+                </div>
+              )}
+              {isPolling && realtimeStatus === 'connected' && (
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  Real-time updates active
+                </div>
+              )}
+              {!isPolling && (
+                <div className="text-sm text-gray-600 dark:text-gray-500">Paused</div>
+              )}
+              {lastUpdate && (
+                <div className="text-xs text-gray-600 dark:text-gray-500 mt-1">
+                  Last updated: {lastUpdate.toLocaleTimeString()}
+                </div>
+              )}
             </div>
           </div>
         </div>
