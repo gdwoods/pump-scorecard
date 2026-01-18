@@ -56,25 +56,26 @@ export default function AlertFiltersComponent({
       return;
     }
 
-    // First-time add: check price first
+    // First-time add: always check price (even if ticker has existing filings)
+    // because scanner won't fetch NEW filings for stocks over $20
     setAddingTicker(true);
     try {
-      // Check if ticker already has filings in the database (if so, no price check needed)
-      const alertsResponse = await fetch(`/api/alerts?ticker=${tickerUpper}&limit=1`);
-      const alertsData = await alertsResponse.json();
-      const hasExistingFilings = alertsData.alerts && alertsData.alerts.length > 0;
-
-      // If no existing filings, check current stock price
-      if (!hasExistingFilings) {
-        const priceResponse = await fetch(`/api/check-price?ticker=${tickerUpper}`);
-        const priceData = await priceResponse.json();
-        
-        if (priceData.found && priceData.price !== null && priceData.price >= 20.0) {
-          // Show warning if price >= $20
-          setPriceWarning({ ticker: tickerUpper, price: priceData.price });
-          setAddingTicker(false);
-          return;
-        }
+      // Always check current stock price
+      const priceResponse = await fetch(`/api/check-price?ticker=${tickerUpper}`);
+      const priceData = await priceResponse.json();
+      
+      console.log(`[Watchlist] Price check for ${tickerUpper}:`, priceData);
+      
+      if (priceData.found && priceData.price !== null && priceData.price >= 20.0) {
+        // Show warning if price >= $20
+        console.log(`[Watchlist] Showing warning for ${tickerUpper} (price: $${priceData.price})`);
+        setPriceWarning({ ticker: tickerUpper, price: priceData.price });
+        setAddingTicker(false);
+        return;
+      } else if (!priceData.found) {
+        console.log(`[Watchlist] Could not fetch price for ${tickerUpper}, allowing add`);
+      } else if (priceData.price !== null && priceData.price < 20.0) {
+        console.log(`[Watchlist] ${tickerUpper} price $${priceData.price} is under $20, allowing add`);
       }
 
       // Price is fine or ticker has existing filings - add to watchlist
