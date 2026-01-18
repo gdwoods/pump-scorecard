@@ -272,11 +272,12 @@ export default function AlertTable({ alerts, onRowClick, onWatchlistChange }: Al
                   )}
                 </div>
               </td>
-              <td className="p-3" onClick={(e) => {
-                e.stopPropagation();
-                onRowClick?.(alert);
-              }}>
+              <td className="p-3">
                 <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRowClick?.(alert);
+                  }}
                   className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1 transition-colors"
                   title="View details"
                 >
