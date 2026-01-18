@@ -366,12 +366,12 @@ if __name__ == "__main__":
         default=100,
         help="Number of latest filings to scan (default: 100)"
     )
-            parser.add_argument(
-                "--max-price",
-                type=float,
-                default=20.0,
-                help="Maximum stock price to include (default: 20.0)"
-            )
+    parser.add_argument(
+        "--max-price",
+        type=float,
+        default=20.0,
+        help="Maximum stock price to include (default: 20.0)"
+    )
     
     args = parser.parse_args()
     
