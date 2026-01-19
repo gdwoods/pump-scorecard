@@ -74,12 +74,6 @@ export default function Page() {
           >
             📊 Short Check
           </Link>
-          <Link
-            href="/company-activities"
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-          >
-            📋 Company Activities
-          </Link>
           <button
             onClick={exportPDF}
             className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
