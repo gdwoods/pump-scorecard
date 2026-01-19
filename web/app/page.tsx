@@ -7,7 +7,7 @@ import AlertTable from "@/components/AlertTable";
 import AlertFiltersComponent from "@/components/AlertFilters";
 import AlertDetailModal from "@/components/AlertDetailModal";
 import QuickStartModal from "@/components/QuickStartModal";
-import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star, HelpCircle, BookOpen, Radio, BarChart3, X, Building2 } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Pause, Play, Bell, BellOff, Volume2, Star, HelpCircle, BookOpen, Radio, BarChart3, X, Building2, Activity } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getWatchlist } from "@/lib/watchlist";
 import { useRealtimeAlerts } from "@/hooks/useRealtimeAlerts";
@@ -531,6 +531,13 @@ export default function Home() {
               title="Underwriter Analytics"
             >
               <Building2 className="w-5 h-5" />
+            </Link>
+            <Link
+              href="/company-activities"
+              className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mt-1"
+              title="Company Activities"
+            >
+              <Activity className="w-5 h-5" />
             </Link>
           </div>
           
