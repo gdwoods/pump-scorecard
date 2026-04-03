@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { loadAskEdgarDetail } from "@/lib/askEdgarDetail";
-import { getAskEdgarApiKeyFromEnv } from "@/lib/topGainers";
+import {
+  ASKEDGAR_ENV_KEYS,
+  getAskEdgarApiKeyFromEnv,
+} from "@/lib/topGainers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +15,10 @@ export async function GET(
   const apiKey = getAskEdgarApiKeyFromEnv();
   if (!apiKey) {
     return NextResponse.json(
-      { error: "ASKEDGAR_API_KEY is not configured" },
+      {
+        error: "Ask Edgar API key is not configured",
+        hint: `Set one of ${ASKEDGAR_ENV_KEYS.join(", ")} in Vercel → Project → Settings → Environment Variables (enable Production), then Redeploy. If you use the short-check deployment, add the variable there—not only on a legacy project.`,
+      },
       { status: 503 }
     );
   }

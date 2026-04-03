@@ -24,13 +24,33 @@ const DILUTION_RATING_ENTERPRISE =
 const DILUTION_RATING_V1 =
   "https://eapi.askedgar.io/v1/dilution-rating";
 
+/** Env names checked in order (Vercel: exact spelling, Production checked, redeploy after add). */
+export const ASKEDGAR_ENV_KEYS = [
+  "ASKEDGAR_API_KEY",
+  "ASK_EDGAR_API_KEY",
+  "ASKEDGAR_KEY",
+  "ASK_EDGAR_KEY",
+] as const;
+
+function cleanSecret(raw: string | undefined): string {
+  if (!raw) return "";
+  let s = raw.trim();
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  return s.replace(/\r\n/g, "\n").trim();
+}
+
 /** Server-only: reads common env names (many users typo or copy from different docs). */
 export function getAskEdgarApiKeyFromEnv(): string {
-  return (
-    process.env.ASKEDGAR_API_KEY?.trim() ||
-    process.env.ASK_EDGAR_API_KEY?.trim() ||
-    ""
-  );
+  for (const name of ASKEDGAR_ENV_KEYS) {
+    const v = cleanSecret(process.env[name]);
+    if (v) return v;
+  }
+  return "";
 }
 
 function extractOverallRisk(record: Record<string, unknown>): string | null {

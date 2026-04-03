@@ -49,9 +49,17 @@ Once you set this and redeploy:
 
 Add these in Vercel → Project → Settings → Environment Variables (all envs):
 
+- `ASKEDGAR_API_KEY` — Ask Edgar dilution / top gainers enrichment / dilution monitor (server-only). **Name must match exactly.** Also accepted: `ASK_EDGAR_API_KEY`, `ASKEDGAR_KEY`, `ASK_EDGAR_KEY`. Enable **Production** (and Preview if you want it there). **Redeploy** after saving—new env vars are not picked up by old deployments.
 - `GOOGLE_CLOUD_VISION_API_KEY` — Google Cloud Vision OCR
 - `FINNHUB_API_KEY` — external news (score + Recent News card)
 - `NEXT_PUBLIC_BASE_URL` — your production domain (no path)
+
+### Ask Edgar key “not found” on Vercel
+
+1. Confirm the variable is on the **same Vercel project** that serves your live URL. If `pump-scorecard.*` redirects to `short-check.vercel.app`, the env vars must be on the **short-check** project.
+2. Open `https://YOUR_DOMAIN/api/debug-env` and check `askEdgar.effectiveKeySet` and `askEdgar.whichVarsHaveValue`.
+3. No quotes around the value in the Vercel UI unless they are part of the secret (normally paste the raw key only).
+4. Trigger a new deployment after changing variables (Redeploy from the Deployments tab).
 - Vercel KV credentials (choose whichever pair your account provides):
   - `KV_REST_API_REDIS_URL` and `KV_REST_API_REDIS_TOKEN`
   - or `KV_REST_API_URL` and `KV_REST_API_TOKEN`
