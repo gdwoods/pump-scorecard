@@ -9,10 +9,13 @@ export async function GET() {
   const polygonKey = process.env.POLYGON_API_KEY || null;
   const googleVisionKey = process.env.GOOGLE_CLOUD_VISION_API_KEY || null;
   const askEdgarEffective = getAskEdgarApiKeyFromEnv();
-  const askEdgarPresence: Record<string, boolean> = {};
-  for (const k of ASKEDGAR_ENV_KEYS) {
-    askEdgarPresence[k] = Boolean(process.env[k]?.trim());
-  }
+  // Static property access so Next/Vercel bundle exposes these (see getAskEdgarApiKeyFromEnv).
+  const askEdgarPresence: Record<string, boolean> = {
+    ASKEDGAR_API_KEY: Boolean(process.env.ASKEDGAR_API_KEY?.trim()),
+    ASK_EDGAR_API_KEY: Boolean(process.env.ASK_EDGAR_API_KEY?.trim()),
+    ASKEDGAR_KEY: Boolean(process.env.ASKEDGAR_KEY?.trim()),
+    ASK_EDGAR_KEY: Boolean(process.env.ASK_EDGAR_KEY?.trim()),
+  };
 
   return NextResponse.json({
     polygonVars: {

@@ -44,13 +44,20 @@ function cleanSecret(raw: string | undefined): string {
   return s.replace(/\r\n/g, "\n").trim();
 }
 
-/** Server-only: reads common env names (many users typo or copy from different docs). */
+/**
+ * Server-only: reads common env names.
+ * Important: use static `process.env.FOO` access only. Dynamic `process.env[name]`
+ * is often stripped by the Next.js bundler, so variables set in Vercel never appear
+ * at runtime (while POLYGON_API_KEY etc. still work).
+ */
 export function getAskEdgarApiKeyFromEnv(): string {
-  for (const name of ASKEDGAR_ENV_KEYS) {
-    const v = cleanSecret(process.env[name]);
-    if (v) return v;
-  }
-  return "";
+  return (
+    cleanSecret(process.env.ASKEDGAR_API_KEY) ||
+    cleanSecret(process.env.ASK_EDGAR_API_KEY) ||
+    cleanSecret(process.env.ASKEDGAR_KEY) ||
+    cleanSecret(process.env.ASK_EDGAR_KEY) ||
+    ""
+  );
 }
 
 function extractOverallRisk(record: Record<string, unknown>): string | null {
