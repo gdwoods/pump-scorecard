@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -47,6 +48,13 @@ const ROW = "#1b2128";
 const BORDER = "#30363d";
 const ACCENT = "#58a6ff";
 const FG = "#e6edf3";
+
+/** Match server: cache successful detail per ticker for 30 minutes in this session. */
+const DETAIL_CLIENT_TTL_MS = 30 * 60 * 1000;
+
+function detailJsonCacheable(j: DetailJson): boolean {
+  return !j.meta?.rateLimited && !j.meta?.authError;
+}
 
 const HISTORY_FROM_COLOR: Record<string, string> = {
   green: "Strong",
@@ -179,6 +187,9 @@ export default function DilutionMonitor() {
     {}
   );
   const [aeModalUrl, setAeModalUrl] = useState<string | null>(null);
+  const detailClientCache = useRef(
+    new Map<string, { expires: number; detail: DetailJson }>()
+  );
 
   const openAskEdgarOrExternal = useCallback((href: string) => {
     const h = href.trim();
@@ -220,14 +231,43 @@ export default function DilutionMonitor() {
   const loadDetail = useCallback(async (sym: string) => {
     const t = sym.trim().toUpperCase();
     if (!t) return;
+    const now = Date.now();
+    const cached = detailClientCache.current.get(t);
+    if (cached && cached.expires > now) {
+      setDetailErr(null);
+      setDetailLoading(false);
+      setDetail(cached.detail);
+      const f = cached.detail.floatData;
+      if (f) {
+        const fl = fmtM(f.float_shares ?? f.float ?? f.Float);
+        const os = fmtM(f.outstanding_shares ?? f.os ?? f.shares_outstanding);
+        const mc = fmtM(f.market_cap_final ?? f.market_cap ?? f.marketCap);
+        const sector = str(f.sector || f.Sector || "").trim();
+        const country = str(f.country || f.Country || "US").trim();
+        const parts = [fl && os ? `${fl}/${os}` : fl || os, mc, sector, country].filter(
+          Boolean
+        );
+        if (parts.length)
+          setSublineByTicker((prev) => ({
+            ...prev,
+            [t]: parts.join(" | "),
+          }));
+      }
+      return;
+    }
+
     setDetailLoading(true);
     setDetailErr(null);
     try {
-      const res = await fetch(`/api/ask-edgar/detail/${encodeURIComponent(t)}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(`/api/ask-edgar/detail/${encodeURIComponent(t)}`);
       const j = (await res.json()) as DetailJson & { error?: string };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      if (detailJsonCacheable(j)) {
+        detailClientCache.current.set(t, {
+          expires: now + DETAIL_CLIENT_TTL_MS,
+          detail: j,
+        });
+      }
       setDetail(j);
       const f = j.floatData;
       if (f) {

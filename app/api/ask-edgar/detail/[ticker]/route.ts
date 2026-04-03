@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { loadAskEdgarDetail } from "@/lib/askEdgarDetail";
+import { loadAskEdgarDetailCached } from "@/lib/askEdgarDetail";
 import {
   ASKEDGAR_ENV_KEYS,
   getAskEdgarApiKeyFromEnv,
 } from "@/lib/topGainers";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+
+/** Allow CDN/browser to cache successful JSON for 30m; errors stay uncached. */
 
 export async function GET(
   _req: Request,
@@ -30,9 +31,16 @@ export async function GET(
   }
 
   try {
-    const payload = await loadAskEdgarDetail(sym, apiKey);
+    const payload = await loadAskEdgarDetailCached(sym, apiKey);
+    const cacheable =
+      !payload.meta?.rateLimited && !payload.meta?.authError;
     return NextResponse.json(payload, {
-      headers: { "Cache-Control": "private, no-store" },
+      headers: cacheable
+        ? {
+            "Cache-Control":
+              "public, max-age=1800, s-maxage=1800, stale-while-revalidate=7200",
+          }
+        : { "Cache-Control": "private, no-store" },
     });
   } catch (e) {
     console.error("[ask-edgar/detail]", e);

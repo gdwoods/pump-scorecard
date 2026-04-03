@@ -345,3 +345,44 @@ export async function loadAskEdgarDetail(
     ...(meta && Object.keys(meta).length ? { meta } : {}),
   };
 }
+
+const DETAIL_CACHE_TTL_MS = 30 * 60 * 1000;
+const DETAIL_CACHE_MAX_ENTRIES = 200;
+
+const detailServerCache = new Map<
+  string,
+  { expires: number; payload: AskEdgarDetailPayload }
+>();
+
+function isDetailPayloadCacheable(p: AskEdgarDetailPayload): boolean {
+  return !p.meta?.rateLimited && !p.meta?.authError;
+}
+
+function rememberDetailInServerCache(sym: string, payload: AskEdgarDetailPayload) {
+  if (!isDetailPayloadCacheable(payload)) return;
+  if (detailServerCache.size >= DETAIL_CACHE_MAX_ENTRIES) {
+    const oldest = detailServerCache.keys().next().value;
+    if (oldest !== undefined) detailServerCache.delete(oldest);
+  }
+  detailServerCache.set(sym, {
+    expires: Date.now() + DETAIL_CACHE_TTL_MS,
+    payload,
+  });
+}
+
+/**
+ * Same as loadAskEdgarDetail but reuses the last good response per ticker for 30 minutes
+ * (in-process; best effort on serverless). Skips cache for rate-limit / auth error payloads.
+ */
+export async function loadAskEdgarDetailCached(
+  ticker: string,
+  apiKey: string
+): Promise<AskEdgarDetailPayload> {
+  const sym = ticker.trim().toUpperCase();
+  const hit = detailServerCache.get(sym);
+  if (hit && hit.expires > Date.now()) return hit.payload;
+
+  const payload = await loadAskEdgarDetail(sym, apiKey);
+  rememberDetailInServerCache(sym, payload);
+  return payload;
+}
