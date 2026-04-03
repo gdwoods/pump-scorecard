@@ -348,6 +348,16 @@ export default function DilutionMonitor() {
       ]
     : [];
 
+  const hasWarrants = (detail?.inPlay?.warrants?.length ?? 0) > 0;
+  const hasConvertibles = (detail?.inPlay?.convertibles?.length ?? 0) > 0;
+  const hasDetailRail =
+    Boolean(dilution) ||
+    dilution?.offering_ability_desc != null ||
+    hasWarrants ||
+    hasConvertibles ||
+    (detail?.offerings?.length ?? 0) > 0 ||
+    Boolean(dilution?.mgmt_commentary);
+
   return (
     <div
       className="min-h-screen font-sans text-[15px]"
@@ -488,7 +498,7 @@ export default function DilutionMonitor() {
         </aside>
 
         {/* Right: detail */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6 min-w-0">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-5 xl:p-6 min-w-0">
           {!selected && (
             <p className="text-[#8b949e]">Select a ticker or type one and press GO.</p>
           )}
@@ -545,12 +555,26 @@ export default function DilutionMonitor() {
                 </p>
               )}
 
-              {/* News feed */}
-              <section className="mb-8">
-                <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
-                  News &amp; filings
-                </h2>
-                <div className="space-y-2">
+              <div
+                className={
+                  hasDetailRail
+                    ? "grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8 xl:items-start"
+                    : "grid grid-cols-1 gap-6"
+                }
+              >
+                <div className="min-w-0 space-y-6">
+                  {/* News feed */}
+                  <section>
+                    <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
+                      News &amp; filings
+                    </h2>
+                    <div
+                      className={
+                        hasDetailRail
+                          ? "grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-1"
+                          : "grid grid-cols-1 gap-2 md:grid-cols-2"
+                      }
+                    >
                   {(detail?.newsFeed || []).map((item, idx) => {
                     const ft = str(item.form_type) || "news";
                     const h = newsHeadline(item);
@@ -602,29 +626,38 @@ export default function DilutionMonitor() {
                     );
                   })}
                   {!detailLoading && (detail?.newsFeed?.length ?? 0) === 0 && (
-                    <p className="text-sm text-[#8b949e]">No recent items.</p>
+                    <p
+                      className={`text-sm text-[#8b949e] ${hasDetailRail ? "md:col-span-2 xl:col-span-1" : "md:col-span-2"}`}
+                    >
+                      No recent items.
+                    </p>
                   )}
+                    </div>
+                  </section>
                 </div>
-              </section>
 
+                {hasDetailRail && (
+                  <div className="min-w-0 space-y-6">
               {/* Risk grid */}
               {dilution && (
-                <section className="mb-8">
+                <section>
                   <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
                     Risk metrics
                   </h2>
                   <button
                     type="button"
                     onClick={() => openAskEdgarOrExternal(dilUrl)}
-                    className="grid grid-cols-2 md:grid-cols-3 gap-3 w-full text-left cursor-pointer"
+                    className="grid grid-cols-2 gap-2 sm:gap-3 w-full text-left cursor-pointer"
                   >
                     {badgeItems.map(([label, level]) => (
                       <div
                         key={label}
-                        className="rounded border p-3"
+                        className="rounded border p-2.5 sm:p-3"
                         style={{ borderColor: BORDER, backgroundColor: CARD }}
                       >
-                        <div className="text-xs text-[#8b949e] font-mono mb-2">{label}</div>
+                        <div className="text-[10px] sm:text-xs text-[#8b949e] font-mono mb-1.5 sm:mb-2">
+                          {label}
+                        </div>
                         <div
                           className={`inline-block text-xs font-bold px-2 py-1 rounded ${riskBadgeClass(level)}`}
                         >
@@ -638,7 +671,7 @@ export default function DilutionMonitor() {
 
               {/* Offering ability */}
               {dilution?.offering_ability_desc != null && (
-                <section className="mb-8">
+                <section>
                   <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
                     Offering ability
                   </h2>
@@ -654,71 +687,85 @@ export default function DilutionMonitor() {
               {/* In play */}
               {((detail?.inPlay?.warrants?.length ?? 0) > 0 ||
                 (detail?.inPlay?.convertibles?.length ?? 0) > 0) && (
-                <section className="mb-8">
+                <section>
                   <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
                     In play dilution
                   </h2>
-                  <p className="text-xs text-[#d29922] font-mono font-bold mb-2">WARRANTS</p>
-                  <div className="space-y-3">
-                    {detail!.inPlay.warrants.map((w, i) => (
-                      <div
-                        key={i}
-                        className="rounded border p-3 text-sm font-mono"
-                        style={{ borderColor: BORDER, backgroundColor: CARD }}
-                      >
-                        <div className="text-[#e6edf3]">{str(w.details)}</div>
-                        <div className="text-[#8b949e] mt-2 space-y-1">
-                          <div>
-                            Remaining:{" "}
-                            <span className="text-emerald-400">
-                              {fmtM(w.warrants_remaining)}
-                            </span>{" "}
-                            · Strike:{" "}
-                            <span className="text-orange-300">
-                              ${str(w.warrants_exercise_price)}
-                            </span>
-                          </div>
-                          <div className="text-xs">Filed: {str(w.filed_at)}</div>
+                  <div
+                    className={
+                      hasWarrants && hasConvertibles
+                        ? "grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-3"
+                        : "space-y-3"
+                    }
+                  >
+                    {hasWarrants && (
+                      <div className="min-w-0">
+                        <p className="text-xs text-[#d29922] font-mono font-bold mb-2">
+                          WARRANTS
+                        </p>
+                        <div className="space-y-3">
+                          {detail!.inPlay.warrants.map((w, i) => (
+                            <div
+                              key={i}
+                              className="rounded border p-3 text-sm font-mono"
+                              style={{ borderColor: BORDER, backgroundColor: CARD }}
+                            >
+                              <div className="text-[#e6edf3]">{str(w.details)}</div>
+                              <div className="text-[#8b949e] mt-2 space-y-1">
+                                <div>
+                                  Remaining:{" "}
+                                  <span className="text-emerald-400">
+                                    {fmtM(w.warrants_remaining)}
+                                  </span>{" "}
+                                  · Strike:{" "}
+                                  <span className="text-orange-300">
+                                    ${str(w.warrants_exercise_price)}
+                                  </span>
+                                </div>
+                                <div className="text-xs">Filed: {str(w.filed_at)}</div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                  {detail!.inPlay.convertibles.length > 0 && (
-                    <>
-                      <p className="text-xs text-[#d29922] font-mono font-bold mt-4 mb-2">
-                        CONVERTIBLES
-                      </p>
-                      <div className="space-y-3">
-                        {detail!.inPlay.convertibles.map((c, i) => (
-                          <div
-                            key={i}
-                            className="rounded border p-3 text-sm font-mono"
-                            style={{ borderColor: BORDER, backgroundColor: CARD }}
-                          >
-                            <div className="text-[#e6edf3]">{str(c.details)}</div>
-                            <div className="text-[#8b949e] mt-2 text-xs">
-                              Conv: ${str(c.conversion_price)} · Shares:{" "}
-                              {fmtM(c.underlying_shares_remaining)} · {str(c.filed_at)}
+                    )}
+                    {hasConvertibles && (
+                      <div className="min-w-0">
+                        <p className="text-xs text-[#d29922] font-mono font-bold mb-2">
+                          CONVERTIBLES
+                        </p>
+                        <div className="space-y-3">
+                          {detail!.inPlay.convertibles.map((c, i) => (
+                            <div
+                              key={i}
+                              className="rounded border p-3 text-sm font-mono"
+                              style={{ borderColor: BORDER, backgroundColor: CARD }}
+                            >
+                              <div className="text-[#e6edf3]">{str(c.details)}</div>
+                              <div className="text-[#8b949e] mt-2 text-xs">
+                                Conv: ${str(c.conversion_price)} · Shares:{" "}
+                                {fmtM(c.underlying_shares_remaining)} · {str(c.filed_at)}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </section>
               )}
 
               {/* Recent offerings */}
               {(detail?.offerings?.length ?? 0) > 0 && (
-                <section className="mb-8">
+                <section>
                   <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
                     Recent offerings
                   </h2>
-                  <ul className="space-y-2 text-sm font-mono">
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm font-mono">
                     {detail!.offerings.slice(0, 5).map((o, i) => (
                       <li
                         key={i}
-                        className="border rounded p-2"
+                        className="border rounded p-2 min-w-0"
                         style={{ borderColor: BORDER, backgroundColor: CARD }}
                       >
                         {str(o.type || o.offering_type)} — {str(o.date || o.filed_at)} —{" "}
@@ -730,7 +777,7 @@ export default function DilutionMonitor() {
               )}
 
               {dilution?.mgmt_commentary && (
-                <section className="mb-8">
+                <section>
                   <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
                     Management commentary
                   </h2>
@@ -742,6 +789,9 @@ export default function DilutionMonitor() {
                   </div>
                 </section>
               )}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </main>
