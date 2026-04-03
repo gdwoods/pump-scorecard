@@ -355,8 +355,7 @@ export default function DilutionMonitor() {
     dilution?.offering_ability_desc != null ||
     hasWarrants ||
     hasConvertibles ||
-    (detail?.offerings?.length ?? 0) > 0 ||
-    Boolean(dilution?.mgmt_commentary);
+    (detail?.offerings?.length ?? 0) > 0;
 
   return (
     <div
@@ -391,7 +390,7 @@ export default function DilutionMonitor() {
           className="text-lg font-semibold tracking-tight flex-1 text-center min-w-[200px]"
           style={{ color: ACCENT }}
         >
-          Ask Edgar Dilution Monitor
+          Dilution Monitor
         </h1>
         <div className="flex items-center gap-2 justify-end flex-1 min-w-[200px]">
           <Link
@@ -634,6 +633,20 @@ export default function DilutionMonitor() {
                   )}
                     </div>
                   </section>
+
+                  {dilution?.mgmt_commentary && (
+                    <section>
+                      <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
+                        Management commentary
+                      </h2>
+                      <div
+                        className="rounded border p-4 text-sm text-[#e6edf3] whitespace-pre-wrap"
+                        style={{ borderColor: BORDER, backgroundColor: CARD }}
+                      >
+                        {str(dilution.mgmt_commentary)}
+                      </div>
+                    </section>
+                  )}
                 </div>
 
                 {hasDetailRail && (
@@ -773,20 +786,6 @@ export default function DilutionMonitor() {
                       </li>
                     ))}
                   </ul>
-                </section>
-              )}
-
-              {dilution?.mgmt_commentary && (
-                <section>
-                  <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
-                    Management commentary
-                  </h2>
-                  <div
-                    className="rounded border p-4 text-sm text-[#e6edf3] whitespace-pre-wrap"
-                    style={{ borderColor: BORDER, backgroundColor: CARD }}
-                  >
-                    {str(dilution.mgmt_commentary)}
-                  </div>
                 </section>
               )}
                   </div>
