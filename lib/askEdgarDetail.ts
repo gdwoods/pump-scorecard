@@ -3,6 +3,8 @@
  * Endpoints mirror jasontange/Top-Gainers-Dilution-Monitor-V2-Public (das_monitor.py).
  */
 
+import { acquireAskEdgarRequestSlot } from "@/lib/askEdgarThrottle";
+
 const AE = {
   dilutionE: "https://eapi.askedgar.io/enterprise/v1/dilution-rating",
   dilutionV1: "https://eapi.askedgar.io/v1/dilution-rating",
@@ -40,6 +42,7 @@ async function aeGet(
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), ms);
   try {
+    await acquireAskEdgarRequestSlot();
     const res = await fetch(u.toString(), {
       method: "GET",
       headers: { "API-KEY": apiKey, "Content-Type": "application/json" },
@@ -251,8 +254,6 @@ export type AskEdgarDetailPayload = {
   };
 };
 
-const AE_BURST_GAP_MS = 180;
-
 export async function loadAskEdgarDetail(
   ticker: string,
   apiKey: string
@@ -265,8 +266,6 @@ export async function loadAskEdgarDetail(
     fetchFloatRecord(apiKey, sym, httpCtx),
     fetchNewsResults(apiKey, sym, httpCtx),
   ]);
-
-  await new Promise((r) => setTimeout(r, AE_BURST_GAP_MS));
 
   const [chartAnalysis, screenerPrice, dilDataResults, offerings] = await Promise.all([
     fetchChartAnalysis(apiKey, sym, httpCtx),

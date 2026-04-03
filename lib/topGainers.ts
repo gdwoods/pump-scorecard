@@ -1,5 +1,7 @@
 /** Polygon snapshot gainers + optional Ask Edgar dilution (server-side). */
 
+import { acquireAskEdgarRequestSlot } from "@/lib/askEdgarThrottle";
+
 /** Minimum % change vs prior close (Polygon) or premarket % (TradingView fallback). */
 export const TOP_GAINERS_MIN_CHANGE_PCT = 20;
 
@@ -269,6 +271,7 @@ export async function fetchAskEdgarDilutionSummary(
 
   for (const base of [DILUTION_RATING_ENTERPRISE, DILUTION_RATING_V1]) {
     try {
+      await acquireAskEdgarRequestSlot();
       const res = await fetchWithTimeout(
         `${base}?${qs}`,
         { method: "GET", headers },
@@ -296,8 +299,6 @@ export async function fetchAskEdgarDilutionSummary(
 
 const ENRICH_LIMIT = 20;
 const ENRICH_CONCURRENCY = 4;
-/** Space out chunks so page load + dilution detail do not spike Ask Edgar at once. */
-const ENRICH_CHUNK_GAP_MS = 120;
 
 export async function enrichRowsWithAskEdgar(
   rows: TopGainerRow[],
@@ -320,9 +321,6 @@ export async function enrichRowsWithAskEdgar(
       })
     );
     enriched.push(...part);
-    if (i + ENRICH_CONCURRENCY < head.length) {
-      await new Promise((r) => setTimeout(r, ENRICH_CHUNK_GAP_MS));
-    }
   }
 
   return [...enriched, ...tail];
