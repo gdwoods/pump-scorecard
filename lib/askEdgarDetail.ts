@@ -261,18 +261,15 @@ export async function loadAskEdgarDetail(
   const sym = ticker.trim().toUpperCase();
   const httpCtx: AskEdgarHttpCtx = { saw429: false, saw401: false, maxStatus: 0 };
 
-  const [dilution, floatData, newsRaw] = await Promise.all([
-    fetchDilutionRecord(apiKey, sym, httpCtx),
-    fetchFloatRecord(apiKey, sym, httpCtx),
-    fetchNewsResults(apiKey, sym, httpCtx),
-  ]);
-
-  const [chartAnalysis, screenerPrice, dilDataResults, offerings] = await Promise.all([
-    fetchChartAnalysis(apiKey, sym, httpCtx),
-    fetchScreenerPrice(apiKey, sym, httpCtx),
-    fetchDilutionDataResults(apiKey, sym, httpCtx),
-    fetchOfferings(apiKey, sym, httpCtx),
-  ]);
+  // Sequential (not Promise.all) so we never open many Ask Edgar connections at once;
+  // combined with global throttle this avoids 429s from burst + duplicate module instances.
+  const dilution = await fetchDilutionRecord(apiKey, sym, httpCtx);
+  const floatData = await fetchFloatRecord(apiKey, sym, httpCtx);
+  const newsRaw = await fetchNewsResults(apiKey, sym, httpCtx);
+  const chartAnalysis = await fetchChartAnalysis(apiKey, sym, httpCtx);
+  const screenerPrice = await fetchScreenerPrice(apiKey, sym, httpCtx);
+  const dilDataResults = await fetchDilutionDataResults(apiKey, sym, httpCtx);
+  const offerings = await fetchOfferings(apiKey, sym, httpCtx);
 
   let stockPrice = screenerPrice;
   if (stockPrice == null || stockPrice <= 0) {

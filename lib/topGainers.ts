@@ -298,7 +298,8 @@ export async function fetchAskEdgarDilutionSummary(
 }
 
 const ENRICH_LIMIT = 20;
-const ENRICH_CONCURRENCY = 4;
+/** Low concurrency: Ask Edgar is throttled globally; avoid stacking parallel enrich calls. */
+const ENRICH_CONCURRENCY = 2;
 
 export async function enrichRowsWithAskEdgar(
   rows: TopGainerRow[],
