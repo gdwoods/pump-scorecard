@@ -296,6 +296,8 @@ export async function fetchAskEdgarDilutionSummary(
 
 const ENRICH_LIMIT = 20;
 const ENRICH_CONCURRENCY = 4;
+/** Space out chunks so page load + dilution detail do not spike Ask Edgar at once. */
+const ENRICH_CHUNK_GAP_MS = 120;
 
 export async function enrichRowsWithAskEdgar(
   rows: TopGainerRow[],
@@ -318,6 +320,9 @@ export async function enrichRowsWithAskEdgar(
       })
     );
     enriched.push(...part);
+    if (i + ENRICH_CONCURRENCY < head.length) {
+      await new Promise((r) => setTimeout(r, ENRICH_CHUNK_GAP_MS));
+    }
   }
 
   return [...enriched, ...tail];

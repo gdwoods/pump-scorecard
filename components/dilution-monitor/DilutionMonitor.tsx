@@ -38,6 +38,7 @@ type DetailJson = {
   };
   offerings: Record<string, unknown>[];
   error?: string;
+  meta?: { rateLimited?: boolean; authError?: boolean };
 };
 
 const BG = "#0d1117";
@@ -486,6 +487,22 @@ export default function DilutionMonitor() {
               )}
               {detailErr && (
                 <p className="text-[#f85149] mb-4 text-sm">{detailErr}</p>
+              )}
+              {detail?.meta?.rateLimited && (
+                <p
+                  className="text-[#d29922] mb-4 text-sm rounded border px-3 py-2"
+                  style={{ borderColor: BORDER, backgroundColor: ROW }}
+                >
+                  Ask Edgar returned rate limiting (HTTP 429) on one or more requests. Wait a
+                  minute and refresh or switch ticker. The dilution monitor loads several API
+                  endpoints per symbol.
+                </p>
+              )}
+              {detail?.meta?.authError && !detail?.meta?.rateLimited && (
+                <p className="text-[#f85149] mb-4 text-sm">
+                  Ask Edgar rejected the API key (401/403). Check{" "}
+                  <code className="text-xs">ASKEDGAR_API_KEY</code> in Vercel for this project.
+                </p>
               )}
 
               {/* News feed */}

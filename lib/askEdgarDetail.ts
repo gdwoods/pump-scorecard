@@ -14,11 +14,26 @@ const AE = {
   offeringsV1: "https://eapi.askedgar.io/v1/offerings",
 };
 
+/** Optional: record upstream HTTP status for meta (429 / auth) and Vercel logs. */
+export type AskEdgarHttpCtx = {
+  saw429: boolean;
+  saw401: boolean;
+  maxStatus: number;
+};
+
+function bumpAeStatus(ctx: AskEdgarHttpCtx | undefined, status: number) {
+  if (!ctx) return;
+  ctx.maxStatus = Math.max(ctx.maxStatus, status);
+  if (status === 429) ctx.saw429 = true;
+  if (status === 401 || status === 403) ctx.saw401 = true;
+}
+
 async function aeGet(
   url: string,
   search: Record<string, string>,
   apiKey: string,
-  ms = 14_000
+  ms = 14_000,
+  ctx?: AskEdgarHttpCtx
 ): Promise<unknown | null> {
   const u = new URL(url);
   for (const [k, v] of Object.entries(search)) u.searchParams.set(k, v);
@@ -31,9 +46,17 @@ async function aeGet(
       signal: ac.signal,
       cache: "no-store",
     });
-    if (!res.ok) return null;
+    bumpAeStatus(ctx, res.status);
+    if (!res.ok) {
+      if (res.status === 429)
+        console.warn("[AskEdgar] 429", u.pathname, { ticker: search.ticker });
+      else if (res.status === 401 || res.status === 403)
+        console.warn("[AskEdgar] auth error", res.status, u.pathname);
+      return null;
+    }
     return await res.json();
   } catch {
+    bumpAeStatus(ctx, 0);
     return null;
   } finally {
     clearTimeout(t);
@@ -56,13 +79,16 @@ function firstResult(data: unknown): Record<string, unknown> | null {
 
 export async function fetchDilutionRecord(
   apiKey: string,
-  sym: string
+  sym: string,
+  ctx?: AskEdgarHttpCtx
 ): Promise<Record<string, unknown> | null> {
   for (const url of [AE.dilutionE, AE.dilutionV1]) {
     const data = await aeGet(
       url,
       { ticker: sym, offset: "0", limit: "10" },
-      apiKey
+      apiKey,
+      14_000,
+      ctx
     );
     const row = firstResult(data);
     if (row) return row;
@@ -72,24 +98,30 @@ export async function fetchDilutionRecord(
 
 export async function fetchFloatRecord(
   apiKey: string,
-  sym: string
+  sym: string,
+  ctx?: AskEdgarHttpCtx
 ): Promise<Record<string, unknown> | null> {
   const data = await aeGet(
     AE.floatE,
     { ticker: sym, offset: "0", limit: "100" },
-    apiKey
+    apiKey,
+    14_000,
+    ctx
   );
   return firstResult(data);
 }
 
 export async function fetchNewsResults(
   apiKey: string,
-  sym: string
+  sym: string,
+  ctx?: AskEdgarHttpCtx
 ): Promise<Record<string, unknown>[]> {
   const data = await aeGet(
     AE.newsE,
     { ticker: sym, offset: "0", limit: "100" },
-    apiKey
+    apiKey,
+    14_000,
+    ctx
   );
   if (!aeSuccess(data)) return [];
   const r = (data as Record<string, unknown>).results;
@@ -98,17 +130,25 @@ export async function fetchNewsResults(
 
 export async function fetchChartAnalysis(
   apiKey: string,
-  sym: string
+  sym: string,
+  ctx?: AskEdgarHttpCtx
 ): Promise<Record<string, unknown> | null> {
-  const data = await aeGet(AE.chartV1, { ticker: sym, limit: "1" }, apiKey);
+  const data = await aeGet(
+    AE.chartV1,
+    { ticker: sym, limit: "1" },
+    apiKey,
+    14_000,
+    ctx
+  );
   return firstResult(data);
 }
 
 export async function fetchScreenerPrice(
   apiKey: string,
-  sym: string
+  sym: string,
+  ctx?: AskEdgarHttpCtx
 ): Promise<number | null> {
-  const data = await aeGet(AE.screenerE, { ticker: sym }, apiKey);
+  const data = await aeGet(AE.screenerE, { ticker: sym }, apiKey, 14_000, ctx);
   const row = firstResult(data);
   if (!row) return null;
   const p = row.price;
@@ -117,12 +157,15 @@ export async function fetchScreenerPrice(
 
 export async function fetchDilutionDataResults(
   apiKey: string,
-  sym: string
+  sym: string,
+  ctx?: AskEdgarHttpCtx
 ): Promise<Record<string, unknown>[]> {
   const data = await aeGet(
     AE.dilDataE,
     { ticker: sym, offset: "0", limit: "40" },
-    apiKey
+    apiKey,
+    14_000,
+    ctx
   );
   if (!aeSuccess(data)) return [];
   const r = (data as Record<string, unknown>).results;
@@ -131,9 +174,16 @@ export async function fetchDilutionDataResults(
 
 export async function fetchOfferings(
   apiKey: string,
-  sym: string
+  sym: string,
+  ctx?: AskEdgarHttpCtx
 ): Promise<Record<string, unknown>[]> {
-  const data = await aeGet(AE.offeringsV1, { ticker: sym, limit: "5" }, apiKey);
+  const data = await aeGet(
+    AE.offeringsV1,
+    { ticker: sym, limit: "5" },
+    apiKey,
+    14_000,
+    ctx
+  );
   if (!aeSuccess(data)) return [];
   const r = (data as Record<string, unknown>).results;
   return Array.isArray(r) ? (r as Record<string, unknown>[]) : [];
@@ -194,30 +244,35 @@ export type AskEdgarDetailPayload = {
     convertibles: Record<string, unknown>[];
   };
   offerings: Record<string, unknown>[];
+  /** Present when upstream signaled rate limit or auth failure on any sub-request. */
+  meta?: {
+    rateLimited?: boolean;
+    authError?: boolean;
+  };
 };
+
+const AE_BURST_GAP_MS = 180;
 
 export async function loadAskEdgarDetail(
   ticker: string,
   apiKey: string
 ): Promise<AskEdgarDetailPayload> {
   const sym = ticker.trim().toUpperCase();
+  const httpCtx: AskEdgarHttpCtx = { saw429: false, saw401: false, maxStatus: 0 };
 
-  const [
-    dilution,
-    floatData,
-    newsRaw,
-    chartAnalysis,
-    screenerPrice,
-    dilDataResults,
-    offerings,
-  ] = await Promise.all([
-    fetchDilutionRecord(apiKey, sym),
-    fetchFloatRecord(apiKey, sym),
-    fetchNewsResults(apiKey, sym),
-    fetchChartAnalysis(apiKey, sym),
-    fetchScreenerPrice(apiKey, sym),
-    fetchDilutionDataResults(apiKey, sym),
-    fetchOfferings(apiKey, sym),
+  const [dilution, floatData, newsRaw] = await Promise.all([
+    fetchDilutionRecord(apiKey, sym, httpCtx),
+    fetchFloatRecord(apiKey, sym, httpCtx),
+    fetchNewsResults(apiKey, sym, httpCtx),
+  ]);
+
+  await new Promise((r) => setTimeout(r, AE_BURST_GAP_MS));
+
+  const [chartAnalysis, screenerPrice, dilDataResults, offerings] = await Promise.all([
+    fetchChartAnalysis(apiKey, sym, httpCtx),
+    fetchScreenerPrice(apiKey, sym, httpCtx),
+    fetchDilutionDataResults(apiKey, sym, httpCtx),
+    fetchOfferings(apiKey, sym, httpCtx),
   ]);
 
   let stockPrice = screenerPrice;
@@ -270,6 +325,14 @@ export async function loadAskEdgarDetail(
     });
   }
 
+  const meta =
+    httpCtx.saw429 || httpCtx.saw401
+      ? {
+          ...(httpCtx.saw429 ? { rateLimited: true as const } : {}),
+          ...(httpCtx.saw401 ? { authError: true as const } : {}),
+        }
+      : undefined;
+
   return {
     ticker: sym,
     dilution,
@@ -279,5 +342,6 @@ export async function loadAskEdgarDetail(
     stockPrice,
     inPlay,
     offerings,
+    ...(meta && Object.keys(meta).length ? { meta } : {}),
   };
 }
