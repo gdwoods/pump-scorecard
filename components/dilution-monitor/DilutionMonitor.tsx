@@ -211,6 +211,11 @@ export default function DilutionMonitor() {
     setSelected((s) => s ?? gainers[0].ticker);
   }, [gainers]);
 
+  const symForDetail =
+    (selected?.trim() && selected.trim().toUpperCase()) ||
+    (gainers[0]?.ticker?.trim() && gainers[0].ticker.trim().toUpperCase()) ||
+    null;
+
   const loadDetail = useCallback(async (sym: string) => {
     const t = sym.trim().toUpperCase();
     if (!t) return;
@@ -248,9 +253,9 @@ export default function DilutionMonitor() {
   }, []);
 
   useEffect(() => {
-    if (!selected) return;
-    void loadDetail(selected);
-  }, [selected, loadDetail]);
+    if (!symForDetail) return;
+    void loadDetail(symForDetail);
+  }, [symForDetail, loadDetail]);
 
   const goManual = () => {
     const t = manual.trim().toUpperCase();
