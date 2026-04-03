@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import AskEdgarWebModal from "@/components/dilution-monitor/AskEdgarWebModal";
 import { isAskEdgarWebUrl } from "@/lib/askEdgarWeb";
+import type { StockSplitRow } from "@/lib/stockSplits";
 
 type GainerRow = {
   ticker: string;
@@ -66,6 +67,20 @@ const HISTORY_FROM_COLOR: Record<string, string> = {
 function str(v: unknown): string {
   if (v == null) return "";
   return String(v);
+}
+
+function splitAdjustmentLabel(t: string | null): string {
+  if (!t) return "Split";
+  switch (t.toLowerCase()) {
+    case "forward_split":
+      return "Forward split";
+    case "reverse_split":
+      return "Reverse split";
+    case "stock_dividend":
+      return "Stock dividend";
+    default:
+      return t.replace(/_/g, " ");
+  }
 }
 
 function riskBadgeClass(level: string): string {
@@ -190,6 +205,9 @@ export default function DilutionMonitor() {
   const detailClientCache = useRef(
     new Map<string, { expires: number; detail: DetailJson }>()
   );
+  const [splits, setSplits] = useState<StockSplitRow[] | null>(null);
+  const [splitsLoading, setSplitsLoading] = useState(false);
+  const [splitsErr, setSplitsErr] = useState<string | null>(null);
 
   const openAskEdgarOrExternal = useCallback((href: string) => {
     const h = href.trim();
@@ -356,6 +374,36 @@ export default function DilutionMonitor() {
     hasWarrants ||
     hasConvertibles ||
     (detail?.offerings?.length ?? 0) > 0;
+
+  useEffect(() => {
+    if (!symForDetail || !hasDetailRail) {
+      setSplits(null);
+      setSplitsErr(null);
+      setSplitsLoading(false);
+      return;
+    }
+    const ac = new AbortController();
+    setSplitsLoading(true);
+    setSplitsErr(null);
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/stock-splits/${encodeURIComponent(symForDetail)}`,
+          { signal: ac.signal }
+        );
+        const j = (await res.json()) as { splits?: StockSplitRow[]; error?: string };
+        if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+        if (!ac.signal.aborted) setSplits(j.splits ?? []);
+      } catch (e) {
+        if (ac.signal.aborted) return;
+        setSplits([]);
+        setSplitsErr(e instanceof Error ? e.message : "Could not load splits");
+      } finally {
+        if (!ac.signal.aborted) setSplitsLoading(false);
+      }
+    })();
+    return () => ac.abort();
+  }, [symForDetail, hasDetailRail]);
 
   return (
     <div
@@ -788,6 +836,42 @@ export default function DilutionMonitor() {
                   </ul>
                 </section>
               )}
+
+              <section>
+                <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
+                  Stock splits
+                </h2>
+                {splitsLoading && (
+                  <p className="text-sm text-[#8b949e]">Loading…</p>
+                )}
+                {splitsErr && !splitsLoading && (
+                  <p className="text-sm text-[#f85149]">{splitsErr}</p>
+                )}
+                {!splitsLoading && !splitsErr && (splits?.length ?? 0) === 0 && (
+                  <p className="text-sm text-[#8b949e]">
+                    No split events in the last three years.
+                  </p>
+                )}
+                {(splits?.length ?? 0) > 0 && (
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm font-mono">
+                    {splits!.map((s, i) => (
+                      <li
+                        key={`${s.executionDate}-${s.ratioLabel}-${i}`}
+                        className="border rounded p-2 min-w-0"
+                        style={{ borderColor: BORDER, backgroundColor: CARD }}
+                      >
+                        <span className="text-[#e6edf3]">
+                          {splitAdjustmentLabel(s.adjustmentType)}
+                        </span>
+                        <span className="text-[#8b949e]"> · {s.ratioLabel}</span>
+                        <div className="text-xs text-[#8b949e] mt-1 tabular-nums">
+                          {s.executionDate}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
                   </div>
                 )}
               </div>
