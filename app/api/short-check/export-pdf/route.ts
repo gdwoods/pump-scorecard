@@ -422,46 +422,6 @@ export async function POST(req: NextRequest) {
         yPosition -= sectionSpacing;
       }
 
-      // Promotions
-      const recentPromos = pumpScorecardData.recentPromotions || [];
-      const olderPromos = pumpScorecardData.olderPromotions || [];
-      if (recentPromos.length > 0 || olderPromos.length > 0) {
-        yPosition = addSectionHeader('Stock Promotions', yPosition);
-        yPosition -= 10;
-
-        if (recentPromos.length > 0) {
-          currentPage.drawText(`Recent (${recentPromos.length}):`, {
-            x: margin + 10,
-            y: yPosition,
-            size: 10,
-            font: boldFont,
-          });
-          yPosition -= lineHeight;
-          for (const promo of recentPromos.slice(0, 5)) {
-            const promoText = `• ${promo.type || 'Promotion'} - ${promo.date || 'Unknown'}`;
-            yPosition = addText(promoText, margin + 20, yPosition, 9, false);
-            yPosition -= 3;
-          }
-        }
-
-        if (olderPromos.length > 0) {
-          yPosition -= 5;
-          currentPage.drawText(`Older (${olderPromos.length}):`, {
-            x: margin + 10,
-            y: yPosition,
-            size: 10,
-            font: boldFont,
-          });
-          yPosition -= lineHeight;
-          for (const promo of olderPromos.slice(0, 5)) {
-            const promoText = `• ${promo.type || 'Promotion'} - ${promo.date || 'Unknown'}`;
-            yPosition = addText(promoText, margin + 20, yPosition, 9, false);
-            yPosition -= 3;
-          }
-        }
-        yPosition -= sectionSpacing;
-      }
-
       // Fraud Evidence
       // Filter out "manual check" placeholders (same logic as FraudEvidence component)
       const fraudItems = Array.isArray(pumpScorecardData.fraudImages)

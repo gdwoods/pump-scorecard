@@ -98,17 +98,6 @@ export default function CombinedPumpRiskCard({
       });
     }
 
-    // --- Promotions (<30 days)
-    if (pumpScorecardData.recentPromotions?.length > 0) {
-      score += 15;
-      breakdown.push({
-        label: "Recent promotion (<30d)",
-        value: 15,
-        color: "text-red-400",
-        actualValue: `${pumpScorecardData.recentPromotions.length} found`
-      });
-    }
-
     // --- Manual flags
     if (manualFlags.pumpSuspicion) {
       score += 15;
@@ -182,7 +171,7 @@ export default function CombinedPumpRiskCard({
           </h2>
         </div>
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          Comprehensive risk analysis based on fundamentals, SEC filings, promotions, fraud evidence, and historical price behavior
+          Comprehensive risk analysis based on fundamentals, SEC filings, fraud evidence, and historical price behavior
         </p>
       </div>
 
@@ -256,6 +245,7 @@ export default function CombinedPumpRiskCard({
             result={pumpScorecardData}
             manualFlags={manualFlags}
             toggleManualFlag={toggleManualFlag}
+            excludePromotionCriterion
           />
         )}
       </div>

@@ -9,7 +9,6 @@ import CombinedPumpRiskCard from "@/components/short-check/CombinedPumpRiskCard"
 import Chart from "@/components/Chart";
 import DroppinessScatter from "@/components/DroppinessChart";
 import Fundamentals from "@/components/Fundamentals";
-import Promotions from "@/components/Promotions";
 import SecFilings from "@/components/SecFilings";
 import NewsSection from "@/components/NewsSection";
 import FraudEvidence from "@/components/FraudEvidence";
@@ -21,6 +20,7 @@ import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import { ShortCheckResult, calculateShortRating } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { saveScanToHistory } from "@/lib/history";
+import Link from "next/link";
 
 export default function ShortCheckPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -246,6 +246,12 @@ export default function ShortCheckPage() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+            <Link
+              href="/top-gainers"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors text-center text-sm font-medium"
+            >
+              📈 Top gainers
+            </Link>
             {(result || ticker || pumpScorecardData) && (
               <button
                 onClick={() => {
@@ -472,13 +478,8 @@ export default function ShortCheckPage() {
         {ticker && pumpScorecardData && !loadingPumpData && (
           <>
 
-            {/* Promotions, Fraud Evidence, and News */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Promotions
-                ticker={ticker}
-                recentPromotions={pumpScorecardData.recentPromotions || []}
-                olderPromotions={pumpScorecardData.olderPromotions || []}
-              />
+            {/* Fraud Evidence and News */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FraudEvidence
                 ticker={ticker}
                 fraudImages={pumpScorecardData.fraudImages || []}

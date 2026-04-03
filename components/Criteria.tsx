@@ -8,6 +8,8 @@ interface Props {
   result: any;
   manualFlags: Record<string, boolean>;
   toggleManualFlag: (key: string) => void;
+  /** Hide promotion-based criterion (e.g. Short Check — data source no longer available). */
+  excludePromotionCriterion?: boolean;
 }
 
 const LABELS: Record<string, { label: string }> = {
@@ -34,6 +36,7 @@ export default function Criteria({
   result,
   manualFlags,
   toggleManualFlag,
+  excludePromotionCriterion = false,
 }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -61,7 +64,9 @@ export default function Criteria({
 
       {/* Automatic checks */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {Object.entries(LABELS).map(([key, { label }]) => {
+        {Object.entries(LABELS)
+          .filter(([key]) => !(excludePromotionCriterion && key === "promoted_stock"))
+          .map(([key, { label }]) => {
           const val = isActive(key);
           const insiderPct = result?.insiderOwnership ?? null;
 
