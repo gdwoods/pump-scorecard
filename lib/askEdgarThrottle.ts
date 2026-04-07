@@ -1,16 +1,20 @@
 /**
  * Global Ask Edgar HTTP throttle (one limiter per Node runtime).
  *
- * Next.js can load this module in more than one bundle; module-level `let` would
- * split the limiter and allow bursts (e.g. detail + top-gainers) to exceed the cap.
- * `globalThis` keeps a single sliding window for all Ask Edgar calls.
+ * Next.js can load this module in more than one bundle; module-level state would
+ * split the limiter. `globalThis` keeps a single sliding window for all Ask Edgar calls.
  *
- * Cap is set below the typical 10/s account limit to absorb clock skew and overlap
- * with other clients using the same key.
+ * Plan limit: **150 requests per minute** — we use a rolling 60s window with a small
+ * safety margin so clock skew and other clients on the same key are less likely to 429.
  */
 
-export const ASK_EDGAR_MAX_REQUESTS_PER_SEC = 7;
-const WINDOW_MS = 1000;
+/** Documented account cap (requests per rolling minute). */
+export const ASK_EDGAR_MAX_REQUESTS_PER_MINUTE = 150;
+
+/** Effective cap (slightly under plan limit). */
+const EFFECTIVE_MAX_PER_MINUTE = 148;
+
+const WINDOW_MS = 60_000;
 
 const GLOBAL_KEY = "__pumpScorecardAskEdgarThrottle" as const;
 
@@ -49,12 +53,12 @@ export function acquireAskEdgarRequestSlot(): Promise<void> {
     for (;;) {
       const now = Date.now();
       prune(state, now - WINDOW_MS);
-      if (state.recentStarts.length < ASK_EDGAR_MAX_REQUESTS_PER_SEC) {
+      if (state.recentStarts.length < EFFECTIVE_MAX_PER_MINUTE) {
         state.recentStarts.push(Date.now());
         return;
       }
       const oldest = state.recentStarts[0]!;
-      const waitMs = oldest + WINDOW_MS - Date.now() + 5;
+      const waitMs = oldest + WINDOW_MS - Date.now() + 10;
       await new Promise((r) => setTimeout(r, Math.max(1, waitMs)));
     }
   };
