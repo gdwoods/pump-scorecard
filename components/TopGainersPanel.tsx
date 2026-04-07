@@ -92,7 +92,8 @@ export default function TopGainersPanel() {
             Primary source: Polygon&apos;s official top-gainers snapshot (requires
             exchange-reported data; often empty overnight until ~4am ET). If that
             list is empty, we fall back to TradingView&apos;s public scanner
-            (premarket % change, common 2–4 letter tickers, ≥20% move). Ask Edgar
+            (premarket % change, common 2–4 letter tickers, ≥20% move). Rows are
+            limited to last price between $0.60 and $25. Ask Edgar
             dilution on the first 20 rows when{" "}
             <code className="text-xs bg-gray-100 dark:bg-gray-900 px-1 rounded">
               ASKEDGAR_API_KEY

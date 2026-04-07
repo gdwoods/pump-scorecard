@@ -5,6 +5,15 @@ import { acquireAskEdgarRequestSlot } from "@/lib/askEdgarThrottle";
 /** Minimum % change vs prior close (Polygon) or premarket % (TradingView fallback). */
 export const TOP_GAINERS_MIN_CHANGE_PCT = 20;
 
+/** Last trade / snapshot price must fall in [min, max] (USD). */
+export const TOP_GAINERS_MIN_PRICE = 0.6;
+export const TOP_GAINERS_MAX_PRICE = 25.0;
+
+export function isTopGainerPriceInBand(price: number | null): boolean {
+  if (price == null || !Number.isFinite(price)) return false;
+  return price >= TOP_GAINERS_MIN_PRICE && price <= TOP_GAINERS_MAX_PRICE;
+}
+
 /** Match common US symbols (no dots/warrants) — same idea as Top Gainers monitor reference. */
 const US_TICKER_RE = /^[A-Z]{2,4}$/;
 
@@ -173,6 +182,7 @@ export async function fetchPolygonGainers(
     ) {
       continue;
     }
+    if (!isTopGainerPriceInBand(row.price)) continue;
     rows.push(row);
   }
   return rows;
@@ -229,6 +239,7 @@ export async function fetchTradingViewGainersFallback(): Promise<TopGainerRow[]>
     const preClose = typeof d[4] === "number" ? d[4] : null;
     const regClose = typeof d[1] === "number" ? d[1] : null;
     const price = preClose ?? regClose ?? null;
+    if (!isTopGainerPriceInBand(price)) continue;
 
     const pmVol = typeof d[5] === "number" ? d[5] : null;
     const regVol = typeof d[6] === "number" ? d[6] : null;

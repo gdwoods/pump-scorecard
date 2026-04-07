@@ -11,7 +11,8 @@ export default function TopGainersPage() {
               Top gainers
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Polygon market movers with optional Ask Edgar dilution overlay.
+              Polygon market movers ($0.60–$25 last price, ≥20% move) with optional Ask
+              Edgar dilution overlay.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

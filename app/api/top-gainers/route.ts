@@ -4,7 +4,9 @@ import {
   fetchPolygonGainers,
   fetchTradingViewGainersFallback,
   getAskEdgarApiKeyFromEnv,
+  TOP_GAINERS_MAX_PRICE,
   TOP_GAINERS_MIN_CHANGE_PCT,
+  TOP_GAINERS_MIN_PRICE,
 } from "@/lib/topGainers";
 
 export const runtime = "nodejs";
@@ -57,6 +59,8 @@ export async function GET(req: NextRequest) {
         updatedAt: new Date().toISOString(),
         source,
         minChangePct: TOP_GAINERS_MIN_CHANGE_PCT,
+        minPrice: TOP_GAINERS_MIN_PRICE,
+        maxPrice: TOP_GAINERS_MAX_PRICE,
         askEdgarConfigured: Boolean(askedgarKey),
         askEdgarEnriched: Boolean(wantEnrich && askedgarKey),
         askEdgarHits,
