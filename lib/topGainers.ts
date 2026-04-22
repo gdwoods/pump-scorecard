@@ -308,7 +308,19 @@ export async function fetchAskEdgarDilutionSummary(
   return null;
 }
 
-const ENRICH_LIMIT = 20;
+/**
+ * Dilution-rating calls per movers refresh (first N rows only).
+ * Override with ASK_EDGAR_ENRICH_LIMIT (0–20). Default 12 to limit token burn when the page is shared.
+ */
+function enrichLimitFromEnv(): number {
+  const raw = process.env.ASK_EDGAR_ENRICH_LIMIT?.trim();
+  if (!raw) return 12;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) return 12;
+  return Math.max(0, Math.min(20, n));
+}
+
+const ENRICH_LIMIT = enrichLimitFromEnv();
 const ENRICH_CONCURRENCY = 4;
 
 export async function enrichRowsWithAskEdgar(

@@ -59,9 +59,7 @@ export default function TopGainersPanel() {
     try {
       const q = new URLSearchParams();
       if (includeOtc) q.set("includeOtc", "1");
-      const res = await fetch(`/api/top-gainers?${q.toString()}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(`/api/top-gainers?${q.toString()}`);
       const json = (await res.json()) as ApiResponse;
       if (!res.ok) {
         setErr(json.error || `HTTP ${res.status}`);

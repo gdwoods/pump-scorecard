@@ -38,7 +38,7 @@ export async function GET(
       headers: cacheable
         ? {
             "Cache-Control":
-              "public, max-age=1800, s-maxage=1800, stale-while-revalidate=7200",
+              "public, max-age=2700, s-maxage=2700, stale-while-revalidate=10800",
           }
         : { "Cache-Control": "private, no-store" },
     });

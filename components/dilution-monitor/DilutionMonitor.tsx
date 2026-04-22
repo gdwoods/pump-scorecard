@@ -67,8 +67,8 @@ const BORDER = "#30363d";
 const ACCENT = "#58a6ff";
 const FG = "#e6edf3";
 
-/** Match server: cache successful detail per ticker for 30 minutes in this session. */
-const DETAIL_CLIENT_TTL_MS = 30 * 60 * 1000;
+/** Match server: cache successful detail per ticker for 45 minutes in this session. */
+const DETAIL_CLIENT_TTL_MS = 45 * 60 * 1000;
 
 function detailJsonCacheable(j: DetailJson): boolean {
   return !j.meta?.rateLimited && !j.meta?.authError;
@@ -288,7 +288,7 @@ export default function DilutionMonitor() {
     setFmpLoading(true);
     setFmpErr(null);
     try {
-      const res = await fetch("/api/gainers/fmp", { cache: "no-store" });
+      const res = await fetch("/api/gainers/fmp");
       const j = (await res.json()) as TopGainersJson & { error?: string };
       if (!res.ok) {
         if (res.status === 503) {
@@ -323,7 +323,7 @@ export default function DilutionMonitor() {
   const loadGainers = useCallback(async () => {
     setGainersLoading(true);
     try {
-      const res = await fetch("/api/top-gainers", { cache: "no-store" });
+      const res = await fetch("/api/top-gainers");
       const j = (await res.json()) as TopGainersJson & { error?: string };
       if (!res.ok) throw new Error(j.error || "Failed to load gainers");
       setGainers(j.gainers || []);
@@ -415,9 +415,23 @@ export default function DilutionMonitor() {
     }
   }, []);
 
+  /** First symbol loads immediately; rapid ticker changes debounce to one detail fetch. */
+  const detailDebounceBootRef = useRef(false);
+
   useEffect(() => {
-    if (!symForDetail) return;
-    void loadDetail(symForDetail);
+    if (!symForDetail) {
+      detailDebounceBootRef.current = false;
+      return;
+    }
+    if (!detailDebounceBootRef.current) {
+      detailDebounceBootRef.current = true;
+      void loadDetail(symForDetail);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void loadDetail(symForDetail);
+    }, 280);
+    return () => window.clearTimeout(t);
   }, [symForDetail, loadDetail]);
 
   const goManual = () => {

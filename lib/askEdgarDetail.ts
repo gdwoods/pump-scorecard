@@ -414,13 +414,17 @@ export async function loadAskEdgarDetail(
   };
 }
 
-const DETAIL_CACHE_TTL_MS = 30 * 60 * 1000;
+/** Warm-instance cache — longer TTL reduces Ask Edgar burn when a symbol is re-requested. */
+const DETAIL_CACHE_TTL_MS = 45 * 60 * 1000;
 const DETAIL_CACHE_MAX_ENTRIES = 200;
 
 const detailServerCache = new Map<
   string,
   { expires: number; payload: AskEdgarDetailPayload }
 >();
+
+/** Coalesce concurrent detail requests for the same ticker (e.g. many users / double-mount). */
+const detailInflight = new Map<string, Promise<AskEdgarDetailPayload>>();
 
 function isDetailPayloadCacheable(p: AskEdgarDetailPayload): boolean {
   return !p.meta?.rateLimited && !p.meta?.authError;
@@ -439,8 +443,9 @@ function rememberDetailInServerCache(sym: string, payload: AskEdgarDetailPayload
 }
 
 /**
- * Same as loadAskEdgarDetail but reuses the last good response per ticker for 30 minutes
+ * Same as loadAskEdgarDetail but reuses the last good response per ticker for 45 minutes
  * (in-process; best effort on serverless). Skips cache for rate-limit / auth error payloads.
+ * Concurrent identical requests share one upstream fan-out.
  */
 export async function loadAskEdgarDetailCached(
   ticker: string,
@@ -450,7 +455,19 @@ export async function loadAskEdgarDetailCached(
   const hit = detailServerCache.get(sym);
   if (hit && hit.expires > Date.now()) return hit.payload;
 
-  const payload = await loadAskEdgarDetail(sym, apiKey);
-  rememberDetailInServerCache(sym, payload);
-  return payload;
+  const existing = detailInflight.get(sym);
+  if (existing) return existing;
+
+  const work = (async () => {
+    try {
+      const payload = await loadAskEdgarDetail(sym, apiKey);
+      rememberDetailInServerCache(sym, payload);
+      return payload;
+    } finally {
+      detailInflight.delete(sym);
+    }
+  })();
+
+  detailInflight.set(sym, work);
+  return work;
 }

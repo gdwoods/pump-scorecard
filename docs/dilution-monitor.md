@@ -144,6 +144,13 @@ Loaded from the client when `symForDetail` is set **and** the “detail rail” 
 
 ---
 
+## Ask Edgar usage / burn controls
+
+- **Detail:** Server cache **45 min** per ticker (in-process) + **in-flight dedupe** (concurrent same-symbol requests share one upstream batch). HTTP `Cache-Control` **45 min** (`max-age`/`s-maxage` 2700s) when not rate-limited. Client session cache **45 min** per ticker.
+- **Movers enrichment:** Only the **first N** rows get a dilution-rating call per refresh. **N defaults to 12** (was 20). Set **`ASK_EDGAR_ENRICH_LIMIT`** to `0`–`20` in env to tune (e.g. `20` restores previous badge coverage).
+- **Movers API cache:** `Cache-Control` includes **`max-age=120`** (browser) and **`s-maxage=180`** (shared caches) so identical refreshes hit the network less often.
+- **UI:** First selected symbol loads detail **immediately**; subsequent ticker changes are **debounced ~280ms** so fast click-through triggers one detail load.
+
 ## Operational caveats
 
 1. **Polygon movers empty windows:** Documented in code comments — snapshot can clear overnight / before refill; TV fallback is **unofficial** scanner traffic.
@@ -175,4 +182,5 @@ Loaded from the client when `symForDetail` is set **and** the “detail rail” 
 
 ## Changelog (this doc)
 
+- **2026-04-22:** Burn-control notes (caches, enrich cap, debounce, HTTP cache on movers).
 - **2026-04-22:** Initial version (post–FMP column, screener, registrations, TV chart, watchlist, layout toggles).
