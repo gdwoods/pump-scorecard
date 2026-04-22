@@ -4,6 +4,7 @@
  */
 
 import { acquireAskEdgarRequestSlot } from "@/lib/askEdgarThrottle";
+import { getKVClient } from "@/lib/shareStorage";
 
 const AE = {
   dilutionE: "https://eapi.askedgar.io/enterprise/v1/dilution-rating",
@@ -430,6 +431,46 @@ function isDetailPayloadCacheable(p: AskEdgarDetailPayload): boolean {
   return !p.meta?.rateLimited && !p.meta?.authError;
 }
 
+/** Set `ASK_EDGAR_DETAIL_REMOTE_CACHE=0` to skip KV reads/writes (same vars as share links: KV_REST_*). */
+function remoteDetailCacheEnabled(): boolean {
+  const v = process.env.ASK_EDGAR_DETAIL_REMOTE_CACHE?.trim().toLowerCase();
+  if (v === "0" || v === "false" || v === "off") return false;
+  return true;
+}
+
+const REMOTE_DETAIL_KEY_PREFIX = "aed:v1:";
+const REMOTE_DETAIL_TTL_SEC = 45 * 60;
+
+async function getRemoteCachedDetail(sym: string): Promise<AskEdgarDetailPayload | null> {
+  if (!remoteDetailCacheEnabled()) return null;
+  try {
+    const kv = await getKVClient();
+    if (!kv) return null;
+    const raw = await kv.get(`${REMOTE_DETAIL_KEY_PREFIX}${sym}`);
+    if (!raw || typeof raw !== "string") return null;
+    const parsed = JSON.parse(raw) as AskEdgarDetailPayload;
+    if (!parsed || typeof parsed !== "object" || parsed.ticker !== sym) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function setRemoteCachedDetail(sym: string, payload: AskEdgarDetailPayload): Promise<void> {
+  if (!remoteDetailCacheEnabled() || !isDetailPayloadCacheable(payload)) return;
+  try {
+    const kv = await getKVClient();
+    if (!kv) return;
+    await kv.setex(
+      `${REMOTE_DETAIL_KEY_PREFIX}${sym}`,
+      REMOTE_DETAIL_TTL_SEC,
+      JSON.stringify(payload)
+    );
+  } catch (e) {
+    console.warn("[AskEdgarDetail] remote cache set failed", { sym, err: String(e) });
+  }
+}
+
 function rememberDetailInServerCache(sym: string, payload: AskEdgarDetailPayload) {
   if (!isDetailPayloadCacheable(payload)) return;
   if (detailServerCache.size >= DETAIL_CACHE_MAX_ENTRIES) {
@@ -443,9 +484,9 @@ function rememberDetailInServerCache(sym: string, payload: AskEdgarDetailPayload
 }
 
 /**
- * Same as loadAskEdgarDetail but reuses the last good response per ticker for 45 minutes
- * (in-process; best effort on serverless). Skips cache for rate-limit / auth error payloads.
- * Concurrent identical requests share one upstream fan-out.
+ * Same as loadAskEdgarDetail but reuses the last good response per ticker for 45 minutes:
+ * L1 in-process Map, L2 Vercel KV / Redis (when `KV_REST_*` env is set — see `getKVClient()` in shareStorage).
+ * Skips cache for rate-limit / auth error payloads. Concurrent identical requests on one instance share one upstream fan-out.
  */
 export async function loadAskEdgarDetailCached(
   ticker: string,
@@ -455,6 +496,12 @@ export async function loadAskEdgarDetailCached(
   const hit = detailServerCache.get(sym);
   if (hit && hit.expires > Date.now()) return hit.payload;
 
+  const remote = await getRemoteCachedDetail(sym);
+  if (remote && isDetailPayloadCacheable(remote)) {
+    rememberDetailInServerCache(sym, remote);
+    return remote;
+  }
+
   const existing = detailInflight.get(sym);
   if (existing) return existing;
 
@@ -462,6 +509,7 @@ export async function loadAskEdgarDetailCached(
     try {
       const payload = await loadAskEdgarDetail(sym, apiKey);
       rememberDetailInServerCache(sym, payload);
+      await setRemoteCachedDetail(sym, payload);
       return payload;
     } finally {
       detailInflight.delete(sym);

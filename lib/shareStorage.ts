@@ -28,8 +28,8 @@ export function generateShareId(): string {
   return result;
 }
 
-// Get Vercel KV client (if available)
-async function getKVClient() {
+/** Vercel KV / Redis REST client for short-lived keys (shares, Ask Edgar detail cache, …). */
+export async function getKVClient() {
   // Check for Vercel KV environment variables
   // Vercel creates different variable names depending on how KV is connected
   // With custom prefix "KV_REST_API": KV_REST_API_REDIS_URL (sometimes just KV_REST_API_URL for token)
