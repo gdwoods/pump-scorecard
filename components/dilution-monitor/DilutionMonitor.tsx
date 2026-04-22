@@ -10,6 +10,15 @@ import {
 } from "react";
 import Link from "next/link";
 import AskEdgarWebModal from "@/components/dilution-monitor/AskEdgarWebModal";
+import TradingViewChartEmbed from "@/components/dilution-monitor/TradingViewChartEmbed";
+import {
+  DEFAULT_DILUTION_MONITOR_SETTINGS,
+  loadDmSettings,
+  loadWatchlist,
+  saveDmSettings,
+  saveWatchlist,
+  type DilutionMonitorSettings,
+} from "@/lib/dilutionMonitorStorage";
 import { isAskEdgarWebUrl } from "@/lib/askEdgarWeb";
 import type { StockSplitRow } from "@/lib/stockSplits";
 
@@ -34,6 +43,14 @@ type DetailJson = {
   newsFeed: Record<string, unknown>[];
   chartAnalysis: Record<string, unknown> | null;
   stockPrice: number | null;
+  screener?: {
+    shortFloat: number | null;
+    feeRate: number | null;
+    daysToCover: number | null;
+    volAvg: number | null;
+    exchange: string | null;
+  } | null;
+  registrations?: Record<string, unknown>[];
   inPlay: {
     warrants: Record<string, unknown>[];
     convertibles: Record<string, unknown>[];
@@ -110,6 +127,20 @@ function fmtVol(n: number | null): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
   return `${Math.round(n)}`;
+}
+
+/** Short interest: API may send 12.3 as percent or 0.123 as fraction. */
+function fmtShortPct(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const pct = v > 0 && v <= 1 ? v * 100 : v;
+  return `${pct.toFixed(1)}%`;
+}
+
+function fmtFee(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  if (Math.abs(v) < 0.0001) return String(v);
+  if (Math.abs(v) < 1) return `${(v * 100).toFixed(2)}%`;
+  return v.toFixed(2);
 }
 
 function newsHeadline(item: Record<string, unknown>): string {
@@ -208,6 +239,79 @@ export default function DilutionMonitor() {
   const [splits, setSplits] = useState<StockSplitRow[] | null>(null);
   const [splitsLoading, setSplitsLoading] = useState(false);
   const [splitsErr, setSplitsErr] = useState<string | null>(null);
+
+  const [dmSettings, setDmSettings] = useState<DilutionMonitorSettings>(
+    DEFAULT_DILUTION_MONITOR_SETTINGS
+  );
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [storageHydrated, setStorageHydrated] = useState(false);
+  const [fmpGainers, setFmpGainers] = useState<GainerRow[]>([]);
+  const [fmpLoading, setFmpLoading] = useState(false);
+  const [fmpErr, setFmpErr] = useState<string | null>(null);
+
+  const persistDmSettings = useCallback((next: DilutionMonitorSettings) => {
+    setDmSettings(next);
+    saveDmSettings(next);
+  }, []);
+
+  const persistWatchlist = useCallback((symbols: string[]) => {
+    setWatchlist(symbols);
+    saveWatchlist(symbols);
+  }, []);
+
+  useEffect(() => {
+    setDmSettings(loadDmSettings());
+    setWatchlist(loadWatchlist());
+    setStorageHydrated(true);
+  }, []);
+
+  const ensureTickerInMovers = useCallback((sym: string) => {
+    const t = sym.trim().toUpperCase();
+    if (!t) return;
+    setGainers((prev) => {
+      if (prev.some((g) => g.ticker === t)) return prev;
+      return [
+        {
+          ticker: t,
+          changePct: null,
+          price: null,
+          volume: null,
+          askEdgar: null,
+        },
+        ...prev.filter((g) => g.ticker !== t),
+      ];
+    });
+  }, []);
+
+  const loadFmp = useCallback(async () => {
+    setFmpLoading(true);
+    setFmpErr(null);
+    try {
+      const res = await fetch("/api/gainers/fmp", { cache: "no-store" });
+      const j = (await res.json()) as TopGainersJson & { error?: string };
+      if (!res.ok) {
+        if (res.status === 503) {
+          setFmpErr(j.error || "FMP_API_KEY not set");
+          setFmpGainers([]);
+          return;
+        }
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      setFmpGainers(j.gainers || []);
+      setFmpErr(null);
+    } catch (e) {
+      setFmpGainers([]);
+      setFmpErr(e instanceof Error ? e.message : "FMP load failed");
+    } finally {
+      setFmpLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!storageHydrated || !dmSettings.showFmpColumn) return;
+    void loadFmp();
+  }, [storageHydrated, dmSettings.showFmpColumn, loadFmp]);
 
   const openAskEdgarOrExternal = useCallback((href: string) => {
     const h = href.trim();
@@ -320,19 +424,25 @@ export default function DilutionMonitor() {
     const t = manual.trim().toUpperCase();
     if (!t || !/^[A-Z]{1,6}$/.test(t)) return;
     setSelected(t);
-    if (!gainers.some((g) => g.ticker === t)) {
-      setGainers((prev) => [
-        {
-          ticker: t,
-          changePct: null,
-          price: null,
-          volume: null,
-          askEdgar: null,
-        },
-        ...prev.filter((g) => g.ticker !== t),
-      ]);
-    }
+    ensureTickerInMovers(t);
   };
+
+  const addWatchlist = useCallback(() => {
+    const t = selected?.trim().toUpperCase();
+    if (!t || !/^[A-Z]{1,6}$/.test(t)) return;
+    if (watchlist.includes(t)) return;
+    persistWatchlist([t, ...watchlist]);
+  }, [selected, watchlist, persistWatchlist]);
+
+  const pickWatchlist = useCallback(
+    (sym: string) => {
+      const t = sym.trim().toUpperCase();
+      if (!t) return;
+      setSelected(t);
+      ensureTickerInMovers(t);
+    },
+    [ensureTickerInMovers]
+  );
 
   const dilution = detail?.dilution;
   const floatData = detail?.floatData;
@@ -368,12 +478,17 @@ export default function DilutionMonitor() {
 
   const hasWarrants = (detail?.inPlay?.warrants?.length ?? 0) > 0;
   const hasConvertibles = (detail?.inPlay?.convertibles?.length ?? 0) > 0;
+  const hasRegs = (detail?.registrations?.length ?? 0) > 0;
   const hasDetailRail =
     Boolean(dilution) ||
+    hasRegs ||
     dilution?.offering_ability_desc != null ||
     hasWarrants ||
     hasConvertibles ||
     (detail?.offerings?.length ?? 0) > 0;
+
+  const screener = detail?.screener;
+  const showAnyGainerCol = dmSettings.showPolygonColumn || dmSettings.showFmpColumn;
 
   useEffect(() => {
     if (!symForDetail || !hasDetailRail) {
@@ -440,7 +555,24 @@ export default function DilutionMonitor() {
         >
           Dilution Monitor
         </h1>
-        <div className="flex items-center gap-2 justify-end flex-1 min-w-[200px]">
+        <div className="flex items-center gap-2 justify-end flex-1 min-w-[200px] flex-wrap">
+          <button
+            type="button"
+            onClick={addWatchlist}
+            disabled={!selected}
+            title="Add selected ticker to watchlist"
+            className="text-xs font-mono px-2 py-1 rounded border border-[#30363d] text-[#8b949e] hover:text-[#58a6ff] disabled:opacity-40 disabled:pointer-events-none"
+          >
+            Watch+
+          </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="text-xs font-mono px-2 py-1 rounded border border-[#30363d] text-[#8b949e] hover:text-[#58a6ff]"
+            title="Columns & panels"
+          >
+            Layout
+          </button>
           <Link
             href="/top-gainers"
             className="text-xs font-mono px-2 py-1 rounded border border-[#30363d] text-[#8b949e] hover:text-[#58a6ff]"
@@ -456,95 +588,212 @@ export default function DilutionMonitor() {
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-56px)]">
-        {/* Left: top gainers */}
-        <aside
-          className="w-full lg:w-[320px] lg:min-w-[280px] lg:max-w-[380px] border-b lg:border-b-0 lg:border-r flex flex-col shrink-0"
-          style={{ borderColor: BORDER, backgroundColor: BG }}
-        >
+      <div className="flex flex-col xl:flex-row min-h-[calc(100vh-56px)]">
+        {showAnyGainerCol && (
           <div
-            className="flex items-center justify-between px-3 py-2 border-b"
-            style={{ borderColor: BORDER }}
+            className={`flex shrink-0 border-b xl:border-b-0 xl:border-r flex-col ${
+              dmSettings.showPolygonColumn && dmSettings.showFmpColumn
+                ? "md:flex-row xl:flex-col 2xl:flex-row"
+                : ""
+            }`}
+            style={{ borderColor: BORDER, backgroundColor: BG }}
           >
-            <span className="font-semibold text-sm tracking-wide" style={{ color: ACCENT }}>
-              TOP GAINERS
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void loadGainers()}
-                className="text-[#8b949e] hover:text-[#58a6ff] text-lg leading-none"
-                title="Refresh"
+            {dmSettings.showPolygonColumn && (
+              <aside
+                className={`w-full md:flex-1 md:min-w-[260px] md:max-w-[380px] flex flex-col shrink-0 border-b md:border-b-0 ${
+                  dmSettings.showFmpColumn ? "md:border-r" : ""
+                } xl:border-b xl:border-r 2xl:border-b-0`}
+                style={{ borderColor: BORDER, backgroundColor: BG }}
               >
-                ↻
-              </button>
-              <span className="text-xs font-mono text-[#8b949e]">
-                {gainersLoading ? "…" : gainers.length}
-              </span>
-            </div>
-          </div>
-          <div className="overflow-y-auto flex-1 p-2 space-y-2 max-h-[40vh] lg:max-h-none lg:h-[calc(100vh-56px-40px)]">
-            {gainersLoading && (
-              <p className="text-sm text-[#8b949e] px-2">Loading…</p>
-            )}
-            {!gainersLoading && gainers.length === 0 && (
-              <p className="text-sm text-[#8b949e] px-2">No gainers.</p>
-            )}
-            {gainers.map((g) => {
-              const active = g.ticker === selected;
-              const risk = g.askEdgar?.overallOfferingRisk || "";
-              return (
-                <button
-                  key={g.ticker}
-                  type="button"
-                  onClick={() => setSelected(g.ticker)}
-                  className="w-full text-left rounded border p-2 transition-colors"
-                  style={{
-                    backgroundColor: active ? ROW : CARD,
-                    borderColor: active ? ACCENT : BORDER,
-                    boxShadow: active ? `inset 3px 0 0 ${ACCENT}` : undefined,
-                  }}
+                <div
+                  className="flex items-center justify-between px-3 py-2 border-b"
+                  style={{ borderColor: BORDER }}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold" style={{ color: ACCENT }}>
-                      {g.ticker}
-                    </span>
-                    {risk ? (
-                      <span
-                        className={`text-xs font-bold px-2 py-0.5 rounded ${riskBadgeClass(risk)}`}
-                      >
-                        {risk}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-[#484f58]">—</span>
-                    )}
-                    <span className="font-mono text-emerald-400 text-sm ml-auto">
-                      {g.changePct != null
-                        ? `${g.changePct >= 0 ? "+" : ""}${g.changePct.toFixed(1)}%`
-                        : "—"}
+                  <span
+                    className="font-semibold text-sm tracking-wide"
+                    style={{ color: ACCENT }}
+                  >
+                    MOVERS (Polygon / TV)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void loadGainers()}
+                      className="text-[#8b949e] hover:text-[#58a6ff] text-lg leading-none"
+                      title="Refresh"
+                    >
+                      ↻
+                    </button>
+                    <span className="text-xs font-mono text-[#8b949e]">
+                      {gainersLoading ? "…" : gainers.length}
                     </span>
                   </div>
-                  <div className="flex justify-between text-xs font-mono text-[#8b949e] mt-1">
-                    <span>{fmtPrice(g.price)}</span>
-                    <span>Vol {fmtVol(g.volume)}</span>
-                  </div>
-                  {sublineByTicker[g.ticker] && (
-                    <div className="text-[10px] font-mono text-[#6e7681] mt-1 truncate">
-                      {sublineByTicker[g.ticker]}
-                    </div>
+                </div>
+                <div className="overflow-y-auto flex-1 p-2 space-y-2 max-h-[40vh] xl:max-h-none xl:h-[calc(100vh-56px-40px)]">
+                  {gainersLoading && (
+                    <p className="text-sm text-[#8b949e] px-2">Loading…</p>
                   )}
-                </button>
-              );
-            })}
-          </div>
-          {gainersSource && (
-            <p className="text-[10px] text-[#484f58] px-3 py-1 border-t" style={{ borderColor: BORDER }}>
-              Movers: {gainersSource}
-            </p>
-          )}
-        </aside>
+                  {!gainersLoading && gainers.length === 0 && (
+                    <p className="text-sm text-[#8b949e] px-2">No gainers.</p>
+                  )}
+                  {gainers.map((g) => {
+                    const active = g.ticker === selected;
+                    const risk = g.askEdgar?.overallOfferingRisk || "";
+                    return (
+                      <button
+                        key={g.ticker}
+                        type="button"
+                        onClick={() => setSelected(g.ticker)}
+                        className="w-full text-left rounded border p-2 transition-colors"
+                        style={{
+                          backgroundColor: active ? ROW : CARD,
+                          borderColor: active ? ACCENT : BORDER,
+                          boxShadow: active ? `inset 3px 0 0 ${ACCENT}` : undefined,
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold" style={{ color: ACCENT }}>
+                            {g.ticker}
+                          </span>
+                          {risk ? (
+                            <span
+                              className={`text-xs font-bold px-2 py-0.5 rounded ${riskBadgeClass(risk)}`}
+                            >
+                              {risk}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-[#484f58]">—</span>
+                          )}
+                          <span className="font-mono text-emerald-400 text-sm ml-auto">
+                            {g.changePct != null
+                              ? `${g.changePct >= 0 ? "+" : ""}${g.changePct.toFixed(1)}%`
+                              : "—"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs font-mono text-[#8b949e] mt-1">
+                          <span>{fmtPrice(g.price)}</span>
+                          <span>Vol {fmtVol(g.volume)}</span>
+                        </div>
+                        {sublineByTicker[g.ticker] && (
+                          <div className="text-[10px] font-mono text-[#6e7681] mt-1 truncate">
+                            {sublineByTicker[g.ticker]}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {gainersSource && (
+                  <p
+                    className="text-[10px] text-[#484f58] px-3 py-1 border-t"
+                    style={{ borderColor: BORDER }}
+                  >
+                    Movers: {gainersSource}
+                  </p>
+                )}
+              </aside>
+            )}
 
-        {/* Right: detail */}
+            {dmSettings.showFmpColumn && (
+              <aside
+                className={`w-full md:flex-1 md:min-w-[260px] md:max-w-[380px] flex flex-col shrink-0 ${
+                  dmSettings.showPolygonColumn ? "md:border-l xl:border-t 2xl:border-t-0" : ""
+                } xl:border-b 2xl:border-b-0`}
+                style={{ borderColor: BORDER, backgroundColor: BG }}
+              >
+                <div
+                  className="flex items-center justify-between px-3 py-2 border-b"
+                  style={{ borderColor: BORDER }}
+                >
+                  <span
+                    className="font-semibold text-sm tracking-wide"
+                    style={{ color: ACCENT }}
+                  >
+                    FMP GAINERS
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void loadFmp()}
+                      className="text-[#8b949e] hover:text-[#58a6ff] text-lg leading-none"
+                      title="Refresh"
+                    >
+                      ↻
+                    </button>
+                    <span className="text-xs font-mono text-[#8b949e]">
+                      {fmpLoading ? "…" : fmpGainers.length}
+                    </span>
+                  </div>
+                </div>
+                <div className="overflow-y-auto flex-1 p-2 space-y-2 max-h-[40vh] xl:max-h-none xl:h-[calc(100vh-56px-40px)]">
+                  {fmpErr && (
+                    <p className="text-xs text-[#d29922] px-2">{fmpErr}</p>
+                  )}
+                  {fmpLoading && !fmpErr && (
+                    <p className="text-sm text-[#8b949e] px-2">Loading…</p>
+                  )}
+                  {!fmpLoading && !fmpErr && fmpGainers.length === 0 && (
+                    <p className="text-sm text-[#8b949e] px-2">No rows.</p>
+                  )}
+                  {fmpGainers.map((g) => {
+                    const active = g.ticker === selected;
+                    const risk = g.askEdgar?.overallOfferingRisk || "";
+                    return (
+                      <button
+                        key={`fmp-${g.ticker}`}
+                        type="button"
+                        onClick={() => setSelected(g.ticker)}
+                        className="w-full text-left rounded border p-2 transition-colors"
+                        style={{
+                          backgroundColor: active ? ROW : CARD,
+                          borderColor: active ? ACCENT : BORDER,
+                          boxShadow: active ? `inset 3px 0 0 ${ACCENT}` : undefined,
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold" style={{ color: ACCENT }}>
+                            {g.ticker}
+                          </span>
+                          {risk ? (
+                            <span
+                              className={`text-xs font-bold px-2 py-0.5 rounded ${riskBadgeClass(risk)}`}
+                            >
+                              {risk}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-[#484f58]">—</span>
+                          )}
+                          <span className="font-mono text-emerald-400 text-sm ml-auto">
+                            {g.changePct != null
+                              ? `${g.changePct >= 0 ? "+" : ""}${g.changePct.toFixed(1)}%`
+                              : "—"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs font-mono text-[#8b949e] mt-1">
+                          <span>{fmtPrice(g.price)}</span>
+                          <span>Vol {fmtVol(g.volume)}</span>
+                        </div>
+                        {sublineByTicker[g.ticker] && (
+                          <div className="text-[10px] font-mono text-[#6e7681] mt-1 truncate">
+                            {sublineByTicker[g.ticker]}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p
+                  className="text-[10px] text-[#484f58] px-3 py-1 border-t"
+                  style={{ borderColor: BORDER }}
+                >
+                  financialmodelingprep.com
+                </p>
+              </aside>
+            )}
+          </div>
+        )}
+
+        {/* Detail */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-5 xl:p-6 min-w-0">
           {!selected && (
             <p className="text-[#8b949e]">Select a ticker or type one and press GO.</p>
@@ -579,6 +828,62 @@ export default function DilutionMonitor() {
                 </div>
               </div>
 
+              {detail != null && !detailLoading ? (
+                <div
+                  className="rounded border p-3 mb-4 font-mono text-xs"
+                  style={{ borderColor: BORDER, backgroundColor: ROW }}
+                >
+                  <div className="text-[10px] text-[#8b949e] uppercase tracking-wide mb-2">
+                    Screener
+                  </div>
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-[#e6edf3]">
+                    <span className="text-[#8b949e]">
+                      Short float:{" "}
+                      <span className="text-[#e6edf3] tabular-nums">
+                        {fmtShortPct(screener?.shortFloat ?? null)}
+                      </span>
+                    </span>
+                    <span className="text-[#8b949e]">
+                      Fee:{" "}
+                      <span className="text-[#e6edf3] tabular-nums">
+                        {fmtFee(screener?.feeRate ?? null)}
+                      </span>
+                    </span>
+                    <span className="text-[#8b949e]">
+                      DTC:{" "}
+                      <span className="text-[#e6edf3] tabular-nums">
+                        {screener?.daysToCover != null && Number.isFinite(screener.daysToCover)
+                          ? screener.daysToCover.toFixed(1)
+                          : "—"}
+                      </span>
+                    </span>
+                    <span className="text-[#8b949e]">
+                      Vol avg:{" "}
+                      <span className="text-[#e6edf3] tabular-nums">
+                        {fmtVol(screener?.volAvg ?? null)}
+                      </span>
+                    </span>
+                    <span className="text-[#8b949e]">
+                      Exch:{" "}
+                      <span className="text-[#e6edf3]">{str(screener?.exchange) || "—"}</span>
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+
+              {dmSettings.showChart && selected ? (
+                <section className="mb-6 min-w-0">
+                  <h2 className="text-sm font-semibold mb-2" style={{ color: ACCENT }}>
+                    Chart
+                  </h2>
+                  <TradingViewChartEmbed
+                    ticker={selected}
+                    exchangeHint={screener?.exchange ?? null}
+                    height={380}
+                  />
+                </section>
+              ) : null}
+
               {detailLoading && (
                 <p className="text-[#8b949e] mb-4">Loading Ask Edgar…</p>
               )}
@@ -611,9 +916,9 @@ export default function DilutionMonitor() {
               >
                 <div className="min-w-0 space-y-6">
                   {/* News feed */}
-                  <section>
+                  <div className="space-y-3 min-w-0">
                     <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
-                      News &amp; filings
+                      {`News & filings`}
                     </h2>
                     <div
                       className={
@@ -680,9 +985,10 @@ export default function DilutionMonitor() {
                     </p>
                   )}
                     </div>
-                  </section>
+                  </div>
 
-                  {dilution?.mgmt_commentary && (
+                  {dilution?.mgmt_commentary != null &&
+                  String(dilution.mgmt_commentary).trim() !== "" ? (
                     <section>
                       <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
                         Management commentary
@@ -694,13 +1000,13 @@ export default function DilutionMonitor() {
                         {str(dilution.mgmt_commentary)}
                       </div>
                     </section>
-                  )}
+                  ) : null}
                 </div>
 
-                {hasDetailRail && (
+                {hasDetailRail ? (
                   <div className="min-w-0 space-y-6">
               {/* Risk grid */}
-              {dilution && (
+              {dilution != null ? (
                 <section>
                   <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
                     Risk metrics
@@ -727,6 +1033,49 @@ export default function DilutionMonitor() {
                       </div>
                     ))}
                   </button>
+                </section>
+              ) : null}
+
+              {hasRegs && (
+                <section>
+                  <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
+                    Registrations
+                  </h2>
+                  <ul className="space-y-2">
+                    {(detail?.registrations ?? []).map((row, i) => (
+                      <li
+                        key={i}
+                        className="rounded border p-3 text-xs font-mono min-w-0"
+                        style={{ borderColor: BORDER, backgroundColor: CARD }}
+                      >
+                        <div className="text-[#e6edf3] font-semibold">
+                          {str(
+                            (row.registration_type ??
+                              row.type ??
+                              row.offering_type ??
+                              row.form_type ??
+                              "Item") as string | number | boolean
+                          )}
+                        </div>
+                        <div className="text-[#8b949e] mt-2 space-y-1 break-words">
+                          {Object.entries(row)
+                            .filter(
+                              ([k, v]) =>
+                                v != null &&
+                                String(v).trim() !== "" &&
+                                !["registration_type", "type"].includes(k)
+                            )
+                            .slice(0, 10)
+                            .map(([k, v]) => (
+                              <div key={k}>
+                                <span className="text-[#6e7681]">{k}:</span>{" "}
+                                {str(v).slice(0, 280)}
+                              </div>
+                            ))}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </section>
               )}
 
@@ -873,12 +1222,122 @@ export default function DilutionMonitor() {
                 )}
               </section>
                   </div>
-                )}
+                ) : null}
               </div>
             </>
           )}
         </main>
+
+        {dmSettings.showWatchlistColumn && (
+          <aside
+            className="w-full xl:w-[200px] xl:min-w-[180px] shrink-0 border-t xl:border-t-0 xl:border-l flex flex-col max-h-[50vh] xl:max-h-none"
+            style={{ borderColor: BORDER, backgroundColor: BG }}
+          >
+            <div
+              className="flex items-center justify-between px-3 py-2 border-b"
+              style={{ borderColor: BORDER }}
+            >
+              <span className="font-semibold text-sm tracking-wide" style={{ color: ACCENT }}>
+                WATCHLIST
+              </span>
+              <span className="text-xs font-mono text-[#8b949e]">{watchlist.length}</span>
+            </div>
+            <div className="overflow-y-auto flex-1 p-2 space-y-1">
+              {watchlist.length === 0 && (
+                <p className="text-xs text-[#8b949e] px-1">
+                  Empty — select a symbol and press Watch+.
+                </p>
+              )}
+              {watchlist.map((sym) => (
+                <div key={sym} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => pickWatchlist(sym)}
+                    className={`flex-1 min-w-0 text-left rounded border px-2 py-1.5 text-sm font-bold font-mono truncate ${
+                      sym === selected ? "text-[#58a6ff]" : "text-[#e6edf3]"
+                    }`}
+                    style={{
+                      borderColor: sym === selected ? ACCENT : BORDER,
+                      backgroundColor: sym === selected ? ROW : CARD,
+                    }}
+                  >
+                    {sym}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => persistWatchlist(watchlist.filter((x) => x !== sym))}
+                    className="shrink-0 px-2 py-1 text-[#8b949e] hover:text-[#f85149] text-lg leading-none"
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </aside>
+        )}
       </div>
+
+      {settingsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"
+          onClick={() => setSettingsOpen(false)}
+          onKeyDown={(e) => e.key === "Escape" && setSettingsOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-md rounded-lg border p-4 shadow-xl"
+            style={{ backgroundColor: CARD, borderColor: BORDER, color: FG }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dm-settings-title"
+          >
+            <h2 id="dm-settings-title" className="text-lg font-semibold mb-3" style={{ color: ACCENT }}>
+              Layout
+            </h2>
+            <p className="text-xs text-[#8b949e] mb-4">
+              Toggles are saved in this browser (localStorage).
+            </p>
+            <ul className="space-y-3 text-sm">
+              {(
+                [
+                  ["showPolygonColumn", "Polygon / TV movers column"],
+                  ["showFmpColumn", "FMP biggest gainers column"],
+                  ["showChart", "TradingView chart (linked symbol)"],
+                  ["showWatchlistColumn", "Watchlist column"],
+                ] as const
+              ).map(([key, label]) => (
+                <li key={key} className="flex items-center gap-3">
+                  <input
+                    id={`dm-${key}`}
+                    type="checkbox"
+                    className="h-4 w-4 accent-[#58a6ff]"
+                    checked={dmSettings[key]}
+                    onChange={() =>
+                      persistDmSettings({
+                        ...dmSettings,
+                        [key]: !dmSettings[key],
+                      })
+                    }
+                  />
+                  <label htmlFor={`dm-${key}`} className="cursor-pointer select-none">
+                    {label}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(false)}
+              className="mt-6 w-full py-2 rounded font-semibold text-[#0d1117]"
+              style={{ backgroundColor: ACCENT }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

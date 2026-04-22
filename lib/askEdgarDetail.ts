@@ -12,6 +12,7 @@ const AE = {
   newsE: "https://eapi.askedgar.io/enterprise/v1/news",
   dilDataE: "https://eapi.askedgar.io/enterprise/v1/dilution-data",
   screenerE: "https://eapi.askedgar.io/enterprise/v1/screener",
+  registrationsE: "https://eapi.askedgar.io/enterprise/v1/registrations",
   chartV1: "https://eapi.askedgar.io/v1/ai-chart-analysis",
   offeringsV1: "https://eapi.askedgar.io/v1/offerings",
 };
@@ -146,16 +147,75 @@ export async function fetchChartAnalysis(
   return firstResult(data);
 }
 
+function numField(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v.replace(/%/g, "").trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+export type AskEdgarScreenerSlice = {
+  price: number | null;
+  shortFloat: number | null;
+  feeRate: number | null;
+  daysToCover: number | null;
+  volAvg: number | null;
+  exchange: string | null;
+};
+
+export function mapScreenerRow(row: Record<string, unknown> | null): AskEdgarScreenerSlice {
+  if (!row) {
+    return {
+      price: null,
+      shortFloat: null,
+      feeRate: null,
+      daysToCover: null,
+      volAvg: null,
+      exchange: null,
+    };
+  }
+  const ex = row.exchange;
+  return {
+    price: numField(row.price),
+    shortFloat: numField(row.short_float),
+    feeRate: numField(row.feerate),
+    daysToCover: numField(row.days_to_cover),
+    volAvg: numField(row.vol_avg),
+    exchange: typeof ex === "string" && ex.trim() ? ex.trim() : null,
+  };
+}
+
+export async function fetchScreenerRecord(
+  apiKey: string,
+  sym: string,
+  ctx?: AskEdgarHttpCtx
+): Promise<Record<string, unknown> | null> {
+  const data = await aeGet(AE.screenerE, { ticker: sym }, apiKey, 14_000, ctx);
+  return firstResult(data);
+}
+
+/** @deprecated prefer fetchScreenerRecord + mapScreenerRow().price */
 export async function fetchScreenerPrice(
   apiKey: string,
   sym: string,
   ctx?: AskEdgarHttpCtx
 ): Promise<number | null> {
-  const data = await aeGet(AE.screenerE, { ticker: sym }, apiKey, 14_000, ctx);
-  const row = firstResult(data);
-  if (!row) return null;
-  const p = row.price;
-  return typeof p === "number" && Number.isFinite(p) ? p : null;
+  const row = await fetchScreenerRecord(apiKey, sym, ctx);
+  const p = mapScreenerRow(row).price;
+  return p;
+}
+
+export async function fetchRegistrationsResults(
+  apiKey: string,
+  sym: string,
+  ctx?: AskEdgarHttpCtx
+): Promise<Record<string, unknown>[]> {
+  const data = await aeGet(AE.registrationsE, { ticker: sym }, apiKey, 14_000, ctx);
+  if (!aeSuccess(data)) return [];
+  const r = (data as Record<string, unknown>).results;
+  return Array.isArray(r) ? (r as Record<string, unknown>[]) : [];
 }
 
 export async function fetchDilutionDataResults(
@@ -242,6 +302,10 @@ export type AskEdgarDetailPayload = {
   newsFeed: Record<string, unknown>[];
   chartAnalysis: Record<string, unknown> | null;
   stockPrice: number | null;
+  /** Screener fields (short %, borrow fee, etc.) when enterprise screener returns a row. */
+  screener: AskEdgarScreenerSlice | null;
+  /** Shelf / ATM / registration rows from Ask Edgar. */
+  registrations: Record<string, unknown>[];
   inPlay: {
     warrants: Record<string, unknown>[];
     convertibles: Record<string, unknown>[];
@@ -267,14 +331,17 @@ export async function loadAskEdgarDetail(
     fetchNewsResults(apiKey, sym, httpCtx),
   ]);
 
-  const [chartAnalysis, screenerPrice, dilDataResults, offerings] = await Promise.all([
-    fetchChartAnalysis(apiKey, sym, httpCtx),
-    fetchScreenerPrice(apiKey, sym, httpCtx),
-    fetchDilutionDataResults(apiKey, sym, httpCtx),
-    fetchOfferings(apiKey, sym, httpCtx),
-  ]);
+  const [chartAnalysis, screenerRow, dilDataResults, offerings, registrations] =
+    await Promise.all([
+      fetchChartAnalysis(apiKey, sym, httpCtx),
+      fetchScreenerRecord(apiKey, sym, httpCtx),
+      fetchDilutionDataResults(apiKey, sym, httpCtx),
+      fetchOfferings(apiKey, sym, httpCtx),
+      fetchRegistrationsResults(apiKey, sym, httpCtx),
+    ]);
 
-  let stockPrice = screenerPrice;
+  const screener = mapScreenerRow(screenerRow);
+  let stockPrice = screener.price;
   if (stockPrice == null || stockPrice <= 0) {
     const c = dilution?.last_price;
     if (typeof c === "number" && c > 0) stockPrice = c;
@@ -339,6 +406,8 @@ export async function loadAskEdgarDetail(
     newsFeed,
     chartAnalysis,
     stockPrice,
+    screener,
+    registrations,
     inPlay,
     offerings,
     ...(meta && Object.keys(meta).length ? { meta } : {}),
