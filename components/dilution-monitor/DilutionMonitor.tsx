@@ -1039,6 +1039,49 @@ export default function DilutionMonitor() {
                       </div>
                     </section>
                   ) : null}
+
+                  {hasRegs && (
+                    <section>
+                      <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
+                        Registrations
+                      </h2>
+                      <ul className="space-y-2">
+                        {(detail?.registrations ?? []).map((row, i) => (
+                          <li
+                            key={i}
+                            className="rounded border p-3 text-xs font-mono min-w-0"
+                            style={{ borderColor: BORDER, backgroundColor: CARD }}
+                          >
+                            <div className="text-[#e6edf3] font-semibold">
+                              {str(
+                                (row.registration_type ??
+                                  row.type ??
+                                  row.offering_type ??
+                                  row.form_type ??
+                                  "Item") as string | number | boolean
+                              )}
+                            </div>
+                            <div className="text-[#8b949e] mt-2 space-y-1 break-words">
+                              {Object.entries(row)
+                                .filter(
+                                  ([k, v]) =>
+                                    v != null &&
+                                    String(v).trim() !== "" &&
+                                    !["registration_type", "type"].includes(k)
+                                )
+                                .slice(0, 10)
+                                .map(([k, v]) => (
+                                  <div key={k}>
+                                    <span className="text-[#6e7681]">{k}:</span>{" "}
+                                    {str(v).slice(0, 280)}
+                                  </div>
+                                ))}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
                 </div>
 
                 {hasDetailRail ? (
@@ -1073,49 +1116,6 @@ export default function DilutionMonitor() {
                   </button>
                 </section>
               ) : null}
-
-              {hasRegs && (
-                <section>
-                  <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
-                    Registrations
-                  </h2>
-                  <ul className="space-y-2">
-                    {(detail?.registrations ?? []).map((row, i) => (
-                      <li
-                        key={i}
-                        className="rounded border p-3 text-xs font-mono min-w-0"
-                        style={{ borderColor: BORDER, backgroundColor: CARD }}
-                      >
-                        <div className="text-[#e6edf3] font-semibold">
-                          {str(
-                            (row.registration_type ??
-                              row.type ??
-                              row.offering_type ??
-                              row.form_type ??
-                              "Item") as string | number | boolean
-                          )}
-                        </div>
-                        <div className="text-[#8b949e] mt-2 space-y-1 break-words">
-                          {Object.entries(row)
-                            .filter(
-                              ([k, v]) =>
-                                v != null &&
-                                String(v).trim() !== "" &&
-                                !["registration_type", "type"].includes(k)
-                            )
-                            .slice(0, 10)
-                            .map(([k, v]) => (
-                              <div key={k}>
-                                <span className="text-[#6e7681]">{k}:</span>{" "}
-                                {str(v).slice(0, 280)}
-                              </div>
-                            ))}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
 
               {/* Offering ability */}
               {dilution?.offering_ability_desc != null && (
