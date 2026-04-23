@@ -249,6 +249,8 @@ export default function DilutionMonitor() {
   const [fmpGainers, setFmpGainers] = useState<GainerRow[]>([]);
   const [fmpLoading, setFmpLoading] = useState(false);
   const [fmpErr, setFmpErr] = useState<string | null>(null);
+  const [fmpExpanded, setFmpExpanded] = useState(false);
+  const [fmpUpdatedAt, setFmpUpdatedAt] = useState<number | null>(null);
 
   const persistDmSettings = useCallback((next: DilutionMonitorSettings) => {
     setDmSettings(next);
@@ -300,6 +302,7 @@ export default function DilutionMonitor() {
       }
       setFmpGainers(j.gainers || []);
       setFmpErr(null);
+      setFmpUpdatedAt(Date.now());
     } catch (e) {
       setFmpGainers([]);
       setFmpErr(e instanceof Error ? e.message : "FMP load failed");
@@ -312,6 +315,18 @@ export default function DilutionMonitor() {
     if (!storageHydrated || !dmSettings.showFmpColumn) return;
     void loadFmp();
   }, [storageHydrated, dmSettings.showFmpColumn, loadFmp]);
+
+  const fmtAge = useCallback((ts: number | null) => {
+    if (!ts) return "";
+    const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    if (s < 45) return "just now";
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return `${d}d ago`;
+  }, []);
 
   const openAskEdgarOrExternal = useCallback((href: string) => {
     const h = href.trim();
@@ -605,18 +620,12 @@ export default function DilutionMonitor() {
       <div className="flex flex-col xl:flex-row min-h-[calc(100vh-56px)]">
         {showAnyGainerCol && (
           <div
-            className={`flex shrink-0 border-b xl:border-b-0 xl:border-r flex-col ${
-              dmSettings.showPolygonColumn && dmSettings.showFmpColumn
-                ? "md:flex-row xl:flex-col 2xl:flex-row"
-                : ""
-            }`}
+            className="flex shrink-0 border-b xl:border-b-0 xl:border-r flex-col"
             style={{ borderColor: BORDER, backgroundColor: BG }}
           >
             {dmSettings.showPolygonColumn && (
               <aside
-                className={`w-full md:flex-1 md:min-w-[260px] md:max-w-[380px] flex flex-col shrink-0 border-b md:border-b-0 ${
-                  dmSettings.showFmpColumn ? "md:border-r" : ""
-                } xl:border-b xl:border-r 2xl:border-b-0`}
+                className="w-full xl:w-[360px] xl:min-w-[300px] xl:max-w-[420px] flex flex-col shrink-0 border-b"
                 style={{ borderColor: BORDER, backgroundColor: BG }}
               >
                 <div
@@ -710,21 +719,24 @@ export default function DilutionMonitor() {
 
             {dmSettings.showFmpColumn && (
               <aside
-                className={`w-full md:flex-1 md:min-w-[260px] md:max-w-[380px] flex flex-col shrink-0 ${
-                  dmSettings.showPolygonColumn ? "md:border-l xl:border-t 2xl:border-t-0" : ""
-                } xl:border-b 2xl:border-b-0`}
+                className="w-full xl:w-[360px] xl:min-w-[300px] xl:max-w-[420px] flex flex-col shrink-0"
                 style={{ borderColor: BORDER, backgroundColor: BG }}
               >
                 <div
                   className="flex items-center justify-between px-3 py-2 border-b"
                   style={{ borderColor: BORDER }}
                 >
-                  <span
-                    className="font-semibold text-sm tracking-wide"
+                  <button
+                    type="button"
+                    onClick={() => setFmpExpanded((v) => !v)}
+                    className="flex items-center gap-2 font-semibold text-sm tracking-wide hover:opacity-90"
                     style={{ color: ACCENT }}
+                    aria-expanded={fmpExpanded}
+                    title={fmpExpanded ? "Collapse" : "Expand"}
                   >
-                    FMP GAINERS
-                  </span>
+                    <span className="text-base leading-none">{fmpExpanded ? "▾" : "▸"}</span>
+                    <span>FMP GAINERS</span>
+                  </button>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -739,63 +751,75 @@ export default function DilutionMonitor() {
                     </span>
                   </div>
                 </div>
-                <div className="overflow-y-auto flex-1 p-2 space-y-2 max-h-[40vh] xl:max-h-none xl:h-[calc(100vh-56px-40px)]">
-                  {fmpErr && (
-                    <p className="text-xs text-[#d29922] px-2">{fmpErr}</p>
-                  )}
-                  {fmpLoading && !fmpErr && (
-                    <p className="text-sm text-[#8b949e] px-2">Loading…</p>
-                  )}
-                  {!fmpLoading && !fmpErr && fmpGainers.length === 0 && (
-                    <p className="text-sm text-[#8b949e] px-2">No rows.</p>
-                  )}
-                  {fmpGainers.map((g) => {
-                    const active = g.ticker === selected;
-                    const risk = g.askEdgar?.overallOfferingRisk || "";
-                    return (
-                      <button
-                        key={`fmp-${g.ticker}`}
-                        type="button"
-                        onClick={() => setSelected(g.ticker)}
-                        className="w-full text-left rounded border p-2 transition-colors"
-                        style={{
-                          backgroundColor: active ? ROW : CARD,
-                          borderColor: active ? ACCENT : BORDER,
-                          boxShadow: active ? `inset 3px 0 0 ${ACCENT}` : undefined,
-                        }}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-bold" style={{ color: ACCENT }}>
-                            {g.ticker}
-                          </span>
-                          {risk ? (
-                            <span
-                              className={`text-xs font-bold px-2 py-0.5 rounded ${riskBadgeClass(risk)}`}
-                            >
-                              {risk}
+                {!fmpExpanded ? (
+                  <div className="px-3 py-2 border-b" style={{ borderColor: BORDER }}>
+                    <div className="text-xs font-mono text-[#8b949e]">
+                      {fmpLoading
+                        ? "Loading…"
+                        : fmpErr
+                          ? `Error: ${fmpErr}`
+                          : `${fmpGainers.length} symbols${fmpUpdatedAt ? ` • updated ${fmtAge(fmpUpdatedAt)}` : ""}`}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-y-auto flex-1 p-2 space-y-2 max-h-[40vh] xl:max-h-none xl:h-[calc(100vh-56px-40px)]">
+                    {fmpErr && (
+                      <p className="text-xs text-[#d29922] px-2">{fmpErr}</p>
+                    )}
+                    {fmpLoading && !fmpErr && (
+                      <p className="text-sm text-[#8b949e] px-2">Loading…</p>
+                    )}
+                    {!fmpLoading && !fmpErr && fmpGainers.length === 0 && (
+                      <p className="text-sm text-[#8b949e] px-2">No rows.</p>
+                    )}
+                    {fmpGainers.map((g) => {
+                      const active = g.ticker === selected;
+                      const risk = g.askEdgar?.overallOfferingRisk || "";
+                      return (
+                        <button
+                          key={`fmp-${g.ticker}`}
+                          type="button"
+                          onClick={() => setSelected(g.ticker)}
+                          className="w-full text-left rounded border p-2 transition-colors"
+                          style={{
+                            backgroundColor: active ? ROW : CARD,
+                            borderColor: active ? ACCENT : BORDER,
+                            boxShadow: active ? `inset 3px 0 0 ${ACCENT}` : undefined,
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold" style={{ color: ACCENT }}>
+                              {g.ticker}
                             </span>
-                          ) : (
-                            <span className="text-xs text-[#484f58]">—</span>
-                          )}
-                          <span className="font-mono text-emerald-400 text-sm ml-auto">
-                            {g.changePct != null
-                              ? `${g.changePct >= 0 ? "+" : ""}${g.changePct.toFixed(1)}%`
-                              : "—"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs font-mono text-[#8b949e] mt-1">
-                          <span>{fmtPrice(g.price)}</span>
-                          <span>Vol {fmtVol(g.volume)}</span>
-                        </div>
-                        {sublineByTicker[g.ticker] && (
-                          <div className="text-[10px] font-mono text-[#6e7681] mt-1 truncate">
-                            {sublineByTicker[g.ticker]}
+                            {risk ? (
+                              <span
+                                className={`text-xs font-bold px-2 py-0.5 rounded ${riskBadgeClass(risk)}`}
+                              >
+                                {risk}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-[#484f58]">—</span>
+                            )}
+                            <span className="font-mono text-emerald-400 text-sm ml-auto">
+                              {g.changePct != null
+                                ? `${g.changePct >= 0 ? "+" : ""}${g.changePct.toFixed(1)}%`
+                                : "—"}
+                            </span>
                           </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                          <div className="flex justify-between text-xs font-mono text-[#8b949e] mt-1">
+                            <span>{fmtPrice(g.price)}</span>
+                            <span>Vol {fmtVol(g.volume)}</span>
+                          </div>
+                          {sublineByTicker[g.ticker] && (
+                            <div className="text-[10px] font-mono text-[#6e7681] mt-1 truncate">
+                              {sublineByTicker[g.ticker]}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <p
                   className="text-[10px] text-[#484f58] px-3 py-1 border-t"
                   style={{ borderColor: BORDER }}
