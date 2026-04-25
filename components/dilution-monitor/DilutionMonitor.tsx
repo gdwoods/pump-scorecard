@@ -220,7 +220,13 @@ function renderOfferingDesc(desc: unknown): ReactNode {
   return null;
 }
 
-export default function DilutionMonitor() {
+export default function DilutionMonitor({
+  userEmail = null,
+  accountsEnabled = false,
+}: {
+  userEmail?: string | null;
+  accountsEnabled?: boolean;
+} = {}) {
   const [gainers, setGainers] = useState<GainerRow[]>([]);
   const [gainersSource, setGainersSource] = useState<string>("");
   const [gainersLoading, setGainersLoading] = useState(true);
@@ -228,6 +234,8 @@ export default function DilutionMonitor() {
   const [manual, setManual] = useState("");
   const [detail, setDetail] = useState<DetailJson | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailAdvancedLoading, setDetailAdvancedLoading] = useState(false);
+  const [detailNewsLoading, setDetailNewsLoading] = useState(false);
   const [detailErr, setDetailErr] = useState<string | null>(null);
   const [sublineByTicker, setSublineByTicker] = useState<Record<string, string>>(
     {}
@@ -246,11 +254,30 @@ export default function DilutionMonitor() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [storageHydrated, setStorageHydrated] = useState(false);
-  const [fmpGainers, setFmpGainers] = useState<GainerRow[]>([]);
-  const [fmpLoading, setFmpLoading] = useState(false);
-  const [fmpErr, setFmpErr] = useState<string | null>(null);
-  const [fmpExpanded, setFmpExpanded] = useState(false);
-  const [fmpUpdatedAt, setFmpUpdatedAt] = useState<number | null>(null);
+
+  const [askedgarKeyConfigured, setAskedgarKeyConfigured] = useState<
+    boolean | null
+  >(null);
+  const [askKeyInput, setAskKeyInput] = useState("");
+  const [askKeyMsg, setAskKeyMsg] = useState<string | null>(null);
+  const [askKeyErr, setAskKeyErr] = useState<string | null>(null);
+  const [askKeySaving, setAskKeySaving] = useState(false);
+
+  const refreshAskedgarKeyStatus = useCallback(async () => {
+    if (!accountsEnabled) return;
+    setAskedgarKeyConfigured(null);
+    try {
+      const res = await fetch("/api/user/askedgar-key", { credentials: "include" });
+      if (!res.ok) {
+        setAskedgarKeyConfigured(false);
+        return;
+      }
+      const j = (await res.json()) as { configured?: boolean; accountsEnabled?: boolean };
+      setAskedgarKeyConfigured(Boolean(j.configured));
+    } catch {
+      setAskedgarKeyConfigured(false);
+    }
+  }, [accountsEnabled]);
 
   const persistDmSettings = useCallback((next: DilutionMonitorSettings) => {
     setDmSettings(next);
@@ -267,6 +294,10 @@ export default function DilutionMonitor() {
     setWatchlist(loadWatchlist());
     setStorageHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (accountsEnabled) void refreshAskedgarKeyStatus();
+  }, [accountsEnabled, refreshAskedgarKeyStatus]);
 
   const ensureTickerInMovers = useCallback((sym: string) => {
     const t = sym.trim().toUpperCase();
@@ -285,36 +316,6 @@ export default function DilutionMonitor() {
       ];
     });
   }, []);
-
-  const loadFmp = useCallback(async () => {
-    setFmpLoading(true);
-    setFmpErr(null);
-    try {
-      const res = await fetch("/api/gainers/fmp");
-      const j = (await res.json()) as TopGainersJson & { error?: string };
-      if (!res.ok) {
-        if (res.status === 503) {
-          setFmpErr(j.error || "FMP_API_KEY not set");
-          setFmpGainers([]);
-          return;
-        }
-        throw new Error(j.error || `HTTP ${res.status}`);
-      }
-      setFmpGainers(j.gainers || []);
-      setFmpErr(null);
-      setFmpUpdatedAt(Date.now());
-    } catch (e) {
-      setFmpGainers([]);
-      setFmpErr(e instanceof Error ? e.message : "FMP load failed");
-    } finally {
-      setFmpLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!storageHydrated || !dmSettings.showFmpColumn) return;
-    void loadFmp();
-  }, [storageHydrated, dmSettings.showFmpColumn, loadFmp]);
 
   const fmtAge = useCallback((ts: number | null) => {
     if (!ts) return "";
@@ -335,10 +336,69 @@ export default function DilutionMonitor() {
     else window.open(h, "_blank", "noopener,noreferrer");
   }, []);
 
+  const signOut = useCallback(async () => {
+    if (!accountsEnabled) return;
+    const { createClient } = await import("@/lib/supabase/client");
+    await createClient().auth.signOut();
+    window.location.href = "/auth/login?next=" + encodeURIComponent("/dilution-monitor");
+  }, [accountsEnabled]);
+
+  const saveAskedgarKey = useCallback(async () => {
+    if (!accountsEnabled) return;
+    setAskKeyErr(null);
+    setAskKeyMsg(null);
+    if (!askKeyInput.trim() || askKeyInput.trim().length < 20) {
+      setAskKeyErr("Paste a full API key (usually at least 20 characters).");
+      return;
+    }
+    setAskKeySaving(true);
+    try {
+      const res = await fetch("/api/user/askedgar-key", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ key: askKeyInput.trim() }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
+      if (!res.ok) throw new Error(j.error || `Save failed (${res.status})`);
+      setAskKeyInput("");
+      setAskKeyMsg("Saved. Gainers and detail will use this key for your session.");
+      setAskedgarKeyConfigured(true);
+    } catch (e) {
+      setAskKeyErr(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setAskKeySaving(false);
+    }
+  }, [accountsEnabled, askKeyInput]);
+
+  const clearAskedgarKey = useCallback(async () => {
+    if (!accountsEnabled) return;
+    setAskKeyErr(null);
+    setAskKeyMsg(null);
+    setAskKeySaving(true);
+    try {
+      const res = await fetch("/api/user/askedgar-key", {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(j.error || `Remove failed (${res.status})`);
+      setAskKeyMsg("Key removed. Add one again, or the server’s env key (if any) is used.");
+      setAskedgarKeyConfigured(false);
+    } catch (e) {
+      setAskKeyErr(e instanceof Error ? e.message : "Remove failed");
+    } finally {
+      setAskKeySaving(false);
+    }
+  }, [accountsEnabled]);
+
   const loadGainers = useCallback(async () => {
     setGainersLoading(true);
     try {
-      const res = await fetch("/api/top-gainers");
+      const res = await fetch(
+        `/api/top-gainers?enrich=${dmSettings.enrichPolygonBadges ? "1" : "0"}`,
+        { credentials: "include" }
+      );
       const j = (await res.json()) as TopGainersJson & { error?: string };
       if (!res.ok) throw new Error(j.error || "Failed to load gainers");
       setGainers(j.gainers || []);
@@ -349,7 +409,7 @@ export default function DilutionMonitor() {
     } finally {
       setGainersLoading(false);
     }
-  }, []);
+  }, [dmSettings.enrichPolygonBadges]);
 
   useEffect(() => {
     void loadGainers();
@@ -396,7 +456,10 @@ export default function DilutionMonitor() {
     setDetailLoading(true);
     setDetailErr(null);
     try {
-      const res = await fetch(`/api/ask-edgar/detail/${encodeURIComponent(t)}`);
+      const res = await fetch(
+        `/api/ask-edgar/detail/${encodeURIComponent(t)}?mode=basic`,
+        { credentials: "include" }
+      );
       const j = (await res.json()) as DetailJson & { error?: string };
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       if (detailJsonCacheable(j)) {
@@ -429,6 +492,58 @@ export default function DilutionMonitor() {
       setDetailLoading(false);
     }
   }, []);
+
+  const loadAdvancedDetail = useCallback(async () => {
+    if (!selected) return;
+    const t = selected.trim().toUpperCase();
+    if (!t) return;
+    setDetailAdvancedLoading(true);
+    setDetailErr(null);
+    try {
+      const res = await fetch(
+        `/api/ask-edgar/detail/${encodeURIComponent(t)}?mode=full`,
+        { credentials: "include" }
+      );
+      const j = (await res.json()) as DetailJson & { error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setDetail((prev) =>
+        prev && prev.ticker === j.ticker ? { ...prev, ...j } : j
+      );
+      if (detailJsonCacheable(j)) {
+        detailClientCache.current.set(t, {
+          expires: Date.now() + DETAIL_CLIENT_TTL_MS,
+          detail: j,
+        });
+      }
+    } catch (e) {
+      setDetailErr(e instanceof Error ? e.message : "Advanced load failed");
+    } finally {
+      setDetailAdvancedLoading(false);
+    }
+  }, [selected]);
+
+  const loadNews = useCallback(async () => {
+    if (!selected) return;
+    const t = selected.trim().toUpperCase();
+    if (!t) return;
+    setDetailNewsLoading(true);
+    setDetailErr(null);
+    try {
+      const res = await fetch(
+        `/api/ask-edgar/detail/${encodeURIComponent(t)}?mode=news`,
+        { credentials: "include" }
+      );
+      const j = (await res.json()) as DetailJson & { error?: string };
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setDetail((prev) =>
+        prev && prev.ticker === t ? { ...prev, newsFeed: j.newsFeed ?? [] } : prev
+      );
+    } catch (e) {
+      setDetailErr(e instanceof Error ? e.message : "News load failed");
+    } finally {
+      setDetailNewsLoading(false);
+    }
+  }, [selected]);
 
   /** First symbol loads immediately; rapid ticker changes debounce to one detail fetch. */
   const detailDebounceBootRef = useRef(false);
@@ -517,7 +632,7 @@ export default function DilutionMonitor() {
     (detail?.offerings?.length ?? 0) > 0;
 
   const screener = detail?.screener;
-  const showAnyGainerCol = dmSettings.showPolygonColumn || dmSettings.showFmpColumn;
+  const showAnyGainerCol = dmSettings.showPolygonColumn;
 
   useEffect(() => {
     if (!symForDetail || !hasDetailRail) {
@@ -533,7 +648,7 @@ export default function DilutionMonitor() {
       try {
         const res = await fetch(
           `/api/stock-splits/${encodeURIComponent(symForDetail)}`,
-          { signal: ac.signal }
+          { signal: ac.signal, credentials: "include" }
         );
         const j = (await res.json()) as { splits?: StockSplitRow[]; error?: string };
         if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
@@ -614,6 +729,23 @@ export default function DilutionMonitor() {
           >
             Home
           </Link>
+          {accountsEnabled && userEmail && (
+            <>
+              <span
+                className="text-[10px] text-[#8b949e] max-w-[120px] xl:max-w-[180px] truncate"
+                title={userEmail}
+              >
+                {userEmail}
+              </span>
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="text-xs font-mono px-2 py-1 rounded border border-[#30363d] text-[#8b949e] hover:text-[#f85149]"
+              >
+                Sign out
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -717,117 +849,7 @@ export default function DilutionMonitor() {
               </aside>
             )}
 
-            {dmSettings.showFmpColumn && (
-              <aside
-                className="w-full xl:w-[360px] xl:min-w-[300px] xl:max-w-[420px] flex flex-col shrink-0"
-                style={{ borderColor: BORDER, backgroundColor: BG }}
-              >
-                <div
-                  className="flex items-center justify-between px-3 py-2 border-b"
-                  style={{ borderColor: BORDER }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setFmpExpanded((v) => !v)}
-                    className="flex items-center gap-2 font-semibold text-sm tracking-wide hover:opacity-90"
-                    style={{ color: ACCENT }}
-                    aria-expanded={fmpExpanded}
-                    title={fmpExpanded ? "Collapse" : "Expand"}
-                  >
-                    <span className="text-base leading-none">{fmpExpanded ? "▾" : "▸"}</span>
-                    <span>FMP GAINERS</span>
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void loadFmp()}
-                      className="text-[#8b949e] hover:text-[#58a6ff] text-lg leading-none"
-                      title="Refresh"
-                    >
-                      ↻
-                    </button>
-                    <span className="text-xs font-mono text-[#8b949e]">
-                      {fmpLoading ? "…" : fmpGainers.length}
-                    </span>
-                  </div>
-                </div>
-                {!fmpExpanded ? (
-                  <div className="px-3 py-2 border-b" style={{ borderColor: BORDER }}>
-                    <div className="text-xs font-mono text-[#8b949e]">
-                      {fmpLoading
-                        ? "Loading…"
-                        : fmpErr
-                          ? `Error: ${fmpErr}`
-                          : `${fmpGainers.length} symbols${fmpUpdatedAt ? ` • updated ${fmtAge(fmpUpdatedAt)}` : ""}`}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="overflow-y-auto flex-1 p-2 space-y-2 max-h-[40vh] xl:max-h-none xl:h-[calc(100vh-56px-40px)]">
-                    {fmpErr && (
-                      <p className="text-xs text-[#d29922] px-2">{fmpErr}</p>
-                    )}
-                    {fmpLoading && !fmpErr && (
-                      <p className="text-sm text-[#8b949e] px-2">Loading…</p>
-                    )}
-                    {!fmpLoading && !fmpErr && fmpGainers.length === 0 && (
-                      <p className="text-sm text-[#8b949e] px-2">No rows.</p>
-                    )}
-                    {fmpGainers.map((g) => {
-                      const active = g.ticker === selected;
-                      const risk = g.askEdgar?.overallOfferingRisk || "";
-                      return (
-                        <button
-                          key={`fmp-${g.ticker}`}
-                          type="button"
-                          onClick={() => setSelected(g.ticker)}
-                          className="w-full text-left rounded border p-2 transition-colors"
-                          style={{
-                            backgroundColor: active ? ROW : CARD,
-                            borderColor: active ? ACCENT : BORDER,
-                            boxShadow: active ? `inset 3px 0 0 ${ACCENT}` : undefined,
-                          }}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold" style={{ color: ACCENT }}>
-                              {g.ticker}
-                            </span>
-                            {risk ? (
-                              <span
-                                className={`text-xs font-bold px-2 py-0.5 rounded ${riskBadgeClass(risk)}`}
-                              >
-                                {risk}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-[#484f58]">—</span>
-                            )}
-                            <span className="font-mono text-emerald-400 text-sm ml-auto">
-                              {g.changePct != null
-                                ? `${g.changePct >= 0 ? "+" : ""}${g.changePct.toFixed(1)}%`
-                                : "—"}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-xs font-mono text-[#8b949e] mt-1">
-                            <span>{fmtPrice(g.price)}</span>
-                            <span>Vol {fmtVol(g.volume)}</span>
-                          </div>
-                          {sublineByTicker[g.ticker] && (
-                            <div className="text-[10px] font-mono text-[#6e7681] mt-1 truncate">
-                              {sublineByTicker[g.ticker]}
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                <p
-                  className="text-[10px] text-[#484f58] px-3 py-1 border-t"
-                  style={{ borderColor: BORDER }}
-                >
-                  financialmodelingprep.com
-                </p>
-              </aside>
-            )}
+            {/* FMP gainers column removed to reduce cost/surface area */}
           </div>
         )}
 
@@ -863,6 +885,15 @@ export default function DilutionMonitor() {
                   >
                     RISK: {str(dilution?.overall_offering_risk || "N/A")}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => void loadAdvancedDetail()}
+                    disabled={!detail || detailLoading || detailAdvancedLoading}
+                    className="text-xs font-mono px-3 py-1 rounded border border-[#30363d] text-[#8b949e] hover:text-[#58a6ff] disabled:opacity-40 disabled:pointer-events-none"
+                    title="Loads chart AI + dilution-data + offerings + registrations (more Ask Edgar calls)"
+                  >
+                    {detailAdvancedLoading ? "Loading advanced…" : "Load advanced"}
+                  </button>
                 </div>
               </div>
 
@@ -940,8 +971,20 @@ export default function DilutionMonitor() {
               )}
               {detail?.meta?.authError && !detail?.meta?.rateLimited && (
                 <p className="text-[#f85149] mb-4 text-sm">
-                  Ask Edgar rejected the API key (401/403). Check{" "}
-                  <code className="text-xs">ASKEDGAR_API_KEY</code> in Vercel for this project.
+                  Ask Edgar rejected the API key (401/403).{" "}
+                  {accountsEnabled ? (
+                    <>
+                      Update your key in <strong>Layout</strong> below, or your
+                      fallback server key:{" "}
+                      <code className="text-xs">ASKEDGAR_API_KEY</code> in Vercel.
+                    </>
+                  ) : (
+                    <>
+                      Set <code className="text-xs">ASKEDGAR_API_KEY</code> in
+                      Vercel, or connect Supabase to use your key from Layout
+                      with sign-in.
+                    </>
+                  )}
                 </p>
               )}
 
@@ -955,9 +998,20 @@ export default function DilutionMonitor() {
                 <div className="min-w-0 space-y-6">
                   {/* News feed */}
                   <div className="space-y-3 min-w-0">
-                    <h2 className="text-sm font-semibold mb-3" style={{ color: ACCENT }}>
-                      {`News & filings`}
-                    </h2>
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <h2 className="text-sm font-semibold" style={{ color: ACCENT }}>
+                        {`News & filings`}
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => void loadNews()}
+                        disabled={!selected || detailLoading || detailNewsLoading}
+                        className="text-xs font-mono px-2 py-1 rounded border border-[#30363d] text-[#8b949e] hover:text-[#58a6ff] disabled:opacity-40 disabled:pointer-events-none"
+                        title="Loads news on-demand (1 Ask Edgar call)"
+                      >
+                        {detailNewsLoading ? "Loading…" : "Load news"}
+                      </button>
+                    </div>
                     <div
                       className={
                         hasDetailRail
@@ -1015,11 +1069,11 @@ export default function DilutionMonitor() {
                       </a>
                     );
                   })}
-                  {!detailLoading && (detail?.newsFeed?.length ?? 0) === 0 && (
+                  {!detailLoading && !detailNewsLoading && (detail?.newsFeed?.length ?? 0) === 0 && (
                     <p
                       className={`text-sm text-[#8b949e] ${hasDetailRail ? "md:col-span-2 xl:col-span-1" : "md:col-span-2"}`}
                     >
-                      No recent items.
+                      News not loaded (click “Load news”).
                     </p>
                   )}
                     </div>
@@ -1337,11 +1391,67 @@ export default function DilutionMonitor() {
             <p className="text-xs text-[#8b949e] mb-4">
               Toggles are saved in this browser (localStorage).
             </p>
+            {accountsEnabled && (
+              <div
+                className="mb-6 rounded border p-3 space-y-2"
+                style={{ borderColor: BORDER, backgroundColor: ROW }}
+              >
+                <h3 className="text-sm font-semibold" style={{ color: ACCENT }}>
+                  Ask Edgar API key
+                </h3>
+                <p className="text-xs text-[#8b949e]">
+                  Stored once (encrypted) on the server. Used for this page’s
+                  movers and detail, instead of a shared Vercel key.
+                </p>
+                {askedgarKeyConfigured != null && (
+                  <p className="text-xs text-[#8b949e]">
+                    Status:{" "}
+                    {askedgarKeyConfigured ? (
+                      <span className="text-emerald-400">saved</span>
+                    ) : (
+                      <span className="text-amber-400/90">not set</span>
+                    )}
+                  </p>
+                )}
+                <input
+                  type="password"
+                  value={askKeyInput}
+                  onChange={(e) => setAskKeyInput(e.target.value)}
+                  className="w-full px-2 py-1.5 rounded border bg-[#0d1117] text-sm font-mono"
+                  style={{ borderColor: BORDER, color: FG }}
+                  placeholder="ask-live-… (paste to replace)"
+                  autoComplete="off"
+                  disabled={askKeySaving}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void saveAskedgarKey()}
+                    className="px-3 py-1.5 rounded text-xs font-semibold text-[#0d1117] disabled:opacity-50"
+                    style={{ backgroundColor: ACCENT }}
+                    disabled={askKeySaving}
+                  >
+                    {askKeySaving ? "Saving…" : "Save key"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void clearAskedgarKey()}
+                    className="px-3 py-1.5 rounded text-xs font-semibold border text-[#8b949e] border-[#30363d] hover:text-[#f85149] disabled:opacity-50"
+                    disabled={askKeySaving || askedgarKeyConfigured !== true}
+                  >
+                    Remove key
+                  </button>
+                </div>
+                {askKeyMsg && (
+                  <p className="text-xs text-emerald-400/90">{askKeyMsg}</p>
+                )}
+                {askKeyErr && <p className="text-xs text-red-400">{askKeyErr}</p>}
+              </div>
+            )}
             <ul className="space-y-3 text-sm">
               {(
                 [
                   ["showPolygonColumn", "Polygon / TV movers column"],
-                  ["showFmpColumn", "FMP biggest gainers column"],
                   ["showChart", "TradingView chart (linked symbol)"],
                   ["showWatchlistColumn", "Watchlist column"],
                 ] as const
@@ -1365,6 +1475,39 @@ export default function DilutionMonitor() {
                 </li>
               ))}
             </ul>
+            <div className="mt-6 pt-4 border-t" style={{ borderColor: BORDER }}>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: ACCENT }}>
+                Cost controls
+              </h3>
+              <p className="text-xs text-[#8b949e] mb-3">
+                These toggles reduce Ask Edgar calls when the page is shared.
+              </p>
+              <ul className="space-y-3 text-sm">
+                {(
+                  [
+                    ["enrichPolygonBadges", "Show Ask Edgar risk badges in MOVERS list"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <li key={key} className="flex items-center gap-3">
+                    <input
+                      id={`dm-${key}`}
+                      type="checkbox"
+                      className="h-4 w-4 accent-[#58a6ff]"
+                      checked={dmSettings[key]}
+                      onChange={() =>
+                        persistDmSettings({
+                          ...dmSettings,
+                          [key]: !dmSettings[key],
+                        })
+                      }
+                    />
+                    <label htmlFor={`dm-${key}`} className="cursor-pointer select-none">
+                      {label}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
             <button
               type="button"
               onClick={() => setSettingsOpen(false)}

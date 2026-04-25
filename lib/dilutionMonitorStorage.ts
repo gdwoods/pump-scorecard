@@ -5,16 +5,16 @@ const WATCHLIST_KEY = "dilution-monitor:watchlist:v1";
 
 export type DilutionMonitorSettings = {
   showPolygonColumn: boolean;
-  showFmpColumn: boolean;
   showChart: boolean;
   showWatchlistColumn: boolean;
+  enrichPolygonBadges: boolean;
 };
 
 export const DEFAULT_DILUTION_MONITOR_SETTINGS: DilutionMonitorSettings = {
   showPolygonColumn: true,
-  showFmpColumn: true,
   showChart: true,
   showWatchlistColumn: true,
+  enrichPolygonBadges: false,
 };
 
 export function loadDmSettings(): DilutionMonitorSettings {

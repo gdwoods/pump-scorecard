@@ -1,24 +1,23 @@
 import { NextResponse } from "next/server";
 import { loadAskEdgarDetailCached } from "@/lib/askEdgarDetail";
-import {
-  ASKEDGAR_ENV_KEYS,
-  getAskEdgarApiKeyFromEnv,
-} from "@/lib/topGainers";
+import { ASKEDGAR_ENV_KEYS } from "@/lib/topGainers";
+import { resolveAskEdgarApiKey } from "@/lib/resolveAskEdgarApiKey";
 
 export const runtime = "nodejs";
 
 /** Allow CDN/browser to cache successful JSON for 30m; errors stay uncached. */
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ ticker: string }> }
 ) {
-  const apiKey = getAskEdgarApiKeyFromEnv();
+  const resolved = await resolveAskEdgarApiKey();
+  const apiKey = resolved.key;
   if (!apiKey) {
     return NextResponse.json(
       {
         error: "Ask Edgar API key is not configured",
-        hint: `Set one of ${ASKEDGAR_ENV_KEYS.join(", ")} in Vercel → Project → Settings → Environment Variables (enable Production), then Redeploy. If you use the short-check deployment, add the variable there—not only on a legacy project.`,
+        hint: `Sign in to Dilution Monitor and save your key under Layout, or set one of ${ASKEDGAR_ENV_KEYS.join(", ")} in Vercel (not shown to other users).`,
       },
       { status: 503 }
     );
@@ -31,7 +30,10 @@ export async function GET(
   }
 
   try {
-    const payload = await loadAskEdgarDetailCached(sym, apiKey);
+    const { searchParams } = new URL(req.url);
+    const modeParam = String(searchParams.get("mode") || "basic").toLowerCase();
+    const mode = modeParam === "full" ? "full" : modeParam === "news" ? "news" : "basic";
+    const payload = await loadAskEdgarDetailCached(sym, apiKey, mode);
     const cacheable =
       !payload.meta?.rateLimited && !payload.meta?.authError;
     return NextResponse.json(payload, {

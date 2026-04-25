@@ -319,27 +319,65 @@ export type AskEdgarDetailPayload = {
   };
 };
 
+export type AskEdgarDetailMode = "basic" | "news" | "full";
+
 export async function loadAskEdgarDetail(
   ticker: string,
-  apiKey: string
+  apiKey: string,
+  mode: AskEdgarDetailMode = "full"
 ): Promise<AskEdgarDetailPayload> {
   const sym = ticker.trim().toUpperCase();
   const httpCtx: AskEdgarHttpCtx = { saw429: false, saw401: false, maxStatus: 0 };
 
-  const [dilution, floatData, newsRaw] = await Promise.all([
+  if (mode === "news") {
+    const newsRaw = await fetchNewsResults(apiKey, sym, httpCtx);
+    const newsFeed = [...newsRaw]
+      .sort((a, b) => {
+        const ta = Date.parse(String(a.created_at || a.filed_at || ""));
+        const tb = Date.parse(String(b.created_at || b.filed_at || ""));
+        return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+      })
+      .slice(0, 12);
+
+    const meta =
+      httpCtx.saw429 || httpCtx.saw401
+        ? {
+            ...(httpCtx.saw429 ? { rateLimited: true as const } : {}),
+            ...(httpCtx.saw401 ? { authError: true as const } : {}),
+          }
+        : undefined;
+
+    return {
+      ticker: sym,
+      dilution: null,
+      floatData: null,
+      newsFeed,
+      chartAnalysis: null,
+      stockPrice: null,
+      screener: null,
+      registrations: [],
+      inPlay: { warrants: [], convertibles: [] },
+      offerings: [],
+      ...(meta && Object.keys(meta).length ? { meta } : {}),
+    };
+  }
+
+  const [dilution, floatData, screenerRow, newsRaw] = await Promise.all([
     fetchDilutionRecord(apiKey, sym, httpCtx),
     fetchFloatRecord(apiKey, sym, httpCtx),
-    fetchNewsResults(apiKey, sym, httpCtx),
+    fetchScreenerRecord(apiKey, sym, httpCtx),
+    mode === "full" ? fetchNewsResults(apiKey, sym, httpCtx) : Promise.resolve([]),
   ]);
 
-  const [chartAnalysis, screenerRow, dilDataResults, offerings, registrations] =
-    await Promise.all([
-      fetchChartAnalysis(apiKey, sym, httpCtx),
-      fetchScreenerRecord(apiKey, sym, httpCtx),
-      fetchDilutionDataResults(apiKey, sym, httpCtx),
-      fetchOfferings(apiKey, sym, httpCtx),
-      fetchRegistrationsResults(apiKey, sym, httpCtx),
-    ]);
+  const [chartAnalysis, dilDataResults, offerings, registrations] =
+    mode === "full"
+      ? await Promise.all([
+          fetchChartAnalysis(apiKey, sym, httpCtx),
+          fetchDilutionDataResults(apiKey, sym, httpCtx),
+          fetchOfferings(apiKey, sym, httpCtx),
+          fetchRegistrationsResults(apiKey, sym, httpCtx),
+        ])
+      : ([null, [], [], []] as const);
 
   const screener = mapScreenerRow(screenerRow);
   let stockPrice = screener.price;
@@ -349,7 +387,7 @@ export async function loadAskEdgarDetail(
   }
 
   const inPlay =
-    stockPrice && stockPrice > 0
+    mode === "full" && stockPrice && stockPrice > 0
       ? filterInPlayDilution(dilDataResults, stockPrice)
       : { warrants: [], convertibles: [] };
 
@@ -377,20 +415,23 @@ export async function loadAskEdgarDetail(
     return null;
   })();
 
-  const headlines = sortNews(
-    newsRaw.filter((r) => ["news", "8-K", "6-K"].includes(String(r.form_type)))
-  ).slice(0, 6);
-
-  const newsFeed: Record<string, unknown>[] = [...headlines];
-  if (grokLine) {
-    newsFeed.push({
-      form_type: "grok",
-      title: grokLine.line,
-      summary: grokLine.line,
-      filed_at: grokLine.date,
-      url: grokLine.url,
-    });
-  }
+  const newsFeed: Record<string, unknown>[] = (() => {
+    if (mode !== "full") return [];
+    const headlines = sortNews(
+      newsRaw.filter((r) => ["news", "8-K", "6-K"].includes(String(r.form_type)))
+    ).slice(0, 6);
+    const arr: Record<string, unknown>[] = [...headlines];
+    if (grokLine) {
+      arr.push({
+        form_type: "grok",
+        title: grokLine.line,
+        summary: grokLine.line,
+        filed_at: grokLine.date,
+        url: grokLine.url,
+      });
+    }
+    return arr;
+  })();
 
   const meta =
     httpCtx.saw429 || httpCtx.saw401
@@ -438,46 +479,54 @@ function remoteDetailCacheEnabled(): boolean {
   return true;
 }
 
-const REMOTE_DETAIL_KEY_PREFIX = "aed:v1:";
+const REMOTE_DETAIL_KEY_PREFIX = "aed:v2:";
 const REMOTE_DETAIL_TTL_SEC = 45 * 60;
 
-async function getRemoteCachedDetail(sym: string): Promise<AskEdgarDetailPayload | null> {
+async function getRemoteCachedDetail(
+  cacheKey: string
+): Promise<AskEdgarDetailPayload | null> {
   if (!remoteDetailCacheEnabled()) return null;
   try {
     const kv = await getKVClient();
     if (!kv) return null;
-    const raw = await kv.get(`${REMOTE_DETAIL_KEY_PREFIX}${sym}`);
+    const raw = await kv.get(`${REMOTE_DETAIL_KEY_PREFIX}${cacheKey}`);
     if (!raw || typeof raw !== "string") return null;
     const parsed = JSON.parse(raw) as AskEdgarDetailPayload;
-    if (!parsed || typeof parsed !== "object" || parsed.ticker !== sym) return null;
+    if (!parsed || typeof parsed !== "object") return null;
     return parsed;
   } catch {
     return null;
   }
 }
 
-async function setRemoteCachedDetail(sym: string, payload: AskEdgarDetailPayload): Promise<void> {
+async function setRemoteCachedDetail(
+  cacheKey: string,
+  payload: AskEdgarDetailPayload
+): Promise<void> {
   if (!remoteDetailCacheEnabled() || !isDetailPayloadCacheable(payload)) return;
   try {
     const kv = await getKVClient();
     if (!kv) return;
     await kv.setex(
-      `${REMOTE_DETAIL_KEY_PREFIX}${sym}`,
+      `${REMOTE_DETAIL_KEY_PREFIX}${cacheKey}`,
       REMOTE_DETAIL_TTL_SEC,
       JSON.stringify(payload)
     );
   } catch (e) {
-    console.warn("[AskEdgarDetail] remote cache set failed", { sym, err: String(e) });
+    console.warn("[AskEdgarDetail] remote cache set failed", {
+      cacheKey,
+      err: String(e),
+    });
   }
 }
 
-function rememberDetailInServerCache(sym: string, payload: AskEdgarDetailPayload) {
+function rememberDetailInServerCache(cacheKey: string, payload: AskEdgarDetailPayload) {
   if (!isDetailPayloadCacheable(payload)) return;
   if (detailServerCache.size >= DETAIL_CACHE_MAX_ENTRIES) {
     const oldest = detailServerCache.keys().next().value;
     if (oldest !== undefined) detailServerCache.delete(oldest);
   }
-  detailServerCache.set(sym, {
+  detailServerCache.set(cacheKey, {
     expires: Date.now() + DETAIL_CACHE_TTL_MS,
     payload,
   });
@@ -490,32 +539,34 @@ function rememberDetailInServerCache(sym: string, payload: AskEdgarDetailPayload
  */
 export async function loadAskEdgarDetailCached(
   ticker: string,
-  apiKey: string
+  apiKey: string,
+  mode: AskEdgarDetailMode = "full"
 ): Promise<AskEdgarDetailPayload> {
   const sym = ticker.trim().toUpperCase();
-  const hit = detailServerCache.get(sym);
+  const cacheKey = `${sym}|${mode}`;
+  const hit = detailServerCache.get(cacheKey);
   if (hit && hit.expires > Date.now()) return hit.payload;
 
-  const remote = await getRemoteCachedDetail(sym);
+  const remote = await getRemoteCachedDetail(cacheKey);
   if (remote && isDetailPayloadCacheable(remote)) {
-    rememberDetailInServerCache(sym, remote);
+    rememberDetailInServerCache(cacheKey, remote);
     return remote;
   }
 
-  const existing = detailInflight.get(sym);
+  const existing = detailInflight.get(cacheKey);
   if (existing) return existing;
 
   const work = (async () => {
     try {
-      const payload = await loadAskEdgarDetail(sym, apiKey);
-      rememberDetailInServerCache(sym, payload);
-      await setRemoteCachedDetail(sym, payload);
+      const payload = await loadAskEdgarDetail(sym, apiKey, mode);
+      rememberDetailInServerCache(cacheKey, payload);
+      await setRemoteCachedDetail(cacheKey, payload);
       return payload;
     } finally {
-      detailInflight.delete(sym);
+      detailInflight.delete(cacheKey);
     }
   })();
 
-  detailInflight.set(sym, work);
+  detailInflight.set(cacheKey, work);
   return work;
 }

@@ -3,11 +3,11 @@ import {
   enrichRowsWithAskEdgar,
   fetchPolygonGainers,
   fetchTradingViewGainersFallback,
-  getAskEdgarApiKeyFromEnv,
   TOP_GAINERS_MAX_PRICE,
   TOP_GAINERS_MIN_CHANGE_PCT,
   TOP_GAINERS_MIN_PRICE,
 } from "@/lib/topGainers";
+import { resolveAskEdgarApiKey } from "@/lib/resolveAskEdgarApiKey";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,8 +26,11 @@ export async function GET(req: NextRequest) {
     searchParams.get("includeOtc") === "1" ||
     searchParams.get("include_otc") === "true";
   const enrichParam = searchParams.get("enrich");
-  const wantEnrich = enrichParam !== "0" && enrichParam !== "false";
-  const askedgarKey = getAskEdgarApiKeyFromEnv();
+  // Default off to reduce token burn when the page is shared.
+  const wantEnrich =
+    enrichParam === "1" || enrichParam === "true" || enrichParam === "yes";
+  const resolved = await resolveAskEdgarApiKey();
+  const askedgarKey = resolved.key;
   const allowTvFallback =
     searchParams.get("tvFallback") !== "0" &&
     searchParams.get("tv_fallback") !== "false";
@@ -63,6 +66,7 @@ export async function GET(req: NextRequest) {
         maxPrice: TOP_GAINERS_MAX_PRICE,
         askEdgarConfigured: Boolean(askedgarKey),
         askEdgarEnriched: Boolean(wantEnrich && askedgarKey),
+        askEdgarKeySource: askedgarKey ? resolved.source : null,
         askEdgarHits,
         count: rows.length,
         gainers: rows,
