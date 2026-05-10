@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || "";
   const pathname = request.nextUrl.pathname;
 
@@ -16,7 +15,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/short-check", request.url));
   }
 
-  return updateSession(request);
+  return NextResponse.next();
 }
 
 export const config = {

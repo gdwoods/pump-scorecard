@@ -20,8 +20,6 @@ import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import { ShortCheckResult, calculateShortRating } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { saveScanToHistory } from "@/lib/history";
-import Link from "next/link";
-
 export default function ShortCheckPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ShortCheckResult | null>(null);
@@ -246,12 +244,6 @@ export default function ShortCheckPage() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-            <Link
-              href="/top-gainers"
-              className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors text-center text-sm font-medium"
-            >
-              📈 Top gainers
-            </Link>
             {(result || ticker || pumpScorecardData) && (
               <button
                 onClick={() => {
