@@ -360,18 +360,6 @@ useEffect(() => {
 
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/dilution-monitor"
-            className="px-4 py-2 bg-[#0d1117] text-[#58a6ff] border border-[#30363d] rounded hover:bg-[#161b22] transition-colors"
-          >
-            Dilution monitor
-          </Link>
-          <Link
-            href="/top-gainers"
-            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
-          >
-            📈 Top gainers
-          </Link>
-          <Link
             href="/"
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
