@@ -18,6 +18,7 @@ import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import SentimentCard from "@/components/SentimentCard";
 import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
+import AppNav from "@/components/AppNav";
 import { ShortCheckResult, calculateShortRating } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { saveScanToHistory } from "@/lib/history";
@@ -293,35 +294,40 @@ export default function ShortCheckPage() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-            {(result || ticker || pumpScorecardData) && (
-              <button
-                onClick={() => {
-                  setResult(null);
-                  setExtractedData(null);
-                  setTicker("");
-                  setError(null);
-                  setPumpScorecardData(null);
-                  setManualFlags({});
-                  setHasAnalyzedTicker(false);
-                  setFastVerdict(null);
-                  setFastVerdictError(null);
-                  setLoadingFastVerdict(false);
-                  // Scroll to top to show upload component
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
-              >
-                📄 Analyze Another Screenshot
-              </button>
-            )}
-            <button
-              onClick={() =>
-                document.documentElement.classList.toggle("dark")
+            <AppNav
+              extra={
+                <>
+                  {(result || ticker || pumpScorecardData) && (
+                    <button
+                      onClick={() => {
+                        setResult(null);
+                        setExtractedData(null);
+                        setTicker("");
+                        setError(null);
+                        setPumpScorecardData(null);
+                        setManualFlags({});
+                        setHasAnalyzedTicker(false);
+                        setFastVerdict(null);
+                        setFastVerdictError(null);
+                        setLoadingFastVerdict(false);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="px-4 py-2 bg-slate-700 text-white rounded-xl hover:bg-slate-800 transition-colors"
+                    >
+                      Analyze Another
+                    </button>
+                  )}
+                  <button
+                    onClick={() =>
+                      document.documentElement.classList.toggle("dark")
+                    }
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Toggle Dark Mode
+                  </button>
+                </>
               }
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              🌓 Toggle Dark Mode
-            </button>
+            />
           </div>
         </div>
 

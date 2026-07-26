@@ -15,9 +15,9 @@ import SentimentCard from "@/components/SentimentCard";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
-import Link from "next/link";
 import { useScanner } from "@/hooks/useScanner";
 import { ResultsSkeleton } from "@/components/LoadingSkeleton";
+import AppNav from "@/components/AppNav";
 
 export default function Page() {
   const {
@@ -61,34 +61,32 @@ export default function Page() {
   return (
     <div className="p-6 space-y-6">
       {/* Header restored */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4 flex-wrap">
         <h1 className="text-2xl font-bold flex items-center gap-2 text-blue-600">
           <img src="/logo.png" alt="Pump Scorecard Logo" className="h-8 w-8" />
           Booker Mastermind — Pump Scorecard
         </h1>
 
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/short-check"
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-          >
-            📊 Short Check
-          </Link>
-          <button
-            onClick={exportPDF}
-            className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
-          >
-            Export PDF
-          </button>
-          <button
-            onClick={() =>
-              document.documentElement.classList.toggle("dark")
-            }
-            className="px-4 py-2 border rounded"
-          >
-            🌓 Toggle Dark Mode
-          </button>
-        </div>
+        <AppNav
+          extra={
+            <>
+              <button
+                onClick={exportPDF}
+                className="px-4 py-2 bg-gray-800 text-white rounded-xl hover:bg-gray-700"
+              >
+                Export PDF
+              </button>
+              <button
+                onClick={() =>
+                  document.documentElement.classList.toggle("dark")
+                }
+                className="px-4 py-2 border rounded-xl"
+              >
+                Toggle Dark Mode
+              </button>
+            </>
+          }
+        />
       </div>
 
       {/* Input */}
