@@ -27,6 +27,17 @@ export async function GET(req: NextRequest) {
   const started = Date.now();
   try {
     const result = await pollWireNewsFeeds();
+
+    // Hobby only allows 2 cron jobs — warm fast path here instead of a third cron
+    try {
+      const base =
+        process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '') ||
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://short-check.vercel.app');
+      await fetch(`${base}/api/fast/AAPL?fmt=json`, { cache: 'no-store' });
+    } catch (warmErr) {
+      console.warn('[cron/wire-news] warm failed', warmErr);
+    }
+
     return NextResponse.json({
       ok: true,
       elapsedMs: Date.now() - started,

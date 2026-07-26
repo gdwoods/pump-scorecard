@@ -7,6 +7,8 @@ import * as cheerio from "cheerio";
 import { fetchSentiment } from "@/utils/fetchSentiment";
 import { fetchInsiderTransactions } from "@/utils/fetchInsiderTransactions";
 import { tickerCache, getTickerCacheKey, isCacheValid, getCachedData, setCachedData } from "@/lib/cache";
+import { computeDroppiness } from "@/lib/droppiness/compute";
+import { persistDroppiness } from "@/lib/droppiness/kv";
 export const runtime = "nodejs";
 
 // Initialize Yahoo Finance instance (v3 requires instantiation)
@@ -32,15 +34,6 @@ type FraudImage = {
   date: string | null; // normalized ISO
   caption: string;
   sourceUrl: string | null;
-};
-type IntradayCandle = {
-  bucketTime: number;
-  date: Date;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
 };
 type CompanyProfile = {
   sector?: string;
@@ -81,15 +74,6 @@ type FraudResult = {
   link?: string;
   url?: string;
   postUrl?: string;
-};
-
-type PolygonBar = {
-  t: number;
-  o: number;
-  h: number;
-  l: number;
-  c: number;
-  v: number;
 };
 
 interface YahooQuote {
@@ -503,109 +487,14 @@ try {
 
     const droppinessTask = (async () => {
       try {
-  const EIGHTEEN_MONTHS_MS = 1000 * 60 * 60 * 24 * 547;
-  const startDate = new Date(Date.now() - EIGHTEEN_MONTHS_MS);
-  const endDate = new Date();
-  const startDateStr = startDate.toISOString().slice(0, 10);
-  const endDateStr = endDate.toISOString().slice(0, 10);
-  const polygonKey = process.env.POLYGON_API_KEY;
-
-        let oneMinBars: PolygonBar[] = [];
-  if (polygonKey) {
-    let url: string | null = `https://api.polygon.io/v2/aggs/ticker/${upperTicker}/range/1/minute/${startDateStr}/${endDateStr}?limit=50000&apiKey=${polygonKey}`;
-    let pageCount = 0;
-
-          while (url && pageCount < 10) {
-      const res = await fetch(url);
-      if (!res.ok) break;
-            const json: { results?: PolygonBar[], next_url?: string } = await res.json();
-      if (json.results?.length) {
-              oneMinBars.push(...json.results.map((c: PolygonBar) => ({
-                t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v,
-              })));
-      }
-      url = json.next_url ? `${json.next_url}&apiKey=${polygonKey}` : null;
-      pageCount++;
-    }
-  }
-
-        // Aggregate into 8-hour buckets
-  const bucketMs = 1000 * 60 * 60 * 8;
-  const candles: IntradayCandle[] = [];
-        let bucket: IntradayCandle | null = null;
-
-  for (const bar of oneMinBars) {
-    const barTime = new Date(bar.t);
-    const bucketTime = Math.floor(barTime.getTime() / bucketMs) * bucketMs;
-
-    if (!bucket || bucket.bucketTime !== bucketTime) {
-      if (bucket) candles.push(bucket);
-      bucket = {
-        bucketTime,
-        date: new Date(bucketTime),
-              open: bar.o, high: bar.h, low: bar.l, close: bar.c, volume: bar.v,
-      };
-    } else {
-      bucket.high = Math.max(bucket.high, bar.h);
-      bucket.low = Math.min(bucket.low, bar.l);
-      bucket.close = bar.c;
-      bucket.volume += bar.v;
-    }
-  }
-  if (bucket) candles.push(bucket);
-
-        // Scoring logic
-  let spikeCount = 0;
-  let retraceCount = 0;
-        const spikesForV2: Array<{ ageDays: number; retraced: boolean }> = [];
-        const nowMs = Date.now();
-        let droppinessDetail: Array<{ date: string; spikePct: number; retraced: boolean }> = [];
-
-  for (let i = 1; i < candles.length; i++) {
-    const prev = candles[i - 1];
-    const cur = candles[i];
-          if (!prev.close || !cur.close || !cur.high || !cur.open) continue;
-
-          const spikePctBetweenBuckets = (cur.high - prev.close) / prev.close;
-          const spikePctWithinBucket = (cur.high - cur.open) / cur.open;
-          const spikePct = Math.max(spikePctBetweenBuckets, spikePctWithinBucket);
-
-    if (spikePct > 0.2) {
-      spikeCount++;
-      let retraced = false;
-      if ((cur.high - cur.close) / cur.high > 0.1) retraced = true;
-            if (!retraced && candles[i + 1] && candles[i + 1].close < cur.close * 0.9) retraced = true;
-
-      if (retraced) retraceCount++;
-      droppinessDetail.push({
-        date: cur.date.toISOString(),
-        spikePct: +(spikePct * 100).toFixed(1),
-        retraced,
-      });
-
-            const ageDays = Math.max(0, (nowMs - cur.date.getTime()) / (1000 * 60 * 60 * 24));
-            spikesForV2.push({ ageDays, retraced });
-          }
-        }
-
-        const tauDays = 365;
-        const priorStrength = 3;
-        const priorMean = 0.5;
-        let weightedSum = 0;
-        let weightTotal = 0;
-        for (const s of spikesForV2) {
-          const w = Math.exp(-s.ageDays / tauDays);
-          weightedSum += w * (s.retraced ? 1 : 0);
-          weightTotal += w;
-        }
-
-        const nEff = weightTotal;
-        const pHat = weightTotal > 0 ? weightedSum / weightTotal : 0.5;
-        const pAdj = (nEff * pHat + priorStrength * priorMean) / (nEff + priorStrength);
-        let scoreV2 = Math.round(Math.max(0, Math.min(1, pAdj)) * 100);
-        if (spikeCount < 2) scoreV2 = Math.min(scoreV2, 85);
-
-        return { score: scoreV2, detail: droppinessDetail, intraday: candles };
+        const result = await computeDroppiness(upperTicker);
+        // Best-effort: warm drop:{TICKER} for /api/fast (don't block scan on KV)
+        void persistDroppiness(upperTicker, result);
+        return {
+          score: result.score,
+          detail: result.detail,
+          intraday: result.intraday,
+        };
       } catch (err) {
         console.error("Droppiness task failed:", err);
         return { score: 0, detail: [], intraday: [] };

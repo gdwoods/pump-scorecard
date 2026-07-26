@@ -5,8 +5,8 @@
       "schedule": "0 12 * * 1-5"
     },
     {
-      "path": "/api/cron/wire-news",
-      "schedule": "0 20 * * 1-5"
+      "path": "/api/cron/droppiness",
+      "schedule": "0 6 * * *"
     }
   ]
 }
