@@ -58,8 +58,9 @@ Keep: **`short-check`**, **`ask-edgar-dashboards`**. Deleted duplicates: `pump-s
 
 ## Next work
 
-- Fast verdict UI on `/short-check` (branch `feat/fast-verdict-ui`)
+- Droppiness KV + nightly cron + fast-path read (this branch)
 - Entry log: already in use
-- Later: KV droppiness cache + nightly cron; warming cron for `/api/fast/AAPL`
-- Wire RSS → KV: implemented (`/api/cron/wire-news`, `news:{ticker}`); Hobby-safe daily weekday crons at 12:00 and 20:00 UTC; `CRON_SECRET` set on Production/Preview
+- Optional: denser wire-news schedules if leaving Hobby (currently 1× weekday at 12:00 UTC; second cron slot used by droppiness @ 06:00 UTC)
+- Wire RSS → KV: implemented; `CRON_SECRET` set on Production/Preview
 - KV: only `KV_REST_API_REDIS_URL` is configured (no separate token env) — Redis URL must embed auth for writes to work
+- Optional env: `DROPPINESS_WATCHLIST=TICK1,TICK2` seeds the nightly refresh universe

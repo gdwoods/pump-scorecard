@@ -266,6 +266,15 @@ export async function fetchNewsBundle(ticker: string): Promise<{
   };
 }
 
+export async function fetchDroppinessCached(ticker: string) {
+  try {
+    const { readDroppiness } = await import('@/lib/droppiness/kv');
+    return await withTimeout(readDroppiness(ticker), 200, 'drop-kv');
+  } catch {
+    return null;
+  }
+}
+
 export type Tier2Bundle = {
   snapshot: SettledSource<SnapshotData>;
   bars: SettledSource<DailyBar[]>;
@@ -273,18 +282,22 @@ export type Tier2Bundle = {
   filings: SettledSource<Awaited<ReturnType<typeof fetchSecFilings>>>;
   borrow: SettledSource<Awaited<ReturnType<typeof fetchBorrow>>>;
   news: SettledSource<Awaited<ReturnType<typeof fetchNewsBundle>>>;
+  droppiness: SettledSource<Awaited<ReturnType<typeof fetchDroppinessCached>>>;
 };
 
 export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
   const ms = T.timeouts.perSourceMs;
-  const [snapshot, bars, fundamentals, filings, borrow, news] = await Promise.all([
-    settleSource('polygon-snapshot', Math.min(ms, 800), () => fetchPolygonSnapshot(ticker)),
-    settleSource('polygon-aggs', Math.min(ms, 1000), () => fetchPolygonDailyBars(ticker)),
-    settleSource('yahoo-fundamentals', Math.min(ms, 1200), () => fetchYahooFundamentals(ticker)),
-    settleSource('sec-filings', Math.min(ms, 1200), () => fetchSecFilings(ticker)),
-    settleSource('borrow', Math.min(ms, 1000), () => fetchBorrow(ticker)),
-    settleSource('news', Math.min(ms, 1000), () => fetchNewsBundle(ticker)),
-  ]);
+  const [snapshot, bars, fundamentals, filings, borrow, news, droppiness] =
+    await Promise.all([
+      settleSource('polygon-snapshot', Math.min(ms, 800), () => fetchPolygonSnapshot(ticker)),
+      settleSource('polygon-aggs', Math.min(ms, 1000), () => fetchPolygonDailyBars(ticker)),
+      settleSource('yahoo-fundamentals', Math.min(ms, 1200), () => fetchYahooFundamentals(ticker)),
+      settleSource('sec-filings', Math.min(ms, 1200), () => fetchSecFilings(ticker)),
+      settleSource('borrow', Math.min(ms, 1000), () => fetchBorrow(ticker)),
+      settleSource('news', Math.min(ms, 1000), () => fetchNewsBundle(ticker)),
+      // Dedicated 200ms budget — never block the hot path on a slow KV miss
+      settleSource('droppiness-kv', 200, () => fetchDroppinessCached(ticker)),
+    ]);
 
-  return { snapshot, bars, fundamentals, filings, borrow, news };
+  return { snapshot, bars, fundamentals, filings, borrow, news, droppiness };
 }
