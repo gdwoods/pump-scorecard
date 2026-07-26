@@ -58,9 +58,11 @@ Keep: **`short-check`**, **`ask-edgar-dashboards`**. Deleted duplicates: `pump-s
 
 ## Next work
 
-- Droppiness KV + nightly cron + fast-path read (this branch)
+- Droppiness KV + nightly cron + fast-path read: live on main
+- Nightly cron also ingests Polygon top gainers into `drop:universe`
+- Short Check Fast verdict card overlays scan droppiness + DT offering tags when present
 - Entry log: already in use
-- Optional: denser wire-news schedules if leaving Hobby (currently 1× weekday at 12:00 UTC; second cron slot used by droppiness @ 06:00 UTC)
+- Optional: denser schedules via external cron or Pro (Hobby Vercel cron = once/day)
 - Wire RSS → KV: implemented; `CRON_SECRET` set on Production/Preview
 - KV: only `KV_REST_API_REDIS_URL` is configured (no separate token env) — Redis URL must embed auth for writes to work
 - Optional env: `DROPPINESS_WATCHLIST=TICK1,TICK2` seeds the nightly refresh universe

@@ -488,8 +488,12 @@ try {
     const droppinessTask = (async () => {
       try {
         const result = await computeDroppiness(upperTicker);
-        // Best-effort: warm drop:{TICKER} for /api/fast (don't block scan on KV)
-        void persistDroppiness(upperTicker, result);
+        // Warm drop:{TICKER} for /api/fast — await so Short Check → fast path stays consistent
+        try {
+          await persistDroppiness(upperTicker, result);
+        } catch (persistErr) {
+          console.warn(`[${upperTicker}] droppiness KV persist failed`, persistErr);
+        }
         return {
           score: result.score,
           detail: result.detail,
