@@ -37,10 +37,10 @@ The tool outputs a 0-100% rating that categorizes stocks into four risk tiers, h
 - Supports PNG, JPG, JPEG, WebP formats (max 4MB)
 
 ### 2. **Instant Scoring (0-100%)**
-- **High-Priority Short Candidate** (70-100%): Strong setup with multiple risk factors
-- **Moderate Short Candidate** (40-70%): Decent setup, worth monitoring
-- **Speculative Short Candidate** (20-40%): Weak setup, lower conviction
-- **No-Trade** (<20%): Not a good short opportunity
+- **High-Priority Short Candidate** (>80%): Strong setup with multiple risk factors
+- **Moderate Short Candidate** (70–80%): Solid setup with some risk factors
+- **Speculative Short Candidate** (65–70%): Marginal setup; unverified droppiness also caps here
+- **No-Trade** (<65% or any walk-away): Disqualified
 
 ### 3. **Integrated Pump Scorecard Analysis**
 After uploading a screenshot, entering the ticker provides:
@@ -273,15 +273,25 @@ The Short Check rating is calculated from **12 scoring components**, each contri
 The total score is normalized to a 0-100% rating:
 
 ```
-Rating = (Total Score / Max Possible Score) × 100
+Rating = min(100, (Total Score / Max Possible Score) × 100) × dataCompleteness
 ```
 
-**Max Possible Score**:
-- **Standard**: 162 points (includes Droppiness max of 12)
-- **With positive cash flow**: 125 points (excludes Cash Runway component)
+**Max Possible Score** (source of truth: `lib/shortCheckScoring.ts` + `lib/config/thresholds.ts`):
+- **With Droppiness input**: 162 points (includes Droppiness max of +12)
 - **Without Droppiness data**: 150 points
 
-**Note**: Total score can be negative due to walk-away penalties (e.g., Green Offering + Green Overhead = -30), which reduces the rating proportionally.
+Rating is then multiplied by `dataCompleteness` (populated components / 12). Below
+`T.dataQuality.minCompleteness` (default 70%), category is forced to **No-Trade**.
+
+**Note**: Total score can be negative due to walk-away penalties (e.g., Green Offering + Green Overhead = -30), which reduces the rating proportionally. Rating is hard-capped at 100%.
+
+**Category tiers** (when no walk-away flags):
+- `> 80%` → High-Priority Short Candidate
+- `≥ 70%` → Moderate Short Candidate
+- `≥ 65%` → Speculative Short Candidate
+- `< 65%` → No-Trade
+
+Unverified droppiness (`spikeCount < T.droppiness.minSpikes`) caps category at Speculative.
 
 ---
 
@@ -614,28 +624,31 @@ Default confidence: 0.8 if only full text block available (no individual annotat
 
 Walk-away flags are **disqualifying conditions** that indicate a stock is NOT a good short candidate, regardless of other factors. When walk-away flags are present, the category is set to "No-Trade" even if the calculated rating is high.
 
+**There is no scalp override.** Per Framework 3.0, override is asymmetric: you may decline a system-liked trade; you may never take a trade the system vetoes.
+
+Numeric thresholds live in `lib/config/thresholds.ts` (`T`). Do not duplicate literals in prose as the source of truth.
+
 ### Walk-Away Conditions
 
-1. **Cash Runway ≥ 24 months**
-   - Company has sufficient cash for extended operations
-   - Low urgency for capital raising
+1. **Droppiness failure (V1)** — score below `T.droppiness.walkAway` with `spikeCount >= T.droppiness.minSpikes`. Spikes historically hold. Fewer than min spikes ⇒ `UNVERIFIED` (not a walk-away by itself; caps conviction).
 
-2. **Positive Cash Flow**
-   - Company is generating cash, not burning it
-   - Indicates operational viability
+2. **Borrow unavailable** — iBorrowDesk reports no shares available. Fee is not scored.
 
-3. **Institutional Ownership ≥ 75%**
-   - High professional investor support
-   - Strong fundamental backing
+3. **Cash Runway > `T.runway.walkAway` months**
 
-4. **Strong Positive News Catalyst (Recent)**
-   - Recent bullish news (within 7 days) with keywords: partnership, approval, FDA approval, contract, revenue growth, strategic, breakthrough, acquisition, merger, deal, profit, earnings beat, guidance raise, positive, expands
-   - Could drive price appreciation
+4. **Positive Cash Flow**
 
-5. **Market Cap Exclusions**
-   - **> $100M**: Walk-away unless cash runway < 4 months
-   - **$70-100M**: Walk-away unless cash runway ≤ 4 months
-   - Larger companies have more resources and stability
+5. **Institutional Ownership > `T.instOwn.walkAway` (fraction, stored as % in ExtractedData)**
+
+6. **Strong Positive News Catalyst (Recent)** — recent bullish keywords within 7 days
+
+7. **Market Cap > `T.marketCap.max`**
+
+8. **Double Green Trap** — Offering Green + Overhead Supply Green (unless regulatory override)
+
+9. **TRAP_RISK / squeeze geometry** — float &lt; `T.float.squeezeFloor` with Green offering ability (share counts normalized via `normalizeShareCount`)
+
+10. **Data completeness &lt; `T.dataQuality.minCompleteness`** — missing sources score 0, never their component maximum
 
 6. **Green Offering + Green Overhead**
    - No active dilution mechanisms AND low overhead supply

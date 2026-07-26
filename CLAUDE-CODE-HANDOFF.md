@@ -28,33 +28,37 @@ git checkout rollback/short-check-stable-2026-07-26
 npx vercel promote dpl_F63aWDycLoQ29NWvz4GFUT1SqLTM --scope garth-woods-projects
 ```
 
-To put `main` back on the stable commit (only if intentional): reset/revert to the tag, then push and let Vercel redeploy — or promote the deploy above for an immediate alias switch.
+## Task status
+
+- **Task A (scorer P1 fixes)** — done (working tree; verify: `npx tsx scripts/verify-task-a.ts`)
+- **Task B (`/api/fast/[ticker]`)** — implemented:
+  - `GET /api/fast/[TICKER]?fmt=json|text` (Edge runtime)
+  - Modules under `lib/fast/`
+  - Droppiness returns `UNVERIFIED` / `not_cached` (KV cron later)
+  - Verify: `npx tsx scripts/verify-task-b.ts`
+
+Governing docs (from Claude Code session):
+
+- [docs/framework/START-HERE.md](docs/framework/START-HERE.md)
+- [docs/framework/TASK-A-B-HANDOFF.md](docs/framework/TASK-A-B-HANDOFF.md)
+- [docs/framework/Short-Selling-Framework-3.0.md](docs/framework/Short-Selling-Framework-3.0.md)
+- [docs/framework/fast-verdict-endpoint-spec.md](docs/framework/fast-verdict-endpoint-spec.md)
+- [docs/framework/fast-verdict-spec-addendum.md](docs/framework/fast-verdict-spec-addendum.md)
 
 ## Deploy map (post-cleanup)
 
-Keep:
-
-- **`short-check`** — public Short Check / pump-scorecard app (`short-check.vercel.app`)
-- **`ask-edgar-dashboards`** — private Ask Edgar dilution / top-gainers dashboards
-
-Deleted (do not recreate as duplicates of this repo):
-
-- `pump-scorecard`
-- `pump-scorecard-1r6z`
-
-Old `pump-scorecard*.vercel.app` URLs 404 after delete; production is **https://short-check.vercel.app**.
+Keep: **`short-check`**, **`ask-edgar-dashboards`**. Deleted duplicates: `pump-scorecard`, `pump-scorecard-1r6z`.
 
 ## Working rules
 
-- Branch off up-to-date `main`; use short-lived feature branches; delete after merge
+- Branch off up-to-date `main`; short-lived feature branches; delete after merge
 - Do not force-push `main`
 - Prefer tagging new baselines with `rollback/...` when starting another large change set
-- AskEdgar / dilution-monitor code lives in the separate `ask-edgar-dashboards` project, not this repo
-
-## Archive
-
-- Company-activities work preserved at tag `archive/feature-company-activities` (local branch removed; remote was already gone)
+- AskEdgar / dilution-monitor code lives in the separate `ask-edgar-dashboards` project
 
 ## Next work
 
-Improvements to the Short Check app (`app/short-check/`, related API routes and components). Start from current `main` after pulling; roll back to the tag/deploy above if needed.
+- Merge PR #2 when ready; smoke production
+- Entry log: already in use
+- Later: KV droppiness cache + nightly cron; warming cron for `/api/fast/AAPL`
+- Wire RSS → KV: implemented (`/api/cron/wire-news`, `news:{ticker}`); Hobby-safe daily weekday crons at 12:00 and 20:00 UTC; set `CRON_SECRET` in Vercel
