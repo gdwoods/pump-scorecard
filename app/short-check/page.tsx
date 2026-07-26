@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import ShortCheckUpload from "@/components/short-check/ShortCheckUpload";
 import ShortCheckResults from "@/components/short-check/ShortCheckResults";
+import FastVerdictCard from "@/components/short-check/FastVerdictCard";
 import DroppinessCard from "@/components/DroppinessCard";
 import CombinedPumpRiskCard from "@/components/short-check/CombinedPumpRiskCard";
 import Chart from "@/components/Chart";
@@ -20,6 +21,7 @@ import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import { ShortCheckResult, calculateShortRating } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { saveScanToHistory } from "@/lib/history";
+import type { FastVerdict } from "@/lib/fast/types";
 export default function ShortCheckPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ShortCheckResult | null>(null);
@@ -31,6 +33,9 @@ export default function ShortCheckPage() {
   const [loadingPumpData, setLoadingPumpData] = useState(false);
   const [hasAnalyzedTicker, setHasAnalyzedTicker] = useState(false);
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
+  const [fastVerdict, setFastVerdict] = useState<FastVerdict | null>(null);
+  const [loadingFastVerdict, setLoadingFastVerdict] = useState(false);
+  const [fastVerdictError, setFastVerdictError] = useState<string | null>(null);
 
   const handleUpload = async (file: File) => {
     console.log("Starting upload, file:", file.name, file.size, file.type);
@@ -184,6 +189,47 @@ export default function ShortCheckPage() {
     }
   }, [ticker, result, extractedData, pumpScorecardData]);
 
+  // Fast verdict (Framework 3.0 kill-or-escalate) whenever we analyze a ticker
+  useEffect(() => {
+    const symbol = ticker.trim().toUpperCase();
+    const shouldFetch = symbol.length > 0 && (result !== null || hasAnalyzedTicker);
+    if (!shouldFetch) {
+      setFastVerdict(null);
+      setFastVerdictError(null);
+      setLoadingFastVerdict(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingFastVerdict(true);
+    setFastVerdictError(null);
+
+    fetch(`/api/fast/${encodeURIComponent(symbol)}?fmt=json`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
+        return data as FastVerdict;
+      })
+      .then((data) => {
+        if (!cancelled) setFastVerdict(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setFastVerdict(null);
+          setFastVerdictError(err instanceof Error ? err.message : "Failed to load");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingFastVerdict(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ticker, result, hasAnalyzedTicker]);
+
   // Fetch Pump Scorecard data when ticker is available
   // Also recalculate Short Check score when droppiness becomes available
   useEffect(() => {
@@ -257,6 +303,9 @@ export default function ShortCheckPage() {
                   setPumpScorecardData(null);
                   setManualFlags({});
                   setHasAnalyzedTicker(false);
+                  setFastVerdict(null);
+                  setFastVerdictError(null);
+                  setLoadingFastVerdict(false);
                   // Scroll to top to show upload component
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
@@ -316,10 +365,10 @@ export default function ShortCheckPage() {
                   <div>
                     <h2 className="text-xl font-semibold mb-2">Quick Ticker Analysis</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                      <strong>Don't have a screenshot?</strong> Enter a ticker symbol to view Droppiness and Pump Risk analysis without uploading an image.
+                      <strong>Don't have a screenshot?</strong> Enter a ticker for a Framework 3.0 fast verdict (NO_TRADE / WATCH / REVIEW), plus Droppiness and Pump Risk.
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-500 italic">
-                      This option provides comprehensive market analysis but does not include Short Check scoring (which requires dilution tracker data from a screenshot).
+                      Fast verdict never authorizes a trade. Full Short Check scoring still needs a dilution tracker screenshot (or manual entry).
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -377,6 +426,15 @@ export default function ShortCheckPage() {
           </>
         )}
 
+        {/* Fast verdict — first thing you see after analyzing a ticker */}
+        {(loadingFastVerdict || fastVerdict || fastVerdictError) && (
+          <FastVerdictCard
+            verdict={fastVerdict}
+            loading={loadingFastVerdict}
+            error={fastVerdictError}
+          />
+        )}
+
         {/* Short Check Results - Only show if we have a result */}
         {result && (
           <ShortCheckResults
@@ -387,6 +445,7 @@ export default function ShortCheckPage() {
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
               setHasAnalyzedTicker(true);
+              setPumpScorecardData(null);
               setLoadingPumpData(true);
               fetch(`/api/scan/${newTicker}`)
                 .then((res) => res.json())
