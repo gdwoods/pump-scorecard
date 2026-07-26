@@ -58,6 +58,7 @@ Keep: **`short-check`**, **`ask-edgar-dashboards`**. Deleted duplicates: `pump-s
 
 ## Next work
 
-- Commit/PR Task A + B when ready
-- Later: KV droppiness cache + nightly cron; wire RSS poller → `news:{ticker}`
-- Warming cron for `/api/fast/AAPL` during RTH
+- Merge PR #2 when ready; smoke production
+- Entry log: already in use
+- Later: KV droppiness cache + nightly cron; warming cron for `/api/fast/AAPL`
+- Wire RSS → KV: implemented (`/api/cron/wire-news`, `news:{ticker}`); set `CRON_SECRET` in Vercel

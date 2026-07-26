@@ -5,7 +5,7 @@ import { T } from '@/lib/config/thresholds';
 import { fetchBorrowDesk } from '@/utils/fetchBorrowDesk';
 import { fetchRecentNews } from '@/utils/fetchNews';
 import { normalizeShareCount } from '@/lib/normalizeShares';
-import { settleSource, type SettledSource } from './withTimeout';
+import { settleSource, withTimeout, type SettledSource } from './withTimeout';
 import type { DailyBar, FilingSignal } from './types';
 
 const SEC_UA = 'pump-scorecard short-check (garthwoods@gmail.com)';
@@ -208,7 +208,38 @@ export async function fetchNewsBundle(ticker: string): Promise<{
   ageMinutes: number | null;
   source: string | null;
   tickerRecycleWarning: boolean;
+  fromCache?: boolean;
 }> {
+  // Prefer wire-RSS KV cache (addendum §4 source #7) — 200ms budget
+  try {
+    const { readTickerNews, isNewsFresh } = await import('@/lib/wireNews/kv');
+    const cached = await withTimeout(
+      readTickerNews(ticker),
+      200,
+      'news-kv'
+    );
+    if (cached && isNewsFresh(cached) && cached.items.length > 0) {
+      const newest = cached.items[0];
+      const ageMinutes = newest.date
+        ? Math.round((Date.now() - new Date(newest.date).getTime()) / 60000)
+        : null;
+      const threeYearsMs = 3 * 365 * 86400 * 1000;
+      const tickerRecycleWarning = cached.items.some((it) => {
+        const t = new Date(it.date).getTime();
+        return Number.isFinite(t) && Date.now() - t > threeYearsMs;
+      });
+      return {
+        headline: newest.headline ?? null,
+        ageMinutes,
+        source: newest.source ?? cached.sources[0] ?? 'wire-kv',
+        tickerRecycleWarning,
+        fromCache: true,
+      };
+    }
+  } catch {
+    // miss / timeout / KV unavailable → live fallback
+  }
+
   const items = await fetchRecentNews(ticker);
   if (!items.length) {
     return { headline: null, ageMinutes: null, source: null, tickerRecycleWarning: false };
@@ -231,6 +262,7 @@ export async function fetchNewsBundle(ticker: string): Promise<{
     ageMinutes,
     source: newest.source ?? newest.publisher ?? null,
     tickerRecycleWarning,
+    fromCache: false,
   };
 }
 
