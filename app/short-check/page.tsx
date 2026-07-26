@@ -23,6 +23,7 @@ import { ShortCheckResult, calculateShortRating } from "@/lib/shortCheckScoring"
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { saveScanToHistory } from "@/lib/history";
 import type { FastVerdict } from "@/lib/fast/types";
+import { enrichFastVerdictFromShortCheck } from "@/lib/fast/enrichFromShortCheck";
 export default function ShortCheckPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ShortCheckResult | null>(null);
@@ -433,9 +434,25 @@ export default function ShortCheckPage() {
         )}
 
         {/* Fast verdict — first thing you see after analyzing a ticker */}
+        {/* Fast verdict — enrich with scan droppiness + DT dilution when available */}
         {(loadingFastVerdict || fastVerdict || fastVerdictError) && (
           <FastVerdictCard
-            verdict={fastVerdict}
+            verdict={
+              fastVerdict
+                ? enrichFastVerdictFromShortCheck(fastVerdict, {
+                    scanDroppiness: pumpScorecardData
+                      ? {
+                          score: pumpScorecardData.droppinessScore,
+                          detail: pumpScorecardData.droppinessDetail,
+                          spikeCount: Array.isArray(pumpScorecardData.droppinessDetail)
+                            ? pumpScorecardData.droppinessDetail.length
+                            : undefined,
+                        }
+                      : null,
+                    extracted: extractedData,
+                  })
+                : null
+            }
             loading={loadingFastVerdict}
             error={fastVerdictError}
           />

@@ -8,6 +8,7 @@ import {
   readDroppiness,
   readUniverse,
 } from '@/lib/droppiness/kv';
+import { ingestPolygonGainers } from '@/lib/droppiness/gainers';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -93,6 +94,9 @@ export async function GET(req: NextRequest) {
     // Ensure seeds are enrolled even if we skip computing them this run
     for (const t of SEED) void addToUniverse(t);
 
+    const gainers = await ingestPolygonGainers();
+    console.log('[cron/droppiness] gainers', gainers);
+
     const tickers = await pickTickers();
     for (const ticker of tickers) {
       try {
@@ -118,6 +122,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       elapsedMs: Date.now() - started,
+      gainers,
       processed: results.length,
       results,
     });
