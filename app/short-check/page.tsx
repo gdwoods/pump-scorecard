@@ -205,7 +205,10 @@ export default function ShortCheckPage() {
           // Recalculate Short Check score with droppiness if available
           if (extractedData && data.droppinessScore !== undefined) {
             console.log('Recalculating Short Check score with droppiness:', data.droppinessScore);
-            const updatedResult = calculateShortRating(extractedData, data.droppinessScore);
+            const updatedResult = calculateShortRating(extractedData, {
+              score: data.droppinessScore,
+              spikeCount: Array.isArray(data.droppinessDetail) ? data.droppinessDetail.length : undefined,
+            });
             setResult(updatedResult);
           }
         })

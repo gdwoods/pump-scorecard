@@ -25,6 +25,10 @@ export interface ExtractedData {
   priceSpikePct?: number; // percentage change from DT screenshot (e.g., 18.18%, 20.51%)
   recentNews?: string; // news headline or "None"
   recentNewsDate?: string; // ISO date string for recency weighting
+  /** Distinguishes "no catalyst found" from "news source failed / not fetched". */
+  newsStatus?: 'found' | 'none' | 'unavailable';
+  /** Borrow availability from iBorrowDesk. null/undefined = unknown. */
+  borrowAvailable?: boolean | null;
   currentPrice?: number; // in dollars
   confidence: number; // overall confidence score (0-1)
 }

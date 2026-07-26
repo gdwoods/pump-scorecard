@@ -5,9 +5,17 @@ import { calculateShortRating } from '@/lib/shortCheckScoring';
 import { fetchDebtCashFromYahoo } from '@/utils/fetchDebtCash';
 import { fetchHistoricalOS } from '@/utils/fetchHistoricalOS';
 import { fetchRecentNews, getNewsForScoring } from '@/utils/fetchNews';
+import { fetchBorrowDesk } from '@/utils/fetchBorrowDesk';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // OCR can take time
+
+function parseBorrowAvailable(available: string | undefined): boolean | null {
+  if (!available || available === 'N/A' || available === 'Manual Check') return null;
+  const n = Number(String(available).replace(/,/g, ''));
+  if (Number.isNaN(n)) return null;
+  return n > 0;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -117,6 +125,7 @@ export async function POST(req: NextRequest) {
           // If we found news via API, use it (overrides any OCR-extracted news)
           if (newsHeadline) {
             extractedData.recentNews = newsHeadline;
+            extractedData.newsStatus = 'found';
             // Store the news date for recency weighting in scoring
             if (newsItems.length > 0 && newsItems[0].date) {
               extractedData.recentNewsDate = newsItems[0].date;
@@ -124,11 +133,23 @@ export async function POST(req: NextRequest) {
             console.log(`Short check API: Found news headline: ${newsHeadline.substring(0, 100)}... (date: ${extractedData.recentNewsDate || 'unknown'})`);
           } else {
             console.log(`Short check API: No recent news found (last 14 days)`);
-            // extractedData.recentNews remains undefined, which scores as +15 (no news)
+            extractedData.newsStatus = 'none';
+            extractedData.recentNews = 'None';
           }
         } catch (error) {
           console.error('Short check API: Failed to fetch news:', error);
-          // Continue without news - scoring will default to +15 (no news)
+          extractedData.newsStatus = 'unavailable';
+        }
+
+        // Borrow availability is a hard walk-away when explicitly unavailable
+        try {
+          console.log(`Short check API: Fetching borrow desk for ${extractedData.ticker}...`);
+          const borrow = await fetchBorrowDesk(extractedData.ticker);
+          extractedData.borrowAvailable = parseBorrowAvailable(borrow.available);
+          console.log(`Short check API: Borrow available=`, extractedData.borrowAvailable, borrow.available);
+        } catch (error) {
+          console.error('Short check API: Failed to fetch borrow desk:', error);
+          extractedData.borrowAvailable = null;
         }
       }
       
