@@ -61,4 +61,4 @@ Keep: **`short-check`**, **`ask-edgar-dashboards`**. Deleted duplicates: `pump-s
 - Merge PR #2 when ready; smoke production
 - Entry log: already in use
 - Later: KV droppiness cache + nightly cron; warming cron for `/api/fast/AAPL`
-- Wire RSS → KV: implemented (`/api/cron/wire-news`, `news:{ticker}`); set `CRON_SECRET` in Vercel
+- Wire RSS → KV: implemented (`/api/cron/wire-news`, `news:{ticker}`); Hobby-safe daily weekday crons at 12:00 and 20:00 UTC; set `CRON_SECRET` in Vercel
