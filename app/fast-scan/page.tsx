@@ -18,6 +18,7 @@ import BorrowDeskCard from "@/components/BorrowDeskCard";
 import SentimentCard from "@/components/SentimentCard";
 import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import type { FastVerdict } from "@/lib/fast/types";
+import { SHOW_FAST_VERDICT_UI } from "@/lib/config/features";
 
 function FastScanInner() {
   const searchParams = useSearchParams();
@@ -44,24 +45,32 @@ function FastScanInner() {
     setManualFlags({});
 
     try {
-      const [fastRes, scanRes] = await Promise.all([
-        fetch(`/api/fast/${encodeURIComponent(upper)}?fmt=json`),
-        fetch(`/api/scan/${encodeURIComponent(upper)}`),
+      const scanPromise = fetch(`/api/scan/${encodeURIComponent(upper)}`);
+      const fastPromise = SHOW_FAST_VERDICT_UI
+        ? fetch(`/api/fast/${encodeURIComponent(upper)}?fmt=json`)
+        : null;
+
+      const [scanRes, fastRes] = await Promise.all([
+        scanPromise,
+        fastPromise ?? Promise.resolve(null),
       ]);
 
-      const fastJson = await fastRes.json().catch(() => null);
       const scanJson = await scanRes.json().catch(() => null);
+      const fastJson =
+        fastRes != null ? await fastRes.json().catch(() => null) : null;
 
-      if (!fastRes.ok && !scanRes.ok) {
+      if (!scanRes.ok && (fastRes == null || !fastRes.ok)) {
         throw new Error(
-          fastJson?.error || scanJson?.error || `Scan failed (${fastRes.status}/${scanRes.status})`
+          scanJson?.error || fastJson?.error || `Scan failed (${scanRes.status})`
         );
       }
 
-      if (fastRes.ok && fastJson) setFastVerdict(fastJson as FastVerdict);
+      if (SHOW_FAST_VERDICT_UI && fastRes?.ok && fastJson) {
+        setFastVerdict(fastJson as FastVerdict);
+      }
       if (scanRes.ok && scanJson) setPumpData(scanJson);
 
-      if (!fastRes.ok) {
+      if (SHOW_FAST_VERDICT_UI && fastRes && !fastRes.ok) {
         setError(fastJson?.error || `Fast verdict unavailable (${fastRes.status})`);
       } else if (!scanRes.ok) {
         setError(scanJson?.error || `Market enrichment unavailable (${scanRes.status})`);
@@ -167,7 +176,7 @@ function FastScanInner() {
           </div>
         )}
 
-        {(loading || fastVerdict) && (
+        {SHOW_FAST_VERDICT_UI && (loading || fastVerdict) && (
           <FastVerdictCard verdict={fastVerdict} loading={loading && !fastVerdict} />
         )}
 
