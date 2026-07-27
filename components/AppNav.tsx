@@ -3,11 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const LINKS = [
-  { href: "/", label: "Pump Scorecard" },
-  { href: "/fast-scan", label: "Fast Scan" },
-  { href: "/short-check", label: "Short Check" },
-] as const;
+const LINKS = [{ href: "/fast-scan", label: "Fast Scan" }] as const;
 
 export default function AppNav({
   extra,
@@ -20,9 +16,7 @@ export default function AppNav({
     <div className="flex flex-wrap gap-2 items-center">
       {LINKS.map((link) => {
         const active =
-          link.href === "/"
-            ? pathname === "/"
-            : pathname === link.href || pathname.startsWith(`${link.href}/`);
+          pathname === link.href || pathname.startsWith(`${link.href}/`);
         return (
           <Link
             key={link.href}
