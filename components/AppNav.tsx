@@ -3,10 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const LINKS = [
-  { href: "/fast-scan", label: "Fast Scan" },
-  { href: "/short-check", label: "Short Check" },
-] as const;
+const LINKS = [{ href: "/fast-scan", label: "Fast Scan" }] as const;
 
 export default function AppNav({
   extra,

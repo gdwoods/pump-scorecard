@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import AppNav from "@/components/AppNav";
@@ -112,7 +113,11 @@ function FastScanInner() {
         <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700">
           <div className="space-y-3">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Enter a ticker once. This runs the fast verdict and the full scan together — no screenshot required.
+              Enter a ticker once. This runs the fast verdict and the full scan together — no screenshot required.{" "}
+              <Link href="/short-check" className="text-blue-600 dark:text-blue-400 underline">
+                Have a DT screenshot? Use Short Check
+              </Link>
+              .
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
