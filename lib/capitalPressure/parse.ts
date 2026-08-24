@@ -87,7 +87,7 @@ function parseNumberNear(window: string): number | undefined {
     const unit = (money[2] || '').toLowerCase();
     if (unit === 'million' || unit === 'm') n *= 1_000_000;
     if (unit === 'billion' || unit === 'b') n *= 1_000_000_000;
-    if (!Number.isNaN(n)) return n;
+    if (!Number.isNaN(n) && Number.isFinite(n)) return n;
   }
   const shares = window.match(
     /([\d,]+(?:\.\d+)?)\s*(million|m)?\s*(?:shares|share)/i
@@ -96,9 +96,15 @@ function parseNumberNear(window: string): number | undefined {
     let n = parseFloat(shares[1].replace(/,/g, ''));
     const unit = (shares[2] || '').toLowerCase();
     if (unit === 'million' || unit === 'm') n *= 1_000_000;
-    if (!Number.isNaN(n)) return n;
+    if (!Number.isNaN(n) && Number.isFinite(n)) return n;
   }
   return undefined;
+}
+
+/** Only attach finite numeric fields — NaN/null must never reach JSON (serializes as null). */
+function finiteOrUndefined(n: number | undefined): number | undefined {
+  if (n === undefined || n === null || !Number.isFinite(n)) return undefined;
+  return n;
 }
 
 function hasDateNear(window: string): boolean {
@@ -257,6 +263,7 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
       if (sharesMatch) {
         shares = parseFloat(sharesMatch[1].replace(/,/g, ''));
         if ((sharesMatch[2] || '').toLowerCase().startsWith('m')) shares *= 1_000_000;
+        shares = finiteOrUndefined(shares);
       }
 
       const moneyMatch = window.match(
@@ -268,6 +275,7 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
         const unit = (moneyMatch[2] || '').toLowerCase();
         if (unit === 'million' || unit === 'm') proceeds *= 1_000_000;
         if (unit === 'billion' || unit === 'b') proceeds *= 1_000_000_000;
+        proceeds = finiteOrUndefined(proceeds);
       }
 
       const verifiedAt = new Date().toISOString();
