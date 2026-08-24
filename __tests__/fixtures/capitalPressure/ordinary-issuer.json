@@ -1,0 +1,35 @@
+{
+  "name": "ordinary-issuer",
+  "asOf": "2025-06-15",
+  "windowStart": "2023-06-15",
+  "windowEnd": "2025-06-15",
+  "xbrl": {
+    "cashUsd": 45000000,
+    "cashAsOf": "2025-03-31",
+    "operatingCashFlowUsd": 5000000,
+    "ocfAsOf": "2025-03-31",
+    "currentAssetsUsd": 60000000,
+    "currentLiabilitiesUsd": 20000000,
+    "totalAssetsUsd": 150000000,
+    "balanceSheetAsOf": "2025-03-31",
+    "sharesOutstanding": 50000000,
+    "sharesOutstandingAsOf": "2025-03-31"
+  },
+  "documents": [
+    {
+      "form": "10-Q",
+      "filingDate": "2025-05-01",
+      "accessionNumber": "0000320193-25-000010",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000010/10q.htm",
+      "text": "Form 10-Q for the quarterly period ended March 29, 2025. Net sales were $95,000,000. The Company generated operating cash flow of $5,000,000. Cash and cash equivalents were $45,000,000. There were no material financing transactions during the quarter. The Company did not enter into any at the market offering, equity line, or convertible note arrangements."
+    },
+    {
+      "form": "8-K",
+      "filingDate": "2025-04-20",
+      "accessionNumber": "0000320193-25-000011",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000011/ek.htm",
+      "items": ["2.02"],
+      "text": "Item 2.02 Results of Operations and Financial Condition. The Company announced earnings for the quarter ended March 29, 2025. Revenue increased year over year."
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "name": "equity-line-draw",
+  "asOf": "2025-06-15",
+  "windowStart": "2023-06-15",
+  "windowEnd": "2025-06-15",
+  "xbrl": {
+    "sharesOutstanding": 82000000,
+    "sharesOutstandingAsOf": "2025-05-20",
+    "cashUsd": 1500000,
+    "cashAsOf": "2025-03-31",
+    "operatingCashFlowUsd": -2400000,
+    "ocfAsOf": "2025-03-31"
+  },
+  "documents": [
+    {
+      "form": "8-K",
+      "filingDate": "2025-03-01",
+      "accessionNumber": "0001213900-25-000020",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/1234567/000121390025000020/ek.htm",
+      "items": ["1.01"],
+      "text": "Item 1.01 Entry into a Material Definitive Agreement. On March 1, 2025, the Company entered into an equity line purchase agreement with Yorkville Advisors for up to $25,000,000. Under the equity line, the Company may sell shares from time to time. The purchase price is equal to 95% of the lowest daily VWAP during the pricing period."
+    },
+    {
+      "form": "8-K",
+      "filingDate": "2025-05-28",
+      "accessionNumber": "0001213900-25-000021",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/1234567/000121390025000021/ek2.htm",
+      "items": ["8.01"],
+      "text": "Item 8.01 Other Events. On May 28, 2025, the Company sold and issued 2,500,000 shares of common stock to Yorkville under the equity line purchase agreement for gross proceeds of $1,250,000. The shares were issued pursuant to the equity line."
+    },
+    {
+      "form": "424B5",
+      "filingDate": "2025-05-28",
+      "accessionNumber": "0001213900-25-000022",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/1234567/000121390025000022/424b5.htm",
+      "text": "Prospectus supplement dated May 28, 2025. The Company sold 2,500,000 shares of common stock under its equity line for gross proceeds of approximately $1,250,000."
+    },
+    {
+      "form": "10-Q",
+      "filingDate": "2025-05-15",
+      "accessionNumber": "0001213900-25-000023",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/1234567/000121390025000023/10q.htm",
+      "text": "Form 10-Q for the quarterly period ended March 31, 2025. The Company continues to evaluate financing alternatives. Net loss was $3,000,000 for the quarter."
+    }
+  ]
+}

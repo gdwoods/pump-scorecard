@@ -18,6 +18,7 @@ import DroppinessCard from "@/components/DroppinessCard";
 import DroppinessScatter from "@/components/DroppinessChart";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
+import CapitalPressureCard from "@/components/CapitalPressureCard";
 import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import Link from "next/link";
@@ -474,6 +475,13 @@ useEffect(() => {
             />
             <SecFilings ticker={activeTicker} filings={result.filings} />
           </div>
+
+          {result.capitalPressure && (
+            <CapitalPressureCard
+              ticker={activeTicker.toUpperCase()}
+              data={result.capitalPressure}
+            />
+          )}
 
           {result.borrowData && (
             <BorrowDeskCard

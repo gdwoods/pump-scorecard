@@ -11,6 +11,7 @@ import Chart from "@/components/Chart";
 import DroppinessScatter from "@/components/DroppinessChart";
 import Fundamentals from "@/components/Fundamentals";
 import SecFilings from "@/components/SecFilings";
+import CapitalPressureCard from "@/components/CapitalPressureCard";
 import NewsSection from "@/components/NewsSection";
 import FraudEvidence from "@/components/FraudEvidence";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
@@ -524,6 +525,13 @@ export default function ShortCheckPage() {
                 insiderTransactions={pumpScorecardData.insiderTransactions}
               />
             </div>
+
+            {pumpScorecardData.capitalPressure && (
+              <CapitalPressureCard
+                ticker={ticker.toUpperCase()}
+                data={pumpScorecardData.capitalPressure}
+              />
+            )}
 
             {/* Price and Volume Chart - Full Width */}
             <Chart result={pumpScorecardData} />

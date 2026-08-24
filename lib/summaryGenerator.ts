@@ -107,6 +107,20 @@ function generateQuickSummary(
     lines.push('');
   }
 
+  // Capital Pressure (if available)
+  if (pumpScorecardData?.capitalPressure) {
+    const cp = pumpScorecardData.capitalPressure;
+    if (cp.available === false) {
+      lines.push(`Capital Pressure: unavailable — ${cp.unavailableReason || 'SEC not verified'}`);
+    } else {
+      lines.push(
+        `Capital Pressure: ${cp.score}/100 (${cp.status}) · dilution ${cp.dilutionLikelihood}/10 · exec risk ${cp.shortExecutionRisk}/10`
+      );
+      if (cp.summary) lines.push(cp.summary);
+    }
+    lines.push('');
+  }
+
   // Pump Risk (if available)
   if (pumpScorecardData?.weightedRiskScore !== undefined) {
     lines.push(`Pump Risk: ${pumpScorecardData.weightedRiskScore.toFixed(1)} - ${pumpScorecardData.summaryVerdict || 'N/A'}`);
@@ -289,6 +303,46 @@ function generateFullSummary(
       pumpScorecardData.filings.slice(0, 10).forEach((filing: any) => {
         lines.push(`• ${filing.title || 'Filing'} - ${filing.date || 'Unknown date'}`);
       });
+      lines.push('');
+    }
+
+    // Capital Pressure
+    if (pumpScorecardData.capitalPressure) {
+      const cp = pumpScorecardData.capitalPressure;
+      lines.push('CAPITAL PRESSURE:');
+      if (cp.available === false) {
+        lines.push(`Unavailable — ${cp.unavailableReason || 'SEC filings could not be verified'}`);
+        lines.push('(Missing data is not a risk signal.)');
+      } else {
+        lines.push(`Score: ${cp.score}/100 — ${cp.status}`);
+        lines.push(`Dilution likelihood: ${cp.dilutionLikelihood}/10`);
+        lines.push(`Short execution risk: ${cp.shortExecutionRisk}/10 (execution risk, not a bullish signal)`);
+        if (cp.summary) lines.push(cp.summary);
+        if (cp.capacity?.status === 'unknown') {
+          lines.push('• Capacity: Not verified from available filings');
+        } else if (cp.capacity?.description) {
+          lines.push(`• Capacity (${cp.capacity.status}): ${cp.capacity.description}`);
+        }
+        if (cp.recentIssuance?.status === 'unknown') {
+          lines.push('• Recent issuance: Not verified from available filings');
+        } else if (cp.recentIssuance) {
+          lines.push(
+            `• Recent issuance 30d: ${cp.recentIssuance.shares30d ?? '—'} shares` +
+              (cp.recentIssuance.proceeds30dUsd != null
+                ? ` / $${cp.recentIssuance.proceeds30dUsd}`
+                : '')
+          );
+        }
+        if (cp.reasons?.length) {
+          lines.push('Top reasons:');
+          cp.reasons.slice(0, 5).forEach((r: { label: string; points: number }) => {
+            lines.push(`  +${r.points}: ${r.label}`);
+          });
+        }
+        if (cp.events?.length) {
+          lines.push(`Timeline events: ${cp.events.length} (see UI for SEC links)`);
+        }
+      }
       lines.push('');
     }
 

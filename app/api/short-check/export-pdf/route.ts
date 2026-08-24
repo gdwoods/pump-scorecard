@@ -422,6 +422,105 @@ export async function POST(req: NextRequest) {
         yPosition -= sectionSpacing;
       }
 
+      // Capital Pressure
+      if (pumpScorecardData.capitalPressure) {
+        const cp = pumpScorecardData.capitalPressure;
+        yPosition = addSectionHeader('Capital Pressure', yPosition);
+        yPosition -= 10;
+
+        if (cp.available === false) {
+          yPosition = addText(
+            `Unavailable — ${cp.unavailableReason || 'SEC filings could not be verified'}`,
+            margin,
+            yPosition,
+            10,
+            false
+          );
+          yPosition = addText(
+            'Missing data is not a risk signal.',
+            margin,
+            yPosition,
+            9,
+            false
+          );
+        } else {
+          currentPage.drawText(`Score: ${cp.score}/100 (${cp.status})`, {
+            x: margin,
+            y: yPosition,
+            size: 12,
+            font: boldFont,
+          });
+          yPosition -= lineHeight;
+          yPosition = addText(
+            `Dilution likelihood: ${cp.dilutionLikelihood}/10 · Short execution risk: ${cp.shortExecutionRisk}/10`,
+            margin,
+            yPosition,
+            10,
+            false
+          );
+          yPosition = addText(
+            'Execution risk is not a bullish signal. Not included in Pump Scorecard overall score.',
+            margin,
+            yPosition,
+            8,
+            false
+          );
+          if (cp.summary) {
+            yPosition = addText(cp.summary, margin, yPosition, 9, false);
+          }
+          if (cp.capacity?.status === 'unknown') {
+            yPosition = addText(
+              'Capacity: Not verified from available filings',
+              margin,
+              yPosition,
+              9,
+              false
+            );
+          } else if (cp.capacity?.description) {
+            yPosition = addText(
+              `Capacity (${cp.capacity.status}): ${cp.capacity.description}`,
+              margin,
+              yPosition,
+              9,
+              false
+            );
+          }
+          if (cp.recentIssuance?.status === 'unknown') {
+            yPosition = addText(
+              'Recent issuance: Not verified from available filings',
+              margin,
+              yPosition,
+              9,
+              false
+            );
+          } else if (cp.recentIssuance?.shares30d != null) {
+            yPosition = addText(
+              `Recent issuance (30d): ${cp.recentIssuance.shares30d.toLocaleString()} shares`,
+              margin,
+              yPosition,
+              9,
+              false
+            );
+          }
+          if (Array.isArray(cp.reasons)) {
+            for (const reason of cp.reasons.slice(0, 5)) {
+              yPosition = addText(
+                `+${reason.points}: ${reason.label}`,
+                margin + 10,
+                yPosition,
+                9,
+                false
+              );
+              if (yPosition < margin + 50) {
+                currentPage = pdfDoc.addPage([612, 792]);
+                yPosition = 750;
+              }
+            }
+          }
+        }
+        yPosition -= sectionSpacing;
+      }
+
       // Fraud Evidence
       // Filter out "manual check" placeholders (same logic as FraudEvidence component)
       const fraudItems = Array.isArray(pumpScorecardData.fraudImages)

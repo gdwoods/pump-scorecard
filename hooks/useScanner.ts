@@ -51,6 +51,8 @@ export interface ScanResult {
         messages: any[];
     } | null;
     insiderTransactions: InsiderTransaction[];
+    /** Optional Capital Pressure module — additive; not part of weightedRiskScore. */
+    capitalPressure?: import('@/lib/capitalPressure/types').CapitalPressureResult;
 }
 
 export function useScanner() {

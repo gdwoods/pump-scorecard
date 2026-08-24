@@ -1,0 +1,35 @@
+{
+  "name": "reverse-split-nasdaq",
+  "asOf": "2025-06-15",
+  "windowStart": "2023-06-15",
+  "windowEnd": "2025-06-15",
+  "xbrl": {
+    "sharesOutstanding": 5000000,
+    "sharesOutstandingAsOf": "2025-04-01"
+  },
+  "documents": [
+    {
+      "form": "8-K",
+      "filingDate": "2025-02-10",
+      "accessionNumber": "0001213900-25-000040",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/1234567/000121390025000040/ek.htm",
+      "items": ["3.01"],
+      "text": "Item 3.01 Notice of Delisting or Failure to Satisfy a Continued Listing Rule. On February 10, 2025, the Company received a notification letter from Nasdaq indicating that the Company is not in compliance with the minimum bid price requirement. The Nasdaq deficiency notice provides a 180-day period to regain compliance."
+    },
+    {
+      "form": "8-K",
+      "filingDate": "2025-04-01",
+      "accessionNumber": "0001213900-25-000041",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/1234567/000121390025000041/ek2.htm",
+      "items": ["3.03", "5.03"],
+      "text": "Item 3.03 Material Modification to Rights of Security Holders. On April 1, 2025, the Company effected a 1-for-20 reverse stock split of its common stock. The reverse stock split was approved by stockholders on March 15, 2025. Outstanding shares were reduced from 100,000,000 to 5,000,000."
+    },
+    {
+      "form": "10-Q",
+      "filingDate": "2025-05-12",
+      "accessionNumber": "0001213900-25-000042",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/1234567/000121390025000042/10q.htm",
+      "text": "Form 10-Q for the quarterly period ended March 31, 2025. The Company reported a net loss of $400,000. Management believes existing cash is adequate for operations. No going concern language is included in this filing."
+    }
+  ]
+}
