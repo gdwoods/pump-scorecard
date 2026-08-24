@@ -442,4 +442,37 @@ describe('capitalPressure scoring fixtures', () => {
     expect(financingTypes).toHaveLength(0);
     expect(result.reasons.filter((r) => r.label.includes('Reverse split'))).toHaveLength(1);
   });
+
+  it('ignores null/NaN share counts in recent issuance (JSON null from NaN)', () => {
+    const result = scoreCapitalPressure({
+      parsed: {
+        events: [
+          {
+            id: 'bad-shares',
+            eventDate: '2026-08-24',
+            type: 'note_conversion',
+            title: 'Note conversion',
+            description: 'converted',
+            isCapacityOnly: false,
+            sharesIssued: null as unknown as number,
+            grossProceedsUsd: 11.5,
+            evidence: {
+              form: '8-K',
+              filingDate: '2026-08-24',
+              documentUrl: 'https://example.com',
+              excerpt: 'converted on August 24, 2026 for $11.50',
+              confidence: 'high',
+            },
+          },
+        ],
+        fundamentals: { goingConcern: { present: false } },
+        windowStart: '2024-08-24',
+        windowEnd: '2026-08-24',
+        scannedThrough: '2026-08-24',
+      },
+      context: { asOf: '2026-08-24' },
+    });
+    expect(result.recentIssuance.shares30d).toBeUndefined();
+    expect(result.recentIssuance.proceeds30dUsd).toBe(11.5);
+  });
 });

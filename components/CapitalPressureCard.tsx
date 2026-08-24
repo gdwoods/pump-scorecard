@@ -62,15 +62,15 @@ function evidenceStatusClass(status: EvidenceStatus): string {
   }
 }
 
-function formatShares(n?: number): string {
-  if (n === undefined) return "Not verified from available filings";
+function formatShares(n?: number | null): string {
+  if (n == null || !Number.isFinite(n)) return "Not verified from available filings";
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString();
 }
 
-function formatUsd(n?: number): string {
-  if (n === undefined) return "Not verified from available filings";
+function formatUsd(n?: number | null): string {
+  if (n == null || !Number.isFinite(n)) return "Not verified from available filings";
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
   return `$${n.toLocaleString()}`;
@@ -95,6 +95,7 @@ function SecLink({ url, label }: { url?: string; label?: string }) {
 }
 
 function TimelineRow({ event }: { event: CapitalEvent }) {
+  const evidence = event.evidence;
   return (
     <li className="border-l-2 border-slate-200 dark:border-slate-600 pl-3 py-2 space-y-1">
       <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -107,7 +108,7 @@ function TimelineRow({ event }: { event: CapitalEvent }) {
             capacity
           </span>
         )}
-        {event.evidence.confidence === "needs_review" && (
+        {evidence?.confidence === "needs_review" && (
           <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
             needs review
           </span>
@@ -116,19 +117,19 @@ function TimelineRow({ event }: { event: CapitalEvent }) {
       <p className="text-sm text-gray-800 dark:text-gray-200">{event.title}</p>
       <p className="text-xs text-gray-600 dark:text-gray-400">{event.description}</p>
       <div className="flex flex-wrap gap-3 text-xs text-gray-600 dark:text-gray-400">
-        {event.sharesIssued !== undefined && (
+        {event.sharesIssued != null && Number.isFinite(event.sharesIssued) && (
           <span>Issued: {formatShares(event.sharesIssued)}</span>
         )}
-        {event.potentialShares !== undefined && (
+        {event.potentialShares != null && Number.isFinite(event.potentialShares) && (
           <span>Potential: {formatShares(event.potentialShares)}</span>
         )}
-        {event.grossProceedsUsd !== undefined && (
+        {event.grossProceedsUsd != null && Number.isFinite(event.grossProceedsUsd) && (
           <span>Amount: {formatUsd(event.grossProceedsUsd)}</span>
         )}
-        <SecLink url={event.evidence.documentUrl} label={event.evidence.form} />
+        <SecLink url={evidence?.documentUrl} label={evidence?.form} />
         {(event.filedAt || event.verifiedAt) && (
           <span>
-            filed {event.filedAt || event.evidence.filingDate}
+            filed {event.filedAt || evidence?.filingDate}
             {event.verifiedAt ? ` · verified ${event.verifiedAt.slice(0, 10)}` : ""}
           </span>
         )}
@@ -144,8 +145,8 @@ function ReasonRow({ reason }: { reason: ScoreReason }) {
         <span className="text-gray-800 dark:text-gray-200">{reason.label}</span>
         <span className="font-semibold text-red-700 dark:text-red-300">+{reason.points}</span>
       </div>
-      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3">{reason.evidence.excerpt}</p>
-      <SecLink url={reason.evidence.documentUrl} label={`${reason.evidence.form} evidence`} />
+      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3">{reason.evidence?.excerpt ?? ''}</p>
+      <SecLink url={reason.evidence?.documentUrl} label={`${reason.evidence?.form ?? 'SEC'} evidence`} />
     </div>
   );
 }
@@ -181,11 +182,11 @@ export default function CapitalPressureCard({
 
   const events = data.events || [];
   const visibleEvents = showAllEvents ? events : events.slice(0, 6);
-  const topReason = data.reasons[0];
-  const otherReasons = data.reasons.slice(1);
+  const topReason = data.reasons?.[0];
+  const otherReasons = (data.reasons || []).slice(1);
 
   const capacityText =
-    data.capacity.status === "unknown"
+    !data.capacity || data.capacity.status === "unknown"
       ? "Not verified from available filings"
       : data.capacity.description;
 
@@ -228,22 +229,22 @@ export default function CapitalPressureCard({
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Potential / registered capacity
               </h3>
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(data.capacity.status)}`}>
-                {evidenceStatusLabel(data.capacity.status)}
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(data.capacity?.status ?? "unknown")}`}>
+                {evidenceStatusLabel(data.capacity?.status ?? "unknown")}
               </span>
             </div>
             <p className="text-sm text-gray-800 dark:text-gray-200">{capacityText}</p>
-            {data.capacity.amountUsd !== undefined && (
+            {data.capacity?.amountUsd != null && Number.isFinite(data.capacity.amountUsd) && (
               <p className="text-xs text-gray-600 dark:text-gray-400">
                 Amount: {formatUsd(data.capacity.amountUsd)}
               </p>
             )}
-            {data.capacity.potentialShares !== undefined && (
+            {data.capacity?.potentialShares != null && Number.isFinite(data.capacity.potentialShares) && (
               <p className="text-xs text-gray-600 dark:text-gray-400">
                 Potential shares: {formatShares(data.capacity.potentialShares)}
               </p>
             )}
-            <SecLink url={data.capacity.evidence?.documentUrl} />
+            <SecLink url={data.capacity?.evidence?.documentUrl} />
           </div>
 
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-1">
@@ -251,11 +252,11 @@ export default function CapitalPressureCard({
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Recently issued supply
               </h3>
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(data.recentIssuance.status)}`}>
-                {evidenceStatusLabel(data.recentIssuance.status)}
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(data.recentIssuance?.status ?? "unknown")}`}>
+                {evidenceStatusLabel(data.recentIssuance?.status ?? "unknown")}
               </span>
             </div>
-            {data.recentIssuance.status === "unknown" ? (
+            {!data.recentIssuance || data.recentIssuance.status === "unknown" ? (
               <p className="text-sm text-gray-800 dark:text-gray-200">
                 Not verified from available filings
               </p>
@@ -263,28 +264,28 @@ export default function CapitalPressureCard({
               <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
                 <li>
                   7d:{" "}
-                  {data.recentIssuance.shares7d !== undefined
+                  {data.recentIssuance.shares7d != null && Number.isFinite(data.recentIssuance.shares7d)
                     ? formatShares(data.recentIssuance.shares7d)
                     : "—"}
-                  {data.recentIssuance.proceeds7dUsd !== undefined
+                  {data.recentIssuance.proceeds7dUsd != null && Number.isFinite(data.recentIssuance.proceeds7dUsd)
                     ? ` / ${formatUsd(data.recentIssuance.proceeds7dUsd)}`
                     : ""}
                 </li>
                 <li>
                   30d:{" "}
-                  {data.recentIssuance.shares30d !== undefined
+                  {data.recentIssuance.shares30d != null && Number.isFinite(data.recentIssuance.shares30d)
                     ? formatShares(data.recentIssuance.shares30d)
                     : "—"}
-                  {data.recentIssuance.proceeds30dUsd !== undefined
+                  {data.recentIssuance.proceeds30dUsd != null && Number.isFinite(data.recentIssuance.proceeds30dUsd)
                     ? ` / ${formatUsd(data.recentIssuance.proceeds30dUsd)}`
                     : ""}
                 </li>
                 <li>
                   90d:{" "}
-                  {data.recentIssuance.shares90d !== undefined
+                  {data.recentIssuance.shares90d != null && Number.isFinite(data.recentIssuance.shares90d)
                     ? formatShares(data.recentIssuance.shares90d)
                     : "—"}
-                  {data.recentIssuance.proceeds90dUsd !== undefined
+                  {data.recentIssuance.proceeds90dUsd != null && Number.isFinite(data.recentIssuance.proceeds90dUsd)
                     ? ` / ${formatUsd(data.recentIssuance.proceeds90dUsd)}`
                     : ""}
                 </li>
@@ -297,11 +298,14 @@ export default function CapitalPressureCard({
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Current share count
               </h3>
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(data.sharesOutstanding.status)}`}>
-                {evidenceStatusLabel(data.sharesOutstanding.status)}
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(data.sharesOutstanding?.status ?? "unknown")}`}>
+                {evidenceStatusLabel(data.sharesOutstanding?.status ?? "unknown")}
               </span>
             </div>
-            {data.sharesOutstanding.status === "unknown" || data.sharesOutstanding.value === undefined ? (
+            {!data.sharesOutstanding ||
+            data.sharesOutstanding.status === "unknown" ||
+            data.sharesOutstanding.value == null ||
+            !Number.isFinite(data.sharesOutstanding.value) ? (
               <p className="text-sm text-gray-800 dark:text-gray-200">
                 Not verified from available filings
               </p>
@@ -386,7 +390,7 @@ export default function CapitalPressureCard({
               {otherReasons.map((r, i) => (
                 <ReasonRow key={`${r.label}-${i}`} reason={r} />
               ))}
-              {data.unknowns.length > 0 && (
+              {data.unknowns && data.unknowns.length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold uppercase text-gray-500 mb-1">Data gaps</h4>
                   <ul className="list-disc list-inside text-xs text-gray-600 dark:text-gray-400 space-y-0.5">

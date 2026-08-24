@@ -24,6 +24,10 @@ import type {
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
+function finiteNum(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n);
+}
+
 const BULLISH_NEWS_KEYWORDS = [
   'partnership',
   'approval',
@@ -93,7 +97,9 @@ function sumIssuance(
   for (const e of events) {
     if (e.isCapacityOnly) continue;
     if (!highConfidence(e)) continue;
-    if (e.sharesIssued === undefined && e.grossProceedsUsd === undefined) continue;
+    const issuedShares = finiteNum(e.sharesIssued) ? e.sharesIssued : undefined;
+    const issuedProceeds = finiteNum(e.grossProceedsUsd) ? e.grossProceedsUsd : undefined;
+    if (issuedShares === undefined && issuedProceeds === undefined) continue;
     // Only count types that represent actual issuance
     if (
       ![
@@ -113,26 +119,22 @@ function sumIssuance(
     // De-dupe the same economic issuance reported across 8-K + 424B
     const dedupeKey = [
       e.eventDate,
-      e.sharesIssued ?? '',
-      e.grossProceedsUsd ?? '',
+      issuedShares ?? '',
+      issuedProceeds ?? '',
       e.type === 'prospectus_supplement' ? 'supplement' : e.type,
     ].join('|');
     // Treat equity_line / atm_program / prospectus_supplement on same date+shares as one
-    const softKey = [
-      e.eventDate,
-      e.sharesIssued ?? '',
-      e.grossProceedsUsd ?? '',
-    ].join('|');
+    const softKey = [e.eventDate, issuedShares ?? '', issuedProceeds ?? ''].join('|');
     if (seen.has(dedupeKey) || seen.has(softKey)) continue;
     seen.add(dedupeKey);
     seen.add(softKey);
 
-    if (e.sharesIssued !== undefined) {
-      shares += e.sharesIssued;
+    if (issuedShares !== undefined) {
+      shares += issuedShares;
       hasShares = true;
     }
-    if (e.grossProceedsUsd !== undefined) {
-      proceeds += e.grossProceedsUsd;
+    if (issuedProceeds !== undefined) {
+      proceeds += issuedProceeds;
       hasProceeds = true;
     }
   }
@@ -162,11 +164,11 @@ function buildCapacity(events: CapitalEvent[]): CapacityField {
   let hasShares = false;
   let hasAmount = false;
   for (const e of capacityEvents) {
-    if (e.potentialShares !== undefined) {
+    if (finiteNum(e.potentialShares)) {
       potentialShares += e.potentialShares;
       hasShares = true;
     }
-    if (e.grossProceedsUsd !== undefined) {
+    if (finiteNum(e.grossProceedsUsd)) {
       amountUsd += e.grossProceedsUsd;
       hasAmount = true;
     }
