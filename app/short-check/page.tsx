@@ -508,11 +508,6 @@ export default function ShortCheckPage() {
           <DroppinessScatter detail={pumpScorecardData.droppinessDetail || []} ticker={ticker} />
         )}
 
-        {/* Social Sentiment Card */}
-        {ticker && pumpScorecardData?.sentiment && !loadingPumpData && (
-          <SentimentCard ticker={ticker.toUpperCase()} sentiment={pumpScorecardData.sentiment} />
-        )}
-
         {/* Additional Pump Scorecard Cards - Show when we have ticker data */}
         {ticker && pumpScorecardData && !loadingPumpData && (
           <>
@@ -531,6 +526,11 @@ export default function ShortCheckPage() {
                 ticker={ticker.toUpperCase()}
                 data={pumpScorecardData.capitalPressure}
               />
+            )}
+
+            {/* Social Sentiment — below Capital Pressure */}
+            {pumpScorecardData.sentiment && (
+              <SentimentCard ticker={ticker.toUpperCase()} sentiment={pumpScorecardData.sentiment} />
             )}
 
             {/* Price and Volume Chart - Full Width */}
