@@ -9,7 +9,10 @@ import { fetchInsiderTransactions } from "@/utils/fetchInsiderTransactions";
 import { tickerCache, getTickerCacheKey, isCacheValid, getCachedData, setCachedData } from "@/lib/cache";
 import { computeDroppiness } from "@/lib/droppiness/compute";
 import { persistDroppiness } from "@/lib/droppiness/kv";
+import { runCapitalPressure } from "@/lib/capitalPressure/run";
+import { unavailableCapitalPressure } from "@/lib/capitalPressure/unavailable";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 // Initialize Yahoo Finance instance (v3 requires instantiation)
 const yahooFinance = new YahooFinance();
@@ -355,18 +358,18 @@ try {
       const cikRes = await fetch("https://www.sec.gov/files/company_tickers.json", {
           headers: { "User-Agent": "pump-scorecard (garthwoods@gmail.com)", Accept: "application/json" },
       });
-        if (!cikRes.ok) return { filings: [], secCountry: null };
+        if (!cikRes.ok) return { filings: [], secCountry: null, cik: null, submissions: null };
 
         const cikJson = await cikRes.json();
         const entry = Object.values(cikJson).find((c: unknown) => (c as CikEntry).ticker?.toUpperCase() === upperTicker) as CikEntry | undefined;
-        if (!entry) return { filings: [], secCountry: null };
+        if (!entry) return { filings: [], secCountry: null, cik: null, submissions: null };
 
           const cik = entry.cik_str.toString().padStart(10, "0");
         const secRes = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, {
           headers: { "User-Agent": "pump-scorecard", Accept: "application/json" },
         });
 
-        if (!secRes.ok) return { filings: [], secCountry: null };
+        if (!secRes.ok) return { filings: [], secCountry: null, cik, submissions: null };
 
             const secJson = await secRes.json();
             const biz = parseSecAddress(secJson?.addresses?.business);
@@ -387,10 +390,10 @@ try {
             .sort((a: Filing, b: Filing) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .slice(0, 8);
         }
-        return { filings, secCountry };
+        return { filings, secCountry, cik, submissions: secJson };
       } catch (err) {
         console.error("SEC task failed:", err);
-        return { filings: [], secCountry: null };
+        return { filings: [], secCountry: null, cik: null, submissions: null };
       }
     })();
 
@@ -556,7 +559,7 @@ try {
     const yahooData = yahooRes.status === 'fulfilled' ? yahooRes.value : null;
     const splits = splitsRes.status === 'fulfilled' ? splitsRes.value : [];
     const polyMeta = polyMetaRes.status === 'fulfilled' ? polyMetaRes.value : { meta: null, hasOptions: false };
-    const secData = secRes.status === 'fulfilled' ? secRes.value : { filings: [], secCountry: null };
+    const secData = secRes.status === 'fulfilled' ? secRes.value : { filings: [], secCountry: null, cik: null, submissions: null };
     let promotions = promotionsRes.status === 'fulfilled' ? promotionsRes.value : [];
     const fraudResult = fraudRes.status === 'fulfilled' ? fraudRes.value : { images: [], blocked: false };
     let fraudImages = Array.isArray(fraudResult) ? fraudResult : fraudResult.images || [];
@@ -787,6 +790,40 @@ try {
       droppinessVerdict = "Spikes often hold — many large moves remained elevated after the initial run-up.";
     }
 
+    // Capital Pressure (additive; does not affect weightedRiskScore)
+    let capitalPressure;
+    try {
+      capitalPressure = await runCapitalPressure({
+        ticker: upperTicker,
+        cik: secData.cik,
+        submissions: secData.submissions,
+        context: {
+          floatShares,
+          shortFloat: toPercent(shortFloat),
+          borrowFee: borrowData?.fee ?? null,
+          borrowAvailable: borrowData?.available ?? null,
+          news: Array.isArray(news)
+            ? news.map((n: { title?: string; headline?: string; published?: string | number | null; date?: string }) => ({
+                title: n.title || n.headline,
+                date:
+                  typeof n.published === 'number'
+                    ? new Date(n.published).toISOString()
+                    : (n.published || n.date || undefined),
+              }))
+            : [],
+          droppinessScore,
+          droppinessSpikeCount: Array.isArray(droppinessData.detail)
+            ? droppinessData.detail.length
+            : 0,
+        },
+      });
+    } catch (err) {
+      console.error(`[${upperTicker}] Capital pressure failed:`, err);
+      capitalPressure = unavailableCapitalPressure(
+        err instanceof Error ? err.message : 'Capital pressure computation failed'
+      );
+    }
+
     const responseData = {
       ticker: upperTicker,
       companyName: quote.longName || quote.shortName || upperTicker,
@@ -829,6 +866,7 @@ try {
       news,
       sentiment: sentimentData,
       insiderTransactions,
+      capitalPressure,
     };
     
     // Cache the response data before returning (cacheKey already defined at top of try block)

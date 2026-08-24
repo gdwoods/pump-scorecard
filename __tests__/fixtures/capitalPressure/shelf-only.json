@@ -1,0 +1,26 @@
+{
+  "name": "shelf-only",
+  "asOf": "2025-06-15",
+  "windowStart": "2023-06-15",
+  "windowEnd": "2025-06-15",
+  "xbrl": {
+    "sharesOutstanding": 45000000,
+    "sharesOutstandingAsOf": "2025-03-31"
+  },
+  "documents": [
+    {
+      "form": "S-3",
+      "filingDate": "2025-04-10",
+      "accessionNumber": "0001213900-25-000001",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/1234567/000121390025000001/s3.htm",
+      "text": "As filed with the Securities and Exchange Commission on April 10, 2025. REGISTRATION STATEMENT ON FORM S-3. The Company is registering up to $50,000,000 of common stock under this shelf registration statement. This prospectus relates to the offer and sale of securities that may be offered from time to time. No shares have been sold under this registration statement as of the date hereof."
+    },
+    {
+      "form": "10-Q",
+      "filingDate": "2025-05-15",
+      "accessionNumber": "0001213900-25-000010",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/1234567/000121390025000010/10q.htm",
+      "text": "UNITED STATES SECURITIES AND EXCHANGE COMMISSION Form 10-Q for the quarterly period ended March 31, 2025. Management believes the Company has sufficient liquidity for the next twelve months. Net income for the quarter was $1,200,000. Cash and cash equivalents were $12,000,000 as of March 31, 2025."
+    }
+  ]
+}

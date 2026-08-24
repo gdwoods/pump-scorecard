@@ -1,0 +1,27 @@
+{
+  "name": "going-concern-10q",
+  "asOf": "2025-06-15",
+  "windowStart": "2023-06-15",
+  "windowEnd": "2025-06-15",
+  "xbrl": {
+    "cashUsd": 800000,
+    "cashAsOf": "2025-03-31",
+    "operatingCashFlowUsd": -3600000,
+    "ocfAsOf": "2025-03-31",
+    "currentAssetsUsd": 1200000,
+    "currentLiabilitiesUsd": 5500000,
+    "totalAssetsUsd": 8000000,
+    "balanceSheetAsOf": "2025-03-31",
+    "sharesOutstanding": 120000000,
+    "sharesOutstandingAsOf": "2025-03-31"
+  },
+  "documents": [
+    {
+      "form": "10-Q",
+      "filingDate": "2025-05-14",
+      "accessionNumber": "0001213900-25-000030",
+      "documentUrl": "https://www.sec.gov/Archives/edgar/data/1234567/000121390025000030/10q.htm",
+      "text": "UNITED STATES SECURITIES AND EXCHANGE COMMISSION Form 10-Q for the quarterly period ended March 31, 2025. Going Concern. The accompanying condensed consolidated financial statements have been prepared assuming the Company will continue as a going concern. There is substantial doubt about the Company's ability to continue as a going concern. Cash and cash equivalents were $800,000 as of March 31, 2025. Current assets were $1,200,000 and current liabilities were $5,500,000. Total assets were $8,000,000. Net cash used in operating activities was $3,600,000 for the three months ended March 31, 2025."
+    }
+  ]
+}
