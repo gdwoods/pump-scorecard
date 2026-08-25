@@ -1,25 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip } from "@/components/ui/tooltip";
+import { cleanFilingText } from "@/lib/capitalPressure/textClean";
 import type {
   CapitalEvent,
   CapitalPressureResult,
   EvidenceStatus,
+  RecentIssuanceField,
   ScoreReason,
 } from "@/lib/capitalPressure/types";
 
-function statusLabel(status: CapitalPressureResult["status"]): string {
+const NEEDS_REVIEW_TIP =
+  "Matched a financing-related phrase, but not auto-scored — verify the linked filing.";
+
+function statusBadgeLabel(status: CapitalPressureResult["status"]): string {
   switch (status) {
     case "high":
-      return "High capital pressure";
+      return "High";
     case "elevated":
       return "Elevated";
     case "watch":
       return "Watch";
     default:
-      return "Low documented dilution pressure";
+      return "Low";
   }
 }
 
@@ -80,6 +85,23 @@ function eventTypeLabel(type: CapitalEvent["type"]): string {
   return type.replace(/_/g, " ");
 }
 
+function isIssuanceEvent(event: CapitalEvent): boolean {
+  if (event.isCapacityOnly === true) return false;
+  return [
+    "registered_direct",
+    "note_conversion",
+    "debt_for_equity",
+    "warrant_exercise",
+    "prospectus_supplement",
+    "equity_line",
+    "atm_program",
+  ].includes(event.type);
+}
+
+function isCapacityEvent(event: CapitalEvent): boolean {
+  return event.isCapacityOnly === true;
+}
+
 function SecLink({ url, label }: { url?: string; label?: string }) {
   if (!url) return null;
   return (
@@ -94,28 +116,109 @@ function SecLink({ url, label }: { url?: string; label?: string }) {
   );
 }
 
-function TimelineRow({ event }: { event: CapitalEvent }) {
-  const evidence = event.evidence;
+/** Format one 7/30/90 window without implying zero issuance. */
+function formatIssuanceWindow(
+  shares?: number | null,
+  proceeds?: number | null
+): string {
+  const hasShares = shares != null && Number.isFinite(shares);
+  const hasProceeds = proceeds != null && Number.isFinite(proceeds);
+  if (hasShares && hasProceeds) {
+    return `${formatShares(shares)} / ${formatUsd(proceeds)}`;
+  }
+  if (hasShares) return formatShares(shares);
+  if (hasProceeds) return `No share count verified · ${formatUsd(proceeds)} proceeds`;
+  return "No share count verified";
+}
+
+function formatRecentIssuanceList(ri: RecentIssuanceField) {
   return (
-    <li className="border-l-2 border-slate-200 dark:border-slate-600 pl-3 py-2 space-y-1">
+    <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-1">
+      <li>
+        <span className="text-gray-500">7d:</span>{" "}
+        {formatIssuanceWindow(ri.shares7d, ri.proceeds7dUsd)}
+      </li>
+      <li>
+        <span className="text-gray-500">30d:</span>{" "}
+        {formatIssuanceWindow(ri.shares30d, ri.proceeds30dUsd)}
+      </li>
+      <li>
+        <span className="text-gray-500">90d:</span>{" "}
+        {formatIssuanceWindow(ri.shares90d, ri.proceeds90dUsd)}
+      </li>
+    </ul>
+  );
+}
+
+function TimelineRow({
+  event,
+  highlighted,
+}: {
+  event: CapitalEvent;
+  highlighted?: boolean;
+}) {
+  const evidence = event.evidence;
+  const capacity = isCapacityEvent(event);
+  const issued = isIssuanceEvent(event);
+  const description = cleanFilingText(event.description || "");
+  const excerpt = cleanFilingText(evidence?.excerpt || "");
+
+  const borderClass = highlighted
+    ? "border-red-500 dark:border-red-400"
+    : issued
+      ? "border-red-400 dark:border-red-500"
+      : capacity
+        ? "border-slate-200 dark:border-slate-600 opacity-90"
+        : "border-slate-300 dark:border-slate-500";
+
+  const rowBg = highlighted
+    ? "bg-red-50/70 dark:bg-red-950/30 rounded-r-md -ml-1 pl-3"
+    : issued
+      ? "bg-red-50/40 dark:bg-red-950/20 rounded-r-md -ml-1 pl-3"
+      : "";
+
+  return (
+    <li className={`border-l-2 ${borderClass} pl-3 py-2 space-y-1 ${rowBg}`}>
       <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+        {highlighted && (
+          <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 font-medium">
+            Top score driver
+          </span>
+        )}
         <span className="font-medium text-gray-800 dark:text-gray-200">{event.eventDate}</span>
         <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 uppercase tracking-wide">
           {eventTypeLabel(event.type)}
         </span>
-        {event.isCapacityOnly && (
-          <span className="px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+        {capacity && (
+          <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-100 dark:border-sky-800">
             capacity
           </span>
         )}
-        {evidence?.confidence === "needs_review" && (
-          <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-            needs review
+        {issued && (
+          <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200 font-medium">
+            issued
           </span>
         )}
+        {evidence?.confidence === "needs_review" && (
+          <Tooltip content={NEEDS_REVIEW_TIP}>
+            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 cursor-help">
+              needs review
+            </span>
+          </Tooltip>
+        )}
       </div>
-      <p className="text-sm text-gray-800 dark:text-gray-200">{event.title}</p>
-      <p className="text-xs text-gray-600 dark:text-gray-400">{event.description}</p>
+      <p
+        className={`text-sm ${
+          capacity
+            ? "text-gray-600 dark:text-gray-400"
+            : "text-gray-900 dark:text-gray-100 font-medium"
+        }`}
+      >
+        {event.title}
+      </p>
+      <p className="text-xs text-gray-600 dark:text-gray-400">
+        {description || excerpt}
+      </p>
       <div className="flex flex-wrap gap-3 text-xs text-gray-600 dark:text-gray-400">
         {event.sharesIssued != null && Number.isFinite(event.sharesIssued) && (
           <span>Issued: {formatShares(event.sharesIssued)}</span>
@@ -145,9 +248,36 @@ function ReasonRow({ reason }: { reason: ScoreReason }) {
         <span className="text-gray-800 dark:text-gray-200">{reason.label}</span>
         <span className="font-semibold text-red-700 dark:text-red-300">+{reason.points}</span>
       </div>
-      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3">{reason.evidence?.excerpt ?? ''}</p>
-      <SecLink url={reason.evidence?.documentUrl} label={`${reason.evidence?.form ?? 'SEC'} evidence`} />
+      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3">
+        {cleanFilingText(reason.evidence?.excerpt ?? "")}
+      </p>
+      <SecLink
+        url={reason.evidence?.documentUrl}
+        label={`${reason.evidence?.form ?? "SEC"} evidence`}
+      />
     </div>
+  );
+}
+
+function findPinnedEvent(
+  events: CapitalEvent[],
+  topReason?: ScoreReason
+): CapitalEvent | undefined {
+  if (!topReason?.evidence) return undefined;
+  const acc = topReason.evidence.accessionNumber;
+  const url = topReason.evidence.documentUrl;
+  const form = topReason.evidence.form;
+  const date = topReason.evidence.filingDate;
+
+  return (
+    events.find(
+      (e) =>
+        (acc && e.evidence?.accessionNumber === acc) ||
+        (url && e.evidence?.documentUrl === url)
+    ) ||
+    events.find(
+      (e) => e.evidence?.form === form && e.evidence?.filingDate === date
+    )
   );
 }
 
@@ -158,10 +288,38 @@ export default function CapitalPressureCard({
   ticker: string;
   data?: CapitalPressureResult | null;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
+  const events = data?.events || [];
+  const topReason = data?.reasons?.[0];
+  const otherReasons = (data?.reasons || []).slice(1);
+
+  const pinned = useMemo(
+    () => (data ? findPinnedEvent(events, topReason) : undefined),
+    [data, events, topReason]
+  );
+
+  const orderedEvents = useMemo(() => {
+    if (!pinned) return events;
+    return [pinned, ...events.filter((e) => e.id !== pinned.id)];
+  }, [events, pinned]);
+
   if (!data) return null;
+
+  const windowLabel =
+    data.windowStart && data.windowEnd
+      ? `Window: ${data.windowStart} → ${data.windowEnd}`
+      : null;
+  const filingCount = events.length;
+  const windowMeta = [
+    windowLabel,
+    filingCount > 0 ? `${filingCount} event${filingCount === 1 ? "" : "s"}` : null,
+    data.latestVerifiedAt ? `Verified ${data.latestVerifiedAt.slice(0, 10)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   if (!data.available) {
     return (
@@ -170,9 +328,11 @@ export default function CapitalPressureCard({
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             {ticker} Capital Pressure
           </h2>
+          {windowMeta && <p className="text-xs text-gray-500">{windowMeta}</p>}
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            Capital pressure unavailable — {data.unavailableReason || "SEC filings could not be verified"}.
-            Missing data is not a risk signal.
+            Capital pressure unavailable —{" "}
+            {data.unavailableReason || "SEC filings could not be verified"}. Missing data is
+            not a risk signal.
           </p>
           <p className="text-xs text-gray-500">Scanned: {data.scannedThrough}</p>
         </CardContent>
@@ -180,10 +340,12 @@ export default function CapitalPressureCard({
     );
   }
 
-  const events = data.events || [];
-  const visibleEvents = showAllEvents ? events : events.slice(0, 6);
-  const topReason = data.reasons?.[0];
-  const otherReasons = (data.reasons || []).slice(1);
+  const compactEventCount = 3;
+  const visibleEvents = showAllEvents
+    ? orderedEvents
+    : expanded
+      ? orderedEvents.slice(0, 6)
+      : orderedEvents.slice(0, compactEventCount);
 
   const capacityText =
     !data.capacity || data.capacity.status === "unknown"
@@ -193,216 +355,250 @@ export default function CapitalPressureCard({
   return (
     <Card className="p-4 bg-white dark:bg-gray-800 shadow-sm rounded-xl">
       <CardContent className="space-y-4">
+        {/* Header: score, short status, window */}
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {ticker} Capital Pressure
             </h2>
+            {windowMeta && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{windowMeta}</p>
+            )}
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Research signal for Short Check — not a trade recommendation. Dilution is not certain.
+              Research signal — not a trade recommendation. Dilution is not certain.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{data.score}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {data.score}
+            </span>
             <span
               className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(data.status)}`}
             >
-              {statusLabel(data.status)}
+              {statusBadgeLabel(data.status)}
             </span>
           </div>
         </div>
 
         <p className="text-sm text-gray-700 dark:text-gray-300">{data.summary}</p>
-        {data.latestVerifiedAt && (
-          <p className="text-xs text-gray-500">
-            Latest verified: {data.latestVerifiedAt.slice(0, 10)}
-            {data.windowStart && data.windowEnd
-              ? ` · Window ${data.windowStart} → ${data.windowEnd}`
-              : ""}
-          </p>
-        )}
 
-        {/* Three supply fields */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Potential / registered capacity
-              </h3>
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(data.capacity?.status ?? "unknown")}`}>
-                {evidenceStatusLabel(data.capacity?.status ?? "unknown")}
-              </span>
-            </div>
-            <p className="text-sm text-gray-800 dark:text-gray-200">{capacityText}</p>
-            {data.capacity?.amountUsd != null && Number.isFinite(data.capacity.amountUsd) && (
-              <p className="text-xs text-gray-600 dark:text-gray-400">
-                Amount: {formatUsd(data.capacity.amountUsd)}
-              </p>
-            )}
-            {data.capacity?.potentialShares != null && Number.isFinite(data.capacity.potentialShares) && (
-              <p className="text-xs text-gray-600 dark:text-gray-400">
-                Potential shares: {formatShares(data.capacity.potentialShares)}
-              </p>
-            )}
-            <SecLink url={data.capacity?.evidence?.documentUrl} />
-          </div>
-
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Recently issued supply
-              </h3>
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(data.recentIssuance?.status ?? "unknown")}`}>
-                {evidenceStatusLabel(data.recentIssuance?.status ?? "unknown")}
-              </span>
-            </div>
-            {!data.recentIssuance || data.recentIssuance.status === "unknown" ? (
-              <p className="text-sm text-gray-800 dark:text-gray-200">
-                Not verified from available filings
-              </p>
-            ) : (
-              <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
-                <li>
-                  7d:{" "}
-                  {data.recentIssuance.shares7d != null && Number.isFinite(data.recentIssuance.shares7d)
-                    ? formatShares(data.recentIssuance.shares7d)
-                    : "—"}
-                  {data.recentIssuance.proceeds7dUsd != null && Number.isFinite(data.recentIssuance.proceeds7dUsd)
-                    ? ` / ${formatUsd(data.recentIssuance.proceeds7dUsd)}`
-                    : ""}
-                </li>
-                <li>
-                  30d:{" "}
-                  {data.recentIssuance.shares30d != null && Number.isFinite(data.recentIssuance.shares30d)
-                    ? formatShares(data.recentIssuance.shares30d)
-                    : "—"}
-                  {data.recentIssuance.proceeds30dUsd != null && Number.isFinite(data.recentIssuance.proceeds30dUsd)
-                    ? ` / ${formatUsd(data.recentIssuance.proceeds30dUsd)}`
-                    : ""}
-                </li>
-                <li>
-                  90d:{" "}
-                  {data.recentIssuance.shares90d != null && Number.isFinite(data.recentIssuance.shares90d)
-                    ? formatShares(data.recentIssuance.shares90d)
-                    : "—"}
-                  {data.recentIssuance.proceeds90dUsd != null && Number.isFinite(data.recentIssuance.proceeds90dUsd)
-                    ? ` / ${formatUsd(data.recentIssuance.proceeds90dUsd)}`
-                    : ""}
-                </li>
-              </ul>
-            )}
-          </div>
-
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Current share count
-              </h3>
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(data.sharesOutstanding?.status ?? "unknown")}`}>
-                {evidenceStatusLabel(data.sharesOutstanding?.status ?? "unknown")}
-              </span>
-            </div>
-            {!data.sharesOutstanding ||
-            data.sharesOutstanding.status === "unknown" ||
-            data.sharesOutstanding.value == null ||
-            !Number.isFinite(data.sharesOutstanding.value) ? (
-              <p className="text-sm text-gray-800 dark:text-gray-200">
-                Not verified from available filings
-              </p>
-            ) : (
-              <>
-                <p className="text-sm text-gray-800 dark:text-gray-200">
-                  {formatShares(data.sharesOutstanding.value)}
-                </p>
-                {data.sharesOutstanding.asOf && (
-                  <p className="text-xs text-gray-500">As of {data.sharesOutstanding.asOf}</p>
-                )}
-                <SecLink url={data.sharesOutstanding.evidence?.documentUrl} label="XBRL / filing" />
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Sub-scores */}
-        <div className="flex flex-wrap gap-3">
-          <Tooltip content="Financial need plus documented ability to access equity or common-equivalent financing. Scaled from the Capital Pressure score; not a prediction of a future offering.">
-            <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm cursor-help">
-              Dilution likelihood
-              <strong>{data.dilutionLikelihood}/10</strong>
-            </span>
-          </Tooltip>
-          <Tooltip content="Execution risk, not a bullish signal. Adds points for reverse splits, missing float/borrow, high-impact news catalysts, or Droppiness spikes that hold. Not included in the Pump Scorecard overall score.">
-            <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm cursor-help">
-              Short execution risk
-              <strong>{data.shortExecutionRisk}/10</strong>
-            </span>
-          </Tooltip>
-        </div>
-
-        {/* Timeline */}
+        {/* Compact: top reason always visible */}
         <div>
           <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
+            Strongest score reason
+          </h3>
+          {topReason ? (
+            <ReasonRow reason={topReason} />
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              No automatic score reasons — unverified criteria are listed under details.
+            </p>
+          )}
+        </div>
+
+        {/* Compact timeline: 3 newest (pinned first), legend */}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
             Supply &amp; financing timeline
           </h3>
-          {events.length === 0 ? (
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+            <span className="text-red-700 dark:text-red-300 font-medium">Issued</span> = shares
+            sold ·{" "}
+            <span className="text-sky-700 dark:text-sky-300 font-medium">Capacity</span> =
+            registered or contractual ability · Needs review = matched phrase, not auto-scored
+          </p>
+          {orderedEvents.length === 0 ? (
             <p className="text-sm text-gray-600 dark:text-gray-400">
               No capital-structure events verified in the scanned filing window.
             </p>
           ) : (
             <>
-              <ul className="space-y-1">{visibleEvents.map((e) => (
-                <TimelineRow key={e.id} event={e} />
-              ))}</ul>
-              {events.length > 6 && (
+              <ul className="space-y-1">
+                {visibleEvents.map((e) => (
+                  <TimelineRow
+                    key={e.id}
+                    event={e}
+                    highlighted={pinned?.id === e.id}
+                  />
+                ))}
+              </ul>
+              {(expanded || showAllEvents) && orderedEvents.length > 6 && (
                 <button
                   type="button"
                   onClick={() => setShowAllEvents((v) => !v)}
                   className="mt-2 text-xs text-blue-600 dark:text-blue-400 underline"
                 >
-                  {showAllEvents ? "Show fewer events" : `All events (${events.length})`}
+                  {showAllEvents
+                    ? "Show fewer events"
+                    : `All events (${orderedEvents.length})`}
                 </button>
               )}
             </>
           )}
         </div>
 
-        {/* Details: strongest reason + expander */}
-        <div>
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
-            Score details
-          </h3>
-          {topReason ? (
-            <ReasonRow reason={topReason} />
-          ) : (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              No automatic score reasons — unverified criteria are listed as data gaps.
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={() => setShowDetails((v) => !v)}
-            className="text-xs text-blue-600 dark:text-blue-400 underline"
-          >
-            {showDetails ? "Hide details" : "Show remaining reasons & data gaps"}
-          </button>
-          {showDetails && (
-            <div className="mt-2 space-y-2">
-              {otherReasons.map((r, i) => (
-                <ReasonRow key={`${r.label}-${i}`} reason={r} />
-              ))}
-              {data.unknowns && data.unknowns.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-semibold uppercase text-gray-500 mb-1">Data gaps</h4>
-                  <ul className="list-disc list-inside text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
-                    {data.unknowns.map((u) => (
-                      <li key={u}>{u}</li>
-                    ))}
-                  </ul>
+        {/* Expand denser sections */}
+        <button
+          type="button"
+          onClick={() => {
+            setExpanded((v) => {
+              if (v) {
+                setShowAllEvents(false);
+                setShowDetails(false);
+              }
+              return !v;
+            });
+          }}
+          className="text-xs font-medium text-blue-600 dark:text-blue-400 underline"
+        >
+          {expanded
+            ? "Show less"
+            : "Show supply fields, sub-scores, full timeline & data gaps"}
+        </button>
+
+        {expanded && (
+          <div className="space-y-4 border-t border-gray-100 dark:border-gray-700 pt-4">
+            {/* Three supply fields */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-lg border border-sky-100 dark:border-sky-900/40 bg-sky-50/30 dark:bg-sky-950/20 p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Potential / registered capacity
+                  </h3>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(
+                      data.capacity?.status ?? "unknown"
+                    )}`}
+                  >
+                    {evidenceStatusLabel(data.capacity?.status ?? "unknown")}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-800 dark:text-gray-200">{capacityText}</p>
+                {data.capacity?.amountUsd != null &&
+                  Number.isFinite(data.capacity.amountUsd) && (
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Amount: {formatUsd(data.capacity.amountUsd)}
+                    </p>
+                  )}
+                {data.capacity?.potentialShares != null &&
+                  Number.isFinite(data.capacity.potentialShares) && (
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Potential shares: {formatShares(data.capacity.potentialShares)}
+                    </p>
+                  )}
+                <SecLink url={data.capacity?.evidence?.documentUrl} />
+              </div>
+
+              <div className="rounded-lg border border-red-100 dark:border-red-900/40 bg-red-50/30 dark:bg-red-950/20 p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Recently issued supply
+                  </h3>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(
+                      data.recentIssuance?.status ?? "unknown"
+                    )}`}
+                  >
+                    {evidenceStatusLabel(data.recentIssuance?.status ?? "unknown")}
+                  </span>
+                </div>
+                {!data.recentIssuance || data.recentIssuance.status === "unknown" ? (
+                  <p className="text-sm text-gray-800 dark:text-gray-200">
+                    Not verified from available filings
+                  </p>
+                ) : (
+                  formatRecentIssuanceList(data.recentIssuance)
+                )}
+              </div>
+
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Current share count
+                  </h3>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${evidenceStatusClass(
+                      data.sharesOutstanding?.status ?? "unknown"
+                    )}`}
+                  >
+                    {evidenceStatusLabel(data.sharesOutstanding?.status ?? "unknown")}
+                  </span>
+                </div>
+                {!data.sharesOutstanding ||
+                data.sharesOutstanding.status === "unknown" ||
+                data.sharesOutstanding.value == null ||
+                !Number.isFinite(data.sharesOutstanding.value) ? (
+                  <p className="text-sm text-gray-800 dark:text-gray-200">
+                    Not verified from available filings
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-800 dark:text-gray-200">
+                      {formatShares(data.sharesOutstanding.value)}
+                    </p>
+                    {data.sharesOutstanding.asOf && (
+                      <p className="text-xs text-gray-500">
+                        As of {data.sharesOutstanding.asOf}
+                      </p>
+                    )}
+                    <SecLink
+                      url={data.sharesOutstanding.evidence?.documentUrl}
+                      label="XBRL / filing"
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Sub-scores */}
+            <div className="flex flex-wrap gap-3">
+              <Tooltip content="Financial need plus documented ability to access equity or common-equivalent financing. Scaled from the Capital Pressure score; not a prediction of a future offering.">
+                <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm cursor-help">
+                  Dilution likelihood
+                  <strong>{data.dilutionLikelihood}/10</strong>
+                </span>
+              </Tooltip>
+              <Tooltip content="Execution risk, not a bullish signal. Adds points for reverse splits, missing float/borrow, high-impact news catalysts, or Droppiness spikes that hold. Not included in the Pump Scorecard overall score.">
+                <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm cursor-help">
+                  Short execution risk
+                  <strong>{data.shortExecutionRisk}/10</strong>
+                </span>
+              </Tooltip>
+            </div>
+
+            {/* Remaining reasons + gaps */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowDetails((v) => !v)}
+                className="text-xs text-blue-600 dark:text-blue-400 underline"
+              >
+                {showDetails
+                  ? "Hide remaining reasons & data gaps"
+                  : "Show remaining reasons & data gaps"}
+              </button>
+              {showDetails && (
+                <div className="mt-2 space-y-2">
+                  {otherReasons.map((r, i) => (
+                    <ReasonRow key={`${r.label}-${i}`} reason={r} />
+                  ))}
+                  {data.unknowns && data.unknowns.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase text-gray-500 mb-1">
+                        Data gaps
+                      </h4>
+                      <ul className="list-disc list-inside text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
+                        {data.unknowns.map((u) => (
+                          <li key={u}>{u}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

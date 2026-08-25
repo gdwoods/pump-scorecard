@@ -5,6 +5,7 @@ import {
   parseFilingDocument,
   stripHtml,
 } from '../lib/capitalPressure/parse';
+import { cleanFilingText, decodeHtmlEntities } from '../lib/capitalPressure/textClean';
 import { scoreCapitalPressure } from '../lib/capitalPressureScoring';
 import { unavailableCapitalPressure } from '../lib/capitalPressure/unavailable';
 import type { FilingDocumentInput, XbrlSnapshot } from '../lib/capitalPressure/types';
@@ -40,6 +41,19 @@ function scoreFixture(name: string, context: Record<string, unknown> = {}) {
 describe('capitalPressure parse', () => {
   it('strips HTML and keeps plain text', () => {
     expect(stripHtml('<p>Hello <b>world</b></p>')).toBe('Hello world');
+  });
+
+  it('decodes HTML entities in excerpts', () => {
+    expect(decodeHtmlEntities('At-the-Market&#160;Offerings &#8220;ATM&#8221;')).toBe(
+      'At-the-Market Offerings “ATM”'
+    );
+    const cleaned = cleanFilingText(
+      '…0; &#160; &#160; At-the-Market Offerings &#160; 820,800 &#160;',
+      80
+    );
+    expect(cleaned).not.toMatch(/&#/);
+    expect(cleaned).toMatch(/At-the-Market Offerings/);
+    expect(cleaned.length).toBeLessThanOrEqual(80);
   });
 
   it('marks shelf as capacity, not issuance', () => {
