@@ -17,7 +17,7 @@
 - 🚨 **Visual Alerts**: Red/orange/yellow chips highlight critical risk factors
 - 📊 **Smart Scoring**: High-Priority (70-100%), Moderate (40-70%), Speculative (20-40%), No-Trade (<20%)
 - 🏷️ **Red Flag Tags**: Urgent runway, Active shelf, Weak institutional support, Thin float, Elevated short interest
-- 📈 **Integrated Analysis**: Combines with Pump Scorecard for droppiness, SEC filings, promotions, charts
+- 📈 **Integrated Analysis**: Combines with Pump Scorecard for droppiness, SEC filings, Capital Pressure, promotions, charts
 - 🔗 **Actions**: Copy Summary, Export PDF, Share Link
 - 📰 **News**: Yahoo/Finnhub headlines; DT “Major Developments” ignored unless ≤ 7 days
 

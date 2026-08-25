@@ -47,9 +47,10 @@ After uploading a screenshot, entering the ticker provides:
 - Droppiness analysis (Bayesian-calculated price behavior)
 - Pump risk scorecard
 - SEC filings and insider transactions
+- **Capital Pressure** — SEC EDGAR evidence of near-term capital need and documented issuance mechanisms (ATM/shelf capacity vs confirmed issuance). Research signal only; does not change Short Check % scoring. Soft note under Risk Synopsis when present. Full reference: [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md)
 - Promotions and fraud evidence
 - Charts, fundamentals, and market data
-- Social sentiment (StockTwits)
+- Social sentiment (StockTwits; below Capital Pressure on the page)
 - Borrow desk data (short availability)
 
 ### 4. **Export & Sharing**
@@ -761,7 +762,7 @@ Generates a formatted text summary suitable for sharing:
 ### 7. **PDF Export**
 Server-rendered PDF includes:
 - Short Check rating and breakdown
-- Pump Scorecard data (when available)
+- Pump Scorecard data (when available), including Capital Pressure when present
 - Charts and visualizations
 - All risk factors and flags
 
@@ -810,7 +811,7 @@ Server-rendered PDF includes:
    - News → Yahoo Finance RSS / Finnhub
 4. **Scoring calculation** → `calculateShortRating()`
 5. **Results returned** → Frontend displays
-6. **Optional**: User enters ticker → `/api/scan/[ticker]` fetches Pump Scorecard data
+6. **Optional**: User enters ticker → `/api/scan/[ticker]` fetches Pump Scorecard data (includes optional `capitalPressure`)
 7. **Droppiness recalculation** → If droppiness data available, score is recalculated
 
 ### API Route Structure
@@ -818,7 +819,7 @@ Server-rendered PDF includes:
 - `/api/short-check` (POST) - OCR and scoring
 - `/api/short-check` (PUT) - Manual data submission
 - `/api/short-check/export-pdf` (POST) - PDF generation
-- `/api/scan/[ticker]` (GET) - Pump Scorecard data
+- `/api/scan/[ticker]` (GET) - Pump Scorecard data (optional `capitalPressure` field; see [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md))
 - `/api/share/generate` (POST) - Share link creation
 - `/api/share/[id]` (GET) - Share link retrieval
 - `/api/export-pdf` (GET) - Legacy PDF export
