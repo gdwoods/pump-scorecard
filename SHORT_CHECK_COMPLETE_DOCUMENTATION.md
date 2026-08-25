@@ -852,6 +852,14 @@ Server-rendered PDF includes:
 
 ---
 
+## Related documentation
+
+- [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md) — Capital Pressure module (lookback, scoring, UI, code map)
+- [`README.md`](README.md) — Project overview
+- [`SHORT_CHECK_INTRO.md`](SHORT_CHECK_INTRO.md) — Short Check intro
+
+---
+
 ## Conclusion
 
 Short Check combines quantitative analysis, Bayesian statistics, and real-time market data to provide traders with a comprehensive short trade assessment tool. The scoring system is transparent, the data sources are documented, and the calculations are reproducible.
