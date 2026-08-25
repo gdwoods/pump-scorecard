@@ -9,6 +9,10 @@ import { ShortCheckResult } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { generateRiskSynopsis } from "@/lib/shortCheckHelpers";
 import { generateFormattedSummary } from "@/lib/summaryGenerator";
+import {
+  capitalPressureShortCheckNote,
+  detectOfferingDisagreement,
+} from "@/lib/capitalPressure/shortCheckBridge";
 
 interface ShortCheckResultsProps {
   result: ShortCheckResult;
@@ -538,6 +542,40 @@ export default function ShortCheckResults({
             <p className="text-sm leading-relaxed opacity-80">
               {generateRiskSynopsis(effectiveTicker || ticker, result.scoreBreakdown, extractedData)}
             </p>
+            {(() => {
+              const cp = pumpScorecardData?.capitalPressure;
+              const secNote = capitalPressureShortCheckNote(cp);
+              const disagreement = detectOfferingDisagreement(extractedData, cp);
+              if (!secNote && !disagreement) return null;
+              return (
+                <div className="mt-3 pt-3 border-t border-current/10 space-y-2">
+                  {secNote && (
+                    <p className="text-xs leading-relaxed opacity-80">
+                      <span className="font-semibold">SEC evidence also shows: </span>
+                      {secNote}
+                      {cp?.reasons?.[0]?.evidence?.documentUrl && (
+                        <>
+                          {" "}
+                          <a
+                            href={cp.reasons[0].evidence.documentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline opacity-90"
+                          >
+                            Open filing
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  )}
+                  {disagreement && (
+                    <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-200 bg-amber-50/80 dark:bg-amber-950/30 rounded px-2 py-1.5">
+                      {disagreement}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 

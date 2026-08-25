@@ -75,7 +75,15 @@ function summaryForStatus(status: CapitalPressureStatus): string {
 }
 
 function highConfidence(e: CapitalEvent): boolean {
-  return e.evidence.confidence === 'high';
+  return e.evidence.confidence === 'high' && e.scoreEligible !== false;
+}
+
+function isCompanySideAtmElines(e: CapitalEvent): boolean {
+  return (
+    highConfidence(e) &&
+    (e.type === 'atm_program' || e.type === 'equity_line') &&
+    !e.isSellingShareholder
+  );
 }
 
 function withinDays(eventDate: string, asOf: string, days: number): boolean {
@@ -149,6 +157,7 @@ function buildCapacity(events: CapitalEvent[]): CapacityField {
     (e) =>
       highConfidence(e) &&
       e.isCapacityOnly &&
+      !e.isSellingShareholder &&
       ['shelf_registration', 'atm_program', 'equity_line', 'convertible_note', 'prospectus_supplement'].includes(
         e.type
       )
@@ -243,7 +252,11 @@ function scoreShortExecutionRisk(
   const notes: string[] = [];
 
   const recentRs = events.some(
-    (e) => e.type === 'reverse_split' && highConfidence(e) && withinDays(e.eventDate, asOf, 90)
+    (e) =>
+      e.type === 'reverse_split' &&
+      highConfidence(e) &&
+      !e.isRetrospective &&
+      withinDays(e.eventDate, asOf, 90)
   );
   if (recentRs) {
     score += 2;
@@ -416,11 +429,8 @@ export function scoreCapitalPressure(
   }
 
   // --- Active ATM / ELOC / equity line (18) +4 draw in 30d, cap 22
-  const atmOrElines = events.filter(
-    (e) =>
-      highConfidence(e) &&
-      (e.type === 'atm_program' || e.type === 'equity_line')
-  );
+  // Selling-shareholder / resale registrations do not count as company financing capacity.
+  const atmOrElines = events.filter(isCompanySideAtmElines);
   if (atmOrElines.length > 0) {
     let atmPoints = 18;
     const draw = atmOrElines.find(
@@ -434,9 +444,8 @@ export function scoreCapitalPressure(
       draw ||
       events.find(
         (e) =>
-          highConfidence(e) &&
+          isCompanySideAtmElines(e) &&
           !e.isCapacityOnly &&
-          (e.type === 'equity_line' || e.type === 'atm_program') &&
           withinDays(e.eventDate, asOf, 30) &&
           (e.sharesIssued !== undefined || e.grossProceedsUsd !== undefined)
       );
@@ -515,10 +524,12 @@ export function scoreCapitalPressure(
   }
 
   // --- Reverse split in last 180 days (10) — do not double-count as financing
+  // Retrospective footnotes are timeline-only (scoreEligible=false via parser).
   const rs = events.find(
     (e) =>
       highConfidence(e) &&
       e.type === 'reverse_split' &&
+      !e.isRetrospective &&
       withinDays(e.eventDate, asOf, 180)
   );
   if (rs) {
@@ -632,6 +643,8 @@ export function scoreCapitalPressure(
     windowStart,
     windowEnd,
     latestVerifiedAt,
+    criteriaTotal: 10,
+    criteriaVerified: reasons.length,
   };
 }
 

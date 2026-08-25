@@ -291,6 +291,10 @@ export default function CapitalPressureCard({
   const [expanded, setExpanded] = useState(false);
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [timelineFilter, setTimelineFilter] = useState<
+    "all" | "issued" | "capacity" | "needs_review"
+  >("all");
+  const [copiedReason, setCopiedReason] = useState(false);
 
   const events = data?.events || [];
   const topReason = data?.reasons?.[0];
@@ -306,16 +310,57 @@ export default function CapitalPressureCard({
     return [pinned, ...events.filter((e) => e.id !== pinned.id)];
   }, [events, pinned]);
 
+  const filteredEvents = useMemo(() => {
+    return orderedEvents.filter((e) => {
+      if (timelineFilter === "all") return true;
+      if (timelineFilter === "issued") return isIssuanceEvent(e);
+      if (timelineFilter === "capacity") return isCapacityEvent(e);
+      if (timelineFilter === "needs_review")
+        return e.evidence?.confidence === "needs_review" || e.scoreEligible === false;
+      return true;
+    });
+  }, [orderedEvents, timelineFilter]);
+
+  const copyTopReason = async () => {
+    if (!topReason) return;
+    const excerpt = cleanFilingText(topReason.evidence?.excerpt || "");
+    const lines = [
+      `${ticker} Capital Pressure — top reason (+${topReason.points})`,
+      topReason.label,
+      excerpt,
+      topReason.evidence?.documentUrl || "",
+    ].filter(Boolean);
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopiedReason(true);
+      setTimeout(() => setCopiedReason(false), 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
   if (!data) return null;
 
   const windowLabel =
     data.windowStart && data.windowEnd
       ? `Window: ${data.windowStart} → ${data.windowEnd}`
       : null;
-  const filingCount = events.length;
+  const filingsScanned =
+    data.filingsScanned != null
+      ? `${data.filingsScanned} filing${data.filingsScanned === 1 ? "" : "s"} scanned`
+      : null;
+  const eventCount = events.length;
+  const criteriaLabel =
+    data.criteriaTotal != null
+      ? `${data.criteriaVerified ?? 0}/${data.criteriaTotal} criteria verified`
+      : null;
   const windowMeta = [
     windowLabel,
-    filingCount > 0 ? `${filingCount} event${filingCount === 1 ? "" : "s"}` : null,
+    data.registrationWindowStart && data.registrationWindowStart !== data.windowStart
+      ? `registrations to ${data.registrationWindowStart}`
+      : null,
+    filingsScanned,
+    eventCount > 0 ? `${eventCount} event${eventCount === 1 ? "" : "s"}` : null,
     data.latestVerifiedAt ? `Verified ${data.latestVerifiedAt.slice(0, 10)}` : null,
   ]
     .filter(Boolean)
@@ -335,6 +380,21 @@ export default function CapitalPressureCard({
             not a risk signal.
           </p>
           <p className="text-xs text-gray-500">Scanned: {data.scannedThrough}</p>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            Please manually check{" "}
+            <a
+              href={
+                data.edgarSearchUrl ||
+                "https://www.sec.gov/edgar/searchedgar/companysearch.html"
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 dark:text-blue-400 underline"
+            >
+              EDGAR{data.cik ? ` (CIK ${data.cik.replace(/^0+/, "")})` : ""}
+            </a>
+            .
+          </p>
         </CardContent>
       </Card>
     );
@@ -342,15 +402,19 @@ export default function CapitalPressureCard({
 
   const compactEventCount = 3;
   const visibleEvents = showAllEvents
-    ? orderedEvents
+    ? filteredEvents
     : expanded
-      ? orderedEvents.slice(0, 6)
-      : orderedEvents.slice(0, compactEventCount);
+      ? filteredEvents.slice(0, 6)
+      : filteredEvents.slice(0, compactEventCount);
 
   const capacityText =
     !data.capacity || data.capacity.status === "unknown"
       ? "Not verified from available filings"
       : data.capacity.description;
+
+  const criteriaVerified = data.criteriaVerified ?? 0;
+  const criteriaTotal = data.criteriaTotal ?? 10;
+  const criteriaPct = Math.round((criteriaVerified / criteriaTotal) * 100);
 
   return (
     <Card className="p-4 bg-white dark:bg-gray-800 shadow-sm rounded-xl">
@@ -368,15 +432,28 @@ export default function CapitalPressureCard({
               Research signal — not a trade recommendation. Dilution is not certain.
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              {data.score}
-            </span>
-            <span
-              className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(data.status)}`}
-            >
-              {statusBadgeLabel(data.status)}
-            </span>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                {data.score}
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(data.status)}`}
+              >
+                {statusBadgeLabel(data.status)}
+              </span>
+            </div>
+            <Tooltip content="How many of the 10 Capital Pressure score criteria had verified SEC evidence. Lower coverage means more unknowns — treat the score as less certain.">
+              <div className="flex items-center gap-2 cursor-help">
+                <div className="w-20 h-1.5 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden">
+                  <div
+                    className="h-full bg-slate-600 dark:bg-slate-300"
+                    style={{ width: `${criteriaPct}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-gray-500">{criteriaLabel}</span>
+              </div>
+            </Tooltip>
           </div>
         </div>
 
@@ -384,9 +461,20 @@ export default function CapitalPressureCard({
 
         {/* Compact: top reason always visible */}
         <div>
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
-            Strongest score reason
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+              Strongest score reason
+            </h3>
+            {topReason && (
+              <button
+                type="button"
+                onClick={copyTopReason}
+                className="text-xs text-blue-600 dark:text-blue-400 underline"
+              >
+                {copiedReason ? "Copied" : "Copy reason + SEC link"}
+              </button>
+            )}
+          </div>
           {topReason ? (
             <ReasonRow reason={topReason} />
           ) : (
@@ -396,7 +484,7 @@ export default function CapitalPressureCard({
           )}
         </div>
 
-        {/* Compact timeline: 3 newest (pinned first), legend */}
+        {/* Compact timeline: 3 newest (pinned first), legend + filters */}
         <div>
           <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
             Supply &amp; financing timeline
@@ -407,9 +495,37 @@ export default function CapitalPressureCard({
             <span className="text-sky-700 dark:text-sky-300 font-medium">Capacity</span> =
             registered or contractual ability · Needs review = matched phrase, not auto-scored
           </p>
-          {orderedEvents.length === 0 ? (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {(
+              [
+                ["all", "All"],
+                ["issued", "Issued"],
+                ["capacity", "Capacity"],
+                ["needs_review", "Needs review"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setTimelineFilter(key);
+                  setShowAllEvents(false);
+                }}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium ${
+                  timelineFilter === key
+                    ? "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900"
+                    : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {filteredEvents.length === 0 ? (
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              No capital-structure events verified in the scanned filing window.
+              {orderedEvents.length === 0
+                ? "No capital-structure events verified in the scanned filing window."
+                : "No events match this filter."}
             </p>
           ) : (
             <>
@@ -422,7 +538,7 @@ export default function CapitalPressureCard({
                   />
                 ))}
               </ul>
-              {(expanded || showAllEvents) && orderedEvents.length > 6 && (
+              {(expanded || showAllEvents) && filteredEvents.length > 6 && (
                 <button
                   type="button"
                   onClick={() => setShowAllEvents((v) => !v)}
@@ -430,7 +546,7 @@ export default function CapitalPressureCard({
                 >
                   {showAllEvents
                     ? "Show fewer events"
-                    : `All events (${orderedEvents.length})`}
+                    : `All events (${filteredEvents.length})`}
                 </button>
               )}
             </>
@@ -565,6 +681,21 @@ export default function CapitalPressureCard({
                 </span>
               </Tooltip>
             </div>
+
+            {data.edgarSearchUrl && (
+              <p className="text-xs text-gray-500">
+                Manual check:{" "}
+                <a
+                  href={data.edgarSearchUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 underline"
+                >
+                  EDGAR company filings
+                  {data.cik ? ` (CIK ${data.cik.replace(/^0+/, "")})` : ""}
+                </a>
+              </p>
+            )}
 
             {/* Remaining reasons + gaps */}
             <div>

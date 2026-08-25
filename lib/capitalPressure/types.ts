@@ -35,6 +35,15 @@ export type CapitalEvent = {
   description: string;
   /** Capacity / registration / underlying potential — not confirmed issuance. */
   isCapacityOnly?: boolean;
+  /**
+   * When false, event appears on the timeline but awards no automatic score points
+   * (e.g. retrospective reverse-split footnotes, selling-shareholder registrations).
+   */
+  scoreEligible?: boolean;
+  /** Selling-shareholder / resale registration — not company ATM/ELOC capacity. */
+  isSellingShareholder?: boolean;
+  /** Retrospective accounting footnote rather than an effected split in-window. */
+  isRetrospective?: boolean;
   grossProceedsUsd?: number;
   sharesIssued?: number;
   potentialShares?: number;
@@ -91,7 +100,17 @@ export type CapitalPressureResult = {
   scannedThrough: string;
   windowStart?: string;
   windowEnd?: string;
+  /** Registration statements (S/F-1/3) may extend beyond the primary event window. */
+  registrationWindowStart?: string;
   latestVerifiedAt?: string;
+  /** Padded CIK when known — used for manual EDGAR links. */
+  cik?: string;
+  edgarSearchUrl?: string;
+  /** Count of primary documents fetched/parsed in this run. */
+  filingsScanned?: number;
+  /** How many of the fixed score criteria had verified evidence (0–criteriaTotal). */
+  criteriaVerified?: number;
+  criteriaTotal?: number;
 };
 
 /** Parsed SEC fundamentals used by the scorer (XBRL or filing-derived). */

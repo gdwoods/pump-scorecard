@@ -23,9 +23,14 @@ const PHRASE_PATTERNS: Array<{
   capacityDefault: boolean;
 }> = [
   { type: 'atm_program', re: /\bat[\s-]+the[\s-]+market\b|\batm\s+offering\b|\batm\s+program\b/i, capacityDefault: true },
-  { type: 'equity_line', re: /\bequity\s+line\b|\bELOC\b|\bYorkville\b|\bpurchase\s+agreement\b/i, capacityDefault: true },
+  // Do not match bare "purchase agreement" (too common in selling-shareholder / PIPE SPA text).
+  {
+    type: 'equity_line',
+    re: /\bequity\s+line(?:\s+purchase\s+agreement)?\b|\bELOC\b|\bYorkville\b|\bshare\s+purchase\s+agreement\b/i,
+    capacityDefault: true,
+  },
   { type: 'registered_direct', re: /\bregistered\s+direct\b/i, capacityDefault: false },
-  { type: 'convertible_note', re: /\bconvertible\b|\bconversion\s+price\b|\blowest\s+daily\s+VWAP\b/i, capacityDefault: true },
+  { type: 'convertible_note', re: /\bconvertible\s+(?:notes?|debentures?|debt)\b|\bconversion\s+price\b|\blowest\s+daily\s+VWAP\b/i, capacityDefault: true },
   { type: 'note_conversion', re: /\bconversion\s+of\s+(?:the\s+)?(?:notes?|debentures?)\b|\bconverted\s+into\s+.*common\s+stock\b/i, capacityDefault: false },
   { type: 'debt_for_equity', re: /\bdebt.{0,40}common\s+stock\b|\bexchanged?\s+.{0,40}(?:debt|notes?).{0,40}(?:shares|common\s+stock)\b/i, capacityDefault: false },
   { type: 'warrant_exercise', re: /\bwarrant\s+exercis/i, capacityDefault: false },
@@ -42,6 +47,18 @@ const ISSUANCE_VERBS =
 
 const VARIABLE_VWAP =
   /\b(?:lowest\s+daily\s+VWAP|variable\s+conversion|discount(?:ed)?\s+(?:to\s+)?(?:the\s+)?(?:VWAP|market)|%\s*of\s+(?:the\s+)?(?:lowest|average)\s+(?:daily\s+)?VWAP)\b/i;
+
+const SELLING_SHAREHOLDER =
+  /\bselling\s+shareholders?\b|\bresale\s+(?:of|by)\b|\bregistered\s+for\s+resale\b|\bon\s+behalf\s+of\s+(?:the\s+)?selling\b/i;
+
+const COMPANY_SIDE_ATM_ELOC =
+  /\b(?:at[\s-]+the[\s-]+market|atm\s+(?:offering|program)|equity\s+line|ELOC|Yorkville)\b/i;
+
+const RETROSPECTIVE_REVERSE_SPLIT =
+  /\bretrospectively\s+restated\b|\bas\s+adjusted\s+for\b.{0,60}reverse\s+(?:stock\s+)?split\b|\bgive\s+effect\s+to\b.{0,60}reverse\s+(?:stock\s+)?split\b|\bafter\s+(?:giving\s+)?effect\s+to\b.{0,60}reverse\s+(?:stock\s+)?split\b|\bsee\s+Note\s+\d+.{0,40}reverse\s+(?:stock\s+)?split\b|\b\*+\s*.{0,40}reverse\s+(?:stock\s+)?split\b/i;
+
+const EFFECTED_REVERSE_SPLIT =
+  /\b(?:effected|effectuate[sd]?|completed|consummated|implemented)\s+(?:a\s+)?(?:\d[\d,]*[\s-]*for[\s-]*\d[\d,]*\s+)?reverse\s+(?:stock\s+)?split\b|\breverse\s+(?:stock\s+)?split\s+(?:became|was)\s+effective\b|\bboard\s+(?:of\s+directors\s+)?(?:has\s+)?approved\s+a\s+reverse\s+(?:stock\s+)?split\b/i;
 
 /** True when the match is under a clear negation (did not / no / without / not). */
 function isNegated(text: string, matchIndex: number): boolean {
@@ -222,6 +239,17 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
       }
 
       const type = phrase.type as CapitalEventType;
+
+      // Skip "non-convertible" loan language
+      if (
+        type === 'convertible_note' &&
+        /\bnon[\s-]*convertible\b/i.test(
+          text.slice(Math.max(0, idx - 20), idx + match[0].length + 20)
+        )
+      ) {
+        continue;
+      }
+
       const { capacityOnly, isIssuance } = classifyIssuance(
         type,
         phrase.capacityDefault,
@@ -272,16 +300,65 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
       }
 
       const verifiedAt = new Date().toISOString();
+      let title = titleFor(finalType, capacityOnly && !isIssuance);
+      let scoreEligible = true;
+      let isSellingShareholder = false;
+      let isRetrospective = false;
+      let eventConfidence = confidence;
+
+      // Selling-shareholder / resale registrations are not company ATM/ELOC capacity
+      if (
+        (finalType === 'atm_program' ||
+          finalType === 'equity_line' ||
+          finalType === 'shelf_registration' ||
+          finalType === 'prospectus_supplement') &&
+        SELLING_SHAREHOLDER.test(window) &&
+        !COMPANY_SIDE_ATM_ELOC.test(window)
+      ) {
+        isSellingShareholder = true;
+        scoreEligible = false;
+        eventConfidence = 'needs_review';
+        title = `${title} (selling shareholder)`;
+      }
+
+      // Prefer company-side ATM/ELOC language; bare SPA with selling shareholders already handled
+      if (
+        (finalType === 'atm_program' || finalType === 'equity_line') &&
+        SELLING_SHAREHOLDER.test(window) &&
+        COMPANY_SIDE_ATM_ELOC.test(window)
+      ) {
+        // Company facility mentioned alongside selling shareholders — keep scoreable if high confidence
+      }
+
+      // Retrospective reverse-split footnotes: timeline only, never +10
+      if (finalType === 'reverse_split') {
+        const retrospective = RETROSPECTIVE_REVERSE_SPLIT.test(window);
+        const effected = EFFECTED_REVERSE_SPLIT.test(window);
+        if (retrospective && !effected) {
+          isRetrospective = true;
+          scoreEligible = false;
+          title = 'Reverse stock split (retrospective footnote)';
+        } else if (!effected && !hasDateNear(window)) {
+          // Ambiguous mention without effectuation language → needs review, no auto points
+          scoreEligible = false;
+          eventConfidence = 'needs_review';
+        }
+      }
+
+      // Prefer Item-like operative 8-K context for financing (soft boost already via confidence)
       const event: CapitalEvent = {
         id: `${doc.accessionNumber || doc.filingDate}-${finalType}-${eventIdx++}`,
         eventDate: doc.filingDate,
         type: finalType,
-        title: titleFor(finalType, capacityOnly && !isIssuance),
+        title,
         description: cleanFilingText(excerpt, 200),
         isCapacityOnly: capacityOnly && !isIssuance,
+        scoreEligible,
+        isSellingShareholder: isSellingShareholder || undefined,
+        isRetrospective: isRetrospective || undefined,
         filedAt: doc.filingDate,
         verifiedAt,
-        evidence: makeEvidence(doc, excerpt, confidence),
+        evidence: makeEvidence(doc, excerpt, eventConfidence),
       };
 
       if (isIssuance && shares !== undefined) event.sharesIssued = shares;
