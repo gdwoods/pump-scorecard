@@ -1,6 +1,7 @@
 export * from './types';
 export * from './unavailable';
 export * from './parse';
+export { cleanFilingText, decodeHtmlEntities } from './textClean';
 export { runCapitalPressure } from './run';
 export {
   indexCapitalPressureFilings,

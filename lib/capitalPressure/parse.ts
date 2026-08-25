@@ -13,6 +13,7 @@ import type {
   SecEvidence,
   XbrlSnapshot,
 } from './types';
+import { cleanFilingText } from './textClean';
 
 const MAX_EXCERPT = 280;
 
@@ -53,16 +54,11 @@ function isNegated(text: string, matchIndex: number): boolean {
 }
 
 export function stripHtml(input: string): string {
-  return input
+  const stripped = input
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/<[^>]+>/g, ' ');
+  return cleanFilingText(stripped);
 }
 
 function clipExcerpt(text: string, index: number, matchLen: number): string {
@@ -71,10 +67,7 @@ function clipExcerpt(text: string, index: number, matchLen: number): string {
   let excerpt = text.slice(start, end).trim();
   if (start > 0) excerpt = '…' + excerpt;
   if (end < text.length) excerpt = excerpt + '…';
-  if (excerpt.length > MAX_EXCERPT) {
-    excerpt = excerpt.slice(0, MAX_EXCERPT - 1) + '…';
-  }
-  return excerpt;
+  return cleanFilingText(excerpt, MAX_EXCERPT);
 }
 
 function parseNumberNear(window: string): number | undefined {
@@ -284,7 +277,7 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
         eventDate: doc.filingDate,
         type: finalType,
         title: titleFor(finalType, capacityOnly && !isIssuance),
-        description: excerpt.slice(0, 200),
+        description: cleanFilingText(excerpt, 200),
         isCapacityOnly: capacityOnly && !isIssuance,
         filedAt: doc.filingDate,
         verifiedAt,
