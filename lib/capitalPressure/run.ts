@@ -86,17 +86,18 @@ export async function runCapitalPressure(
       );
     }
     if (!submissions?.filings?.recent) {
-      return scoreCapitalPressure({
-        unavailableReason: 'SEC submissions unavailable',
-        context: { ...args.context, asOf },
-      });
+      return {
+        ...scoreCapitalPressure({
+          unavailableReason: 'SEC submissions unavailable',
+          context: { ...args.context, asOf },
+        }),
+        cik,
+        edgarSearchUrl: `https://www.sec.gov/edgar/browse/?CIK=${cik.replace(/^0+/, '')}`,
+      };
     }
 
-    const { filings, windowStart, windowEnd } = indexCapitalPressureFilings(
-      cik,
-      submissions.filings.recent,
-      { asOf }
-    );
+    const { filings, windowStart, windowEnd, registrationWindowStart } =
+      indexCapitalPressureFilings(cik, submissions.filings.recent, { asOf });
 
     const toFetch = selectFilingsToFetch(filings);
     const docs: FilingDocumentInput[] = [];
@@ -147,10 +148,18 @@ export async function runCapitalPressure(
       };
     }
 
-    return scoreCapitalPressure({
+    const result = scoreCapitalPressure({
       parsed,
       context: { ...args.context, asOf },
     });
+
+    return {
+      ...result,
+      cik,
+      edgarSearchUrl: `https://www.sec.gov/edgar/browse/?CIK=${cik.replace(/^0+/, '')}`,
+      filingsScanned: docs.length,
+      registrationWindowStart,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return scoreCapitalPressure({

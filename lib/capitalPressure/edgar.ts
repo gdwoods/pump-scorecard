@@ -66,7 +66,20 @@ export function monthsAgoIso(months: number, asOf = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Index relevant forms from submissions.recent within a 24-month window. */
+export const EVENT_WINDOW_MONTHS = 12;
+/** Registration statements (S-1/S-3/F-1/F-3) can remain effective longer than event noise warrants. */
+export const REGISTRATION_WINDOW_MONTHS = 24;
+
+function isRegistrationForm(form: string): boolean {
+  return (
+    form.startsWith('S-1') ||
+    form.startsWith('S-3') ||
+    form.startsWith('F-1') ||
+    form.startsWith('F-3')
+  );
+}
+
+/** Index relevant forms: 12 months for events; 24 months for registration statements only. */
 export function indexCapitalPressureFilings(
   cik: string,
   recent: {
@@ -76,11 +89,18 @@ export function indexCapitalPressureFilings(
     primaryDocument?: string[];
     items?: string[];
   },
-  opts?: { asOf?: string; windowMonths?: number }
-): { filings: IndexedFiling[]; windowStart: string; windowEnd: string } {
+  opts?: { asOf?: string; windowMonths?: number; registrationWindowMonths?: number }
+): {
+  filings: IndexedFiling[];
+  windowStart: string;
+  windowEnd: string;
+  registrationWindowStart: string;
+} {
   const asOf = opts?.asOf ? new Date(opts.asOf) : new Date();
-  const windowMonths = opts?.windowMonths ?? 24;
+  const windowMonths = opts?.windowMonths ?? EVENT_WINDOW_MONTHS;
+  const regMonths = opts?.registrationWindowMonths ?? REGISTRATION_WINDOW_MONTHS;
   const windowStart = monthsAgoIso(windowMonths, asOf);
+  const registrationWindowStart = monthsAgoIso(regMonths, asOf);
   const windowEnd = asOf.toISOString().slice(0, 10);
   const forms = recent.form || [];
   const filings: IndexedFiling[] = [];
@@ -88,8 +108,13 @@ export function indexCapitalPressureFilings(
   for (let i = 0; i < forms.length; i++) {
     const form = (forms[i] || '').toUpperCase();
     const filingDate = recent.filingDate?.[i] || '';
-    if (!filingDate || filingDate < windowStart) continue;
+    if (!filingDate) continue;
     if (!isRelevantForm(form)) continue;
+
+    const isReg = isRegistrationForm(form);
+    const earliest = isReg ? registrationWindowStart : windowStart;
+    if (filingDate < earliest) continue;
+
     const accessionNumber = recent.accessionNumber?.[i] || '';
     const primaryDocument = recent.primaryDocument?.[i] || '';
     if (!accessionNumber || !primaryDocument) continue;
@@ -105,7 +130,7 @@ export function indexCapitalPressureFilings(
   }
 
   filings.sort((a, b) => b.filingDate.localeCompare(a.filingDate));
-  return { filings, windowStart, windowEnd };
+  return { filings, windowStart, windowEnd, registrationWindowStart };
 }
 
 function isRelevantForm(form: string): boolean {

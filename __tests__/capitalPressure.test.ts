@@ -489,4 +489,101 @@ describe('capitalPressure scoring fixtures', () => {
     expect(result.recentIssuance.shares30d).toBeUndefined();
     expect(result.recentIssuance.proceeds30dUsd).toBe(11.5);
   });
+
+  it('does not score selling-shareholder SPA as company ATM/ELOC', () => {
+    const parsed = parseCapitalPressureDocuments(
+      [
+        {
+          form: 'F-1',
+          filingDate: '2026-08-01',
+          accessionNumber: 'sell-1',
+          documentUrl: 'https://example.com/f1.htm',
+          text: 'The Selling Shareholders may sell shares pursuant to the terms and conditions of the Securities Purchase Agreement, executed between the Company and the Selling Shareholders on June 26, 2026 (the Purchase Agreement). Under the terms of the Purchase Agreement, up to $10,000,000 may be registered for resale.',
+        },
+        {
+          form: '10-Q',
+          filingDate: '2026-08-10',
+          accessionNumber: 'sell-2',
+          documentUrl: 'https://example.com/10q.htm',
+          text: 'Quarterly report with no financing disclosures.',
+        },
+      ],
+      {
+        windowStart: '2025-08-01',
+        windowEnd: '2026-08-15',
+        asOf: '2026-08-15',
+      }
+    );
+    const equity = parsed.events.find((e) => e.type === 'equity_line');
+    // Bare purchase agreement no longer matches; selling shareholder alone should not create scoreable ATM
+    expect(
+      parsed.events.every(
+        (e) =>
+          !(e.type === 'atm_program' || e.type === 'equity_line') ||
+          e.scoreEligible === false ||
+          e.isSellingShareholder
+      )
+    ).toBe(true);
+    const result = scoreCapitalPressure({
+      parsed,
+      context: { asOf: '2026-08-15' },
+    });
+    expect(result.reasons.every((r) => !/ATM|ELOC|equity line/i.test(r.label))).toBe(true);
+    void equity;
+  });
+
+  it('treats retrospective reverse-split footnotes as timeline-only (no +10)', () => {
+    const parsed = parseCapitalPressureDocuments(
+      [
+        {
+          form: 'F-1/A',
+          filingDate: '2026-08-24',
+          accessionNumber: 'rs-fn',
+          documentUrl: 'https://example.com/f1a.htm',
+          text: 'Share amounts have been retrospectively restated due to thirty for one reverse stock split, see Note 14. Cash flows for the periods presented.',
+        },
+        {
+          form: '10-Q',
+          filingDate: '2026-08-20',
+          accessionNumber: 'rs-q',
+          documentUrl: 'https://example.com/10q.htm',
+          text: 'Quarterly report with no financing disclosures.',
+        },
+      ],
+      {
+        windowStart: '2025-08-01',
+        windowEnd: '2026-08-24',
+        asOf: '2026-08-24',
+      }
+    );
+    const rs = parsed.events.find((e) => e.type === 'reverse_split');
+    expect(rs).toBeDefined();
+    expect(rs!.isRetrospective).toBe(true);
+    expect(rs!.scoreEligible).toBe(false);
+    const result = scoreCapitalPressure({
+      parsed,
+      context: { asOf: '2026-08-24' },
+    });
+    expect(result.reasons.every((r) => !r.label.includes('Reverse split'))).toBe(true);
+  });
+
+  it('indexes events at 12 months and registrations at 24 months', () => {
+    const { indexCapitalPressureFilings } = require('../lib/capitalPressure/edgar');
+    const asOf = '2026-08-15';
+    const { filings, windowStart, registrationWindowStart } = indexCapitalPressureFilings(
+      '0001234567',
+      {
+        form: ['8-K', 'S-3', '8-K'],
+        filingDate: ['2025-01-01', '2024-12-01', '2026-07-01'],
+        accessionNumber: ['a', 'b', 'c'],
+        primaryDocument: ['a.htm', 'b.htm', 'c.htm'],
+      },
+      { asOf }
+    );
+    expect(windowStart).toBe('2025-08-15');
+    expect(registrationWindowStart).toBe('2024-08-15');
+    // Old 8-K outside 12mo excluded; S-3 inside 24mo included; recent 8-K included
+    expect(filings.some((f: { form: string }) => f.form === 'S-3')).toBe(true);
+    expect(filings.filter((f: { form: string }) => f.form === '8-K')).toHaveLength(1);
+  });
 });
