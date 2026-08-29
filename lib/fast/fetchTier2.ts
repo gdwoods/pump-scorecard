@@ -105,7 +105,69 @@ export async function fetchPolygonDailyBars(ticker: string): Promise<DailyBar[]>
   }));
 }
 
-/** Lightweight Yahoo quote summary via query1 — Edge-safe. */
+/** Polygon ticker overview + optional Finnhub profile — Edge-safe (replaces brittle Yahoo). */
+export async function fetchPolygonFundamentals(ticker: string): Promise<FundamentalsData> {
+  const key = process.env.POLYGON_API_KEY;
+  if (!key) throw new Error('POLYGON_API_KEY missing');
+
+  const url = `https://api.polygon.io/v3/reference/tickers/${encodeURIComponent(ticker)}?apiKey=${key}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`polygon ticker ${res.status}`);
+  const json = await res.json();
+  const r = json?.results;
+  if (!r) throw new Error('polygon ticker empty');
+
+  let marketCap = typeof r.market_cap === 'number' ? r.market_cap : null;
+  let floatShares =
+    normalizeShareCount(r.weighted_shares_outstanding) ??
+    normalizeShareCount(r.share_class_shares_outstanding) ??
+    null;
+  let sharesOutstanding = normalizeShareCount(r.share_class_shares_outstanding) ?? null;
+
+  // Finnhub profile2 fills gaps (market cap in millions, shares in millions)
+  const finnhubKey = process.env.FINNHUB_API_KEY;
+  if (finnhubKey) {
+    try {
+      const fRes = await fetch(
+        `https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(ticker)}&token=${finnhubKey}`,
+        { cache: 'no-store' }
+      );
+      if (fRes.ok) {
+        const f = (await fRes.json()) as {
+          marketCapitalization?: number;
+          shareOutstanding?: number;
+        };
+        if (marketCap == null && typeof f.marketCapitalization === 'number') {
+          marketCap = f.marketCapitalization * 1_000_000;
+        }
+        if (floatShares == null && typeof f.shareOutstanding === 'number') {
+          floatShares = f.shareOutstanding * 1_000_000;
+        }
+        if (sharesOutstanding == null && typeof f.shareOutstanding === 'number') {
+          sharesOutstanding = f.shareOutstanding * 1_000_000;
+        }
+      }
+    } catch {
+      // optional enrichment — polygon result stands on its own
+    }
+  }
+
+  if (marketCap == null && floatShares == null) {
+    throw new Error('polygon fundamentals empty');
+  }
+
+  return {
+    marketCap,
+    float: floatShares,
+    instOwn: null,
+    shortInterest: null,
+    sharesOutstanding,
+  };
+}
+
+/**
+ * @deprecated Yahoo quoteSummary returns 401 on Edge — use fetchPolygonFundamentals.
+ */
 export async function fetchYahooFundamentals(ticker: string): Promise<FundamentalsData> {
   const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=defaultKeyStatistics,price,summaryDetail`;
   const res = await fetch(url, {
@@ -145,43 +207,55 @@ export async function fetchSecFilings(ticker: string): Promise<{
   daysSinceLast: number | null;
   cik: string | null;
 }> {
-  // Resolve CIK via SEC company_tickers — but NEVER on hot path at full size.
-  // Use ticker search endpoint instead.
-  const searchUrl = `https://efts.sec.gov/LATEST/search-index?q=%22%22&dateRange=custom&startdt=2020-01-01&forms=8-K,424B5,S-1,S-3&tickers=${ticker}`;
-  // Prefer submissions via CIK lookup from data.sec.gov tickers list cached... 
-  // Fallback: use EDGAR full-text company search for recent forms.
-  const companyUrl = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${ticker}&type=&dateb=&owner=include&count=40&output=atom`;
-  const res = await fetch(companyUrl, {
-    headers: { 'User-Agent': SEC_UA, Accept: 'application/atom+xml' },
+  const upper = ticker.toUpperCase();
+
+  const cikRes = await fetch('https://www.sec.gov/files/company_tickers.json', {
+    headers: { 'User-Agent': SEC_UA, Accept: 'application/json' },
     cache: 'no-store',
   });
-  if (!res.ok) throw new Error(`sec edgar ${res.status}`);
-  const xml = await res.text();
+  if (!cikRes.ok) throw new Error(`sec cik list ${cikRes.status}`);
 
-  const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].slice(0, 20);
+  const cikJson = (await cikRes.json()) as Record<
+    string,
+    { ticker?: string; cik_str?: number }
+  >;
+  const entry = Object.values(cikJson).find((c) => c.ticker?.toUpperCase() === upper);
+  if (!entry?.cik_str) throw new Error(`sec cik not found for ${upper}`);
+
+  const cik = String(entry.cik_str).padStart(10, '0');
+  const secRes = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, {
+    headers: { 'User-Agent': SEC_UA, Accept: 'application/json' },
+    cache: 'no-store',
+  });
+  if (!secRes.ok) throw new Error(`sec submissions ${secRes.status}`);
+
+  const secJson = (await secRes.json()) as {
+    filings?: { recent?: { form?: string[]; filingDate?: string[] } };
+  };
+  const recent = secJson.filings?.recent;
+  const forms = recent?.form ?? [];
+  const dates = recent?.filingDate ?? [];
+
   const filings: FilingItem[] = [];
   let daysSinceLast: number | null = null;
   const now = Date.now();
 
-  for (const m of entries) {
-    const block = m[1];
-    const title = block.match(/<title[^>]*>([\s\S]*?)<\/title>/)?.[1]?.trim() ?? '';
-    const updated = block.match(/<updated>([\s\S]*?)<\/updated>/)?.[1]?.trim();
-    const formMatch = title.match(/\b(\d{1,2}-K|10-Q|10-K|8-K|S-1|S-3|S-3ASR|424B\d|EFFECT|SC 13D|4)\b/i);
-    const form = formMatch ? formMatch[1].toUpperCase() : title.split(' - ')[0]?.trim() || 'UNKNOWN';
-    if (!updated) continue;
-    const filedAt = new Date(updated).toISOString();
-    const ageDays = (now - new Date(updated).getTime()) / (86400 * 1000);
-    if (daysSinceLast == null || ageDays < daysSinceLast) daysSinceLast = Math.floor(ageDays);
+  for (let i = 0; i < Math.min(forms.length, 40); i++) {
+    const form = (forms[i] || '').toUpperCase();
+    const dateStr = dates[i];
+    if (!dateStr) continue;
 
-    // today or yesterday
+    const filedAt = new Date(dateStr).toISOString();
+    const ageDays = (now - new Date(dateStr).getTime()) / (86400 * 1000);
+    const ageFloor = Math.floor(ageDays);
+    if (daysSinceLast == null || ageFloor < daysSinceLast) daysSinceLast = ageFloor;
+
     if (ageDays <= 2) {
       filings.push({ form, filedAt, signal: classifyForm(form) });
     }
   }
 
-  void searchUrl; // reserved for ATM search path
-  return { filings, daysSinceLast, cik: null };
+  return { filings, daysSinceLast, cik };
 }
 
 export async function fetchBorrow(ticker: string): Promise<{
@@ -291,7 +365,9 @@ export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
     await Promise.all([
       settleSource('polygon-snapshot', Math.min(ms, 800), () => fetchPolygonSnapshot(ticker)),
       settleSource('polygon-aggs', Math.min(ms, 1000), () => fetchPolygonDailyBars(ticker)),
-      settleSource('yahoo-fundamentals', Math.min(ms, 1200), () => fetchYahooFundamentals(ticker)),
+      settleSource('polygon-fundamentals', Math.min(ms, 1200), () =>
+        fetchPolygonFundamentals(ticker)
+      ),
       settleSource('sec-filings', Math.min(ms, 1200), () => fetchSecFilings(ticker)),
       settleSource('borrow', Math.min(ms, 1000), () => fetchBorrow(ticker)),
       settleSource('news', Math.min(ms, 1000), () => fetchNewsBundle(ticker)),
