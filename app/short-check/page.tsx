@@ -11,6 +11,7 @@ import DroppinessScatter from "@/components/DroppinessChart";
 import Fundamentals from "@/components/Fundamentals";
 import SecFilings from "@/components/SecFilings";
 import CapitalPressureCard from "@/components/CapitalPressureCard";
+import AiThesisCard from "@/components/AiThesisCard";
 import NewsSection from "@/components/NewsSection";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import HistoryCard from "@/components/HistoryCard";
@@ -290,6 +291,16 @@ export default function ShortCheckPage() {
       />
     ) : null;
 
+  const aiThesisBlock =
+    ticker && result ? (
+      <AiThesisCard
+        ticker={ticker}
+        result={result}
+        extractedData={extractedData}
+        scanData={pumpScorecardData}
+      />
+    ) : null;
+
   // Fetch Pump Scorecard data when ticker is available
   // Also recalculate Short Check score when droppiness becomes available
   useEffect(() => {
@@ -494,7 +505,7 @@ export default function ShortCheckPage() {
             extractedData={extractedData || undefined}
             pumpScorecardData={pumpScorecardData}
             afterQuickActions={fastVerdictCard}
-            afterFastVerdict={capitalPressureBlock}
+            afterFastVerdict={<>{capitalPressureBlock}{aiThesisBlock}</>}
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
               setHasAnalyzedTicker(true);

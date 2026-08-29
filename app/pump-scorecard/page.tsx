@@ -19,6 +19,7 @@ import DroppinessScatter from "@/components/DroppinessChart";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import CapitalPressureCard from "@/components/CapitalPressureCard";
+import AiThesisCard from "@/components/AiThesisCard";
 import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import Link from "next/link";
@@ -482,6 +483,18 @@ useEffect(() => {
               data={result.capitalPressure}
             />
           )}
+
+          <AiThesisCard
+            ticker={activeTicker}
+            scanData={{
+              weightedRiskScore: result.weightedRiskScore,
+              summaryVerdict: result.summaryVerdict,
+              droppinessVerdict: result.droppinessVerdict,
+              capitalPressure: result.capitalPressure,
+              news: result.news,
+              insiderTransactions: result.insiderTransactions,
+            }}
+          />
 
           {result.borrowData && (
             <BorrowDeskCard
