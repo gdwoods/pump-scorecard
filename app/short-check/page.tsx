@@ -510,7 +510,6 @@ export default function ShortCheckPage() {
             </div>
           </Card>
         )}
-        {hasAnalyzedTicker && !result && fastVerdictCard}
 
         {/* Droppiness Card - Show when we have ticker (with or without Short Check result) */}
         {ticker && pumpScorecardData?.droppinessScore !== undefined && (
@@ -526,6 +525,13 @@ export default function ShortCheckPage() {
         {ticker && pumpScorecardData && !loadingPumpData && (
           <DroppinessScatter detail={pumpScorecardData.droppinessDetail || []} ticker={ticker} />
         )}
+
+        {/* Quick Ticker only — Fast Verdict after droppiness gauge + scatter */}
+        {hasAnalyzedTicker &&
+          !result &&
+          !loadingPumpData &&
+          pumpScorecardData?.droppinessScore !== undefined &&
+          fastVerdictCard}
 
         {/* Additional Pump Scorecard Cards - Show when we have ticker data */}
         {ticker && pumpScorecardData && !loadingPumpData && (
