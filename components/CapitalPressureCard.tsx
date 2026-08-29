@@ -199,19 +199,31 @@ function EventSparkline({ events }: { events: CapitalEvent[] }) {
   const sorted = [...events].sort((a, b) => a.eventDate.localeCompare(b.eventDate));
   const recent = sorted.slice(-14);
   return (
-    <div className="flex items-center gap-1 flex-wrap" aria-label="Recent filing activity">
-      {recent.map((e) => (
-        <span
-          key={e.id}
-          title={`${e.eventDate} — ${humanEventType(e.type)}`}
-          className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${
-            isIssuanceEvent(e) ? "bg-red-500" : "bg-sky-400"
-          }`}
-        />
-      ))}
-      <span className="text-[10px] text-gray-500 dark:text-gray-400 ml-1">
-        {recent.length} events (newest →)
-      </span>
+    <div className="space-y-1">
+      <div className="flex items-center gap-0.5 flex-wrap" aria-label="Recent filing activity">
+        {recent.map((e) => {
+          const label = `${e.eventDate} — ${humanEventType(e.type)}`;
+          const issued = isIssuanceEvent(e);
+          return (
+            <Tooltip key={e.id} content={label} side="top">
+              <button
+                type="button"
+                className="p-1.5 rounded-full hover:bg-gray-200/60 dark:hover:bg-gray-700/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                aria-label={label}
+              >
+                <span
+                  className={`block w-2.5 h-2.5 rounded-full ${
+                    issued ? "bg-red-500" : "bg-sky-400"
+                  }`}
+                />
+              </button>
+            </Tooltip>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-gray-500 dark:text-gray-400">
+        {recent.length} events, left (older) → right (newer). Hover or tap a dot for details.
+      </p>
     </div>
   );
 }
