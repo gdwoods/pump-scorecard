@@ -433,30 +433,6 @@ export default function ShortCheckPage() {
           </>
         )}
 
-        {/* Fast verdict — first thing you see after analyzing a ticker */}
-        {SHOW_FAST_VERDICT_ON_SHORT_CHECK && (loadingFastVerdict || fastVerdict || fastVerdictError) && (
-          <FastVerdictCard
-            verdict={
-              fastVerdict
-                ? enrichFastVerdictFromShortCheck(fastVerdict, {
-                    scanDroppiness: pumpScorecardData
-                      ? {
-                          score: pumpScorecardData.droppinessScore,
-                          detail: pumpScorecardData.droppinessDetail,
-                          spikeCount: Array.isArray(pumpScorecardData.droppinessDetail)
-                            ? pumpScorecardData.droppinessDetail.length
-                            : undefined,
-                        }
-                      : null,
-                    extracted: extractedData,
-                  })
-                : null
-            }
-            loading={loadingFastVerdict}
-            error={fastVerdictError}
-          />
-        )}
-
         {/* Short Check Results - Only show if we have a result */}
         {result && (
           <ShortCheckResults
@@ -464,6 +440,31 @@ export default function ShortCheckPage() {
             ticker={ticker}
             extractedData={extractedData || undefined}
             pumpScorecardData={pumpScorecardData}
+            afterQuickActions={
+              SHOW_FAST_VERDICT_ON_SHORT_CHECK &&
+              (loadingFastVerdict || fastVerdict || fastVerdictError) ? (
+                <FastVerdictCard
+                  verdict={
+                    fastVerdict
+                      ? enrichFastVerdictFromShortCheck(fastVerdict, {
+                          scanDroppiness: pumpScorecardData
+                            ? {
+                                score: pumpScorecardData.droppinessScore,
+                                detail: pumpScorecardData.droppinessDetail,
+                                spikeCount: Array.isArray(pumpScorecardData.droppinessDetail)
+                                  ? pumpScorecardData.droppinessDetail.length
+                                  : undefined,
+                              }
+                            : null,
+                          extracted: extractedData,
+                        })
+                      : null
+                  }
+                  loading={loadingFastVerdict}
+                  error={fastVerdictError}
+                />
+              ) : null
+            }
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
               setHasAnalyzedTicker(true);

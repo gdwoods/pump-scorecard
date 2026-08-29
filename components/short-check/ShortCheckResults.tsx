@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import ShortCheckScoreBreakdown from "./ShortCheckScoreBreakdown";
@@ -20,6 +20,7 @@ interface ShortCheckResultsProps {
   extractedData?: ExtractedData;
   pumpScorecardData?: any; // Pump Scorecard data to include in PDF
   onTickerChange?: (newTicker: string) => void; // Callback when ticker is overridden
+  afterQuickActions?: ReactNode;
 }
 
 export default function ShortCheckResults({
@@ -28,6 +29,7 @@ export default function ShortCheckResults({
   extractedData,
   pumpScorecardData,
   onTickerChange,
+  afterQuickActions,
 }: ShortCheckResultsProps) {
   const [showScoringGuide, setShowScoringGuide] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -372,6 +374,8 @@ export default function ShortCheckResults({
           )}
         </Card>
       )}
+
+      {afterQuickActions}
 
       {/* Ticker Override Warning and Input */}
       {isSingleLetterTicker && (

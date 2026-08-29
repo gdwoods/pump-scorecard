@@ -70,7 +70,7 @@ export default function NewsSection({
           </a>.
         </p>
       ) : (
-        <ul className="space-y-3 mt-2">
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
           {news.map((n, i) => {
             const dateStr = formatPublished(n.published);
             return (
