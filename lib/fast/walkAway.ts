@@ -51,9 +51,15 @@ export function evaluateWalkAways(input: WalkAwayInput): {
     return { verdict: 'WATCH', reason: 'W1:dataCompleteness', flags };
   }
 
-  // W2
+  // W2 — discretionary pump-day filter (soft flag; does not hard-disqualify)
   if (input.todayMovePct == null || input.todayMovePct < T.todayMove.min) {
-    return { verdict: 'NO_TRADE', reason: 'W2:todayMove', flags };
+    const moveLabel =
+      input.todayMovePct == null
+        ? 'unknown'
+        : `${(input.todayMovePct * 100).toFixed(0)}%`;
+    flags.push(
+      `W2:todayMove — ${moveLabel} today (discretionary ${Math.round(T.todayMove.min * 100)}%+ pump-day threshold)`
+    );
   }
 
   // W3 — real catalyst (addendum)

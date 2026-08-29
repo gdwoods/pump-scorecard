@@ -1,7 +1,14 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip } from "@/components/ui/tooltip";
+import { droppinessTailwindClass } from "@/lib/droppiness/colors";
+import {
+  describeFastWalkAwayFlag,
+  describeFastWalkAwayReason,
+} from "@/lib/fast/walkAwayReasons";
 import type { FastVerdict, FastVerdictKind } from "@/lib/fast/types";
+import { T } from "@/lib/config/thresholds";
 
 function pct(n: number | null, digits = 0): string {
   if (n == null || Number.isNaN(n)) return "n/a";
@@ -21,7 +28,7 @@ const VERDICT_STYLES: Record<
     badge: "bg-red-600 text-white",
     panel: "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40",
     label: "NO TRADE",
-    blurb: "Hard walk-away — do not size a short from this screen.",
+    blurb: "Hard walk-away on this screen — do not size a short here.",
   },
   WATCH: {
     badge: "bg-amber-500 text-white",
@@ -36,6 +43,27 @@ const VERDICT_STYLES: Record<
     blurb: "Not obviously disqualified — escalate to full Short Check / Tier 3.",
   },
 };
+
+const VERDICT_TOOLTIPS: Record<FastVerdictKind, string> = {
+  NO_TRADE: "A Framework hard walk-away rule fired (W3–W10). Treat as disqualifying on the fast screen.",
+  WATCH: "Data quality too low (W1) or too many soft flags — wait for better inputs.",
+  REVIEW: "No hard walk-away — ticker may warrant deeper Short Check research.",
+};
+
+function RuleCodeBadge({ reason }: { reason: string }) {
+  const description = describeFastWalkAwayReason(reason);
+  const badge = (
+    <span className="text-sm font-mono text-gray-700 dark:text-gray-300 underline decoration-dotted cursor-help">
+      {reason}
+    </span>
+  );
+  if (!description) return badge;
+  return (
+    <Tooltip content={description} side="bottom">
+      {badge}
+    </Tooltip>
+  );
+}
 
 export default function FastVerdictCard({
   verdict,
@@ -70,6 +98,11 @@ export default function FastVerdictCard({
 
   const style = VERDICT_STYLES[verdict.verdict] ?? VERDICT_STYLES.WATCH;
   const sourcesOk = Math.round(verdict.dataCompleteness * 8);
+  const moveBelowPumpThreshold =
+    verdict.price.todayMovePct == null ||
+    verdict.price.todayMovePct < T.todayMove.min;
+  const highBorrowFee =
+    verdict.borrow.feePct != null && verdict.borrow.feePct >= 50;
 
   return (
     <Card className={`shadow-md border rounded-xl overflow-hidden ${style.panel}`}>
@@ -83,16 +116,14 @@ export default function FastVerdictCard({
               <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {verdict.ticker}
               </span>
-              <span
-                className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-semibold ${style.badge}`}
-              >
-                {style.label}
-              </span>
-              {verdict.reason && (
-                <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
-                  {verdict.reason}
+              <Tooltip content={VERDICT_TOOLTIPS[verdict.verdict]} side="bottom">
+                <span
+                  className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-semibold cursor-help ${style.badge}`}
+                >
+                  {style.label}
                 </span>
-              )}
+              </Tooltip>
+              {verdict.reason && <RuleCodeBadge reason={verdict.reason} />}
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400">{style.blurb}</p>
           </div>
@@ -113,7 +144,19 @@ export default function FastVerdictCard({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-gray-800 dark:text-gray-200">
           <div>
             <span className="text-gray-500 dark:text-gray-400">Move </span>
-            {pct(verdict.price.todayMovePct)} today · vol {num(verdict.price.volVs20d, 1)}×
+            <span className={moveBelowPumpThreshold ? "text-amber-600 dark:text-amber-400" : ""}>
+              {pct(verdict.price.todayMovePct)} today · vol {num(verdict.price.volVs20d, 1)}×
+            </span>
+            {moveBelowPumpThreshold && (
+              <Tooltip
+                content={describeFastWalkAwayReason("W2:todayMove") ?? ""}
+                side="bottom"
+              >
+                <span className="ml-1 text-xs text-amber-600 dark:text-amber-400 underline decoration-dotted cursor-help">
+                  (below {Math.round(T.todayMove.min * 100)}% discretionary)
+                </span>
+              </Tooltip>
+            )}
           </div>
           <div>
             <span className="text-gray-500 dark:text-gray-400">Runner </span>
@@ -121,9 +164,15 @@ export default function FastVerdictCard({
           </div>
           <div>
             <span className="text-gray-500 dark:text-gray-400">Drop </span>
-            {verdict.droppiness.status === "UNVERIFIED"
-              ? `UNVERIFIED (${verdict.droppiness.reason ?? "not_cached"})`
-              : `${verdict.droppiness.score ?? "n/a"} (${verdict.droppiness.spikeCount ?? "?"} spikes)`}
+            {verdict.droppiness.status === "UNVERIFIED" ? (
+              <span className="text-gray-500 dark:text-gray-400">
+                UNVERIFIED ({verdict.droppiness.reason ?? "not_cached"})
+              </span>
+            ) : (
+              <span className={droppinessTailwindClass(verdict.droppiness.score)}>
+                {verdict.droppiness.score ?? "n/a"} ({verdict.droppiness.spikeCount ?? "?"} spikes)
+              </span>
+            )}
           </div>
           <div>
             <span className="text-gray-500 dark:text-gray-400">News </span>
@@ -139,7 +188,11 @@ export default function FastVerdictCard({
               : verdict.borrow.available
                 ? "available"
                 : "UNAVAILABLE"}
-            {verdict.borrow.feePct != null ? ` · ${verdict.borrow.feePct}% fee` : ""}
+            {verdict.borrow.feePct != null && (
+              <span className={highBorrowFee ? "text-red-600 dark:text-red-400 font-semibold" : ""}>
+                {` · ${verdict.borrow.feePct}% fee`}
+              </span>
+            )}
           </div>
           <div>
             <span className="text-gray-500 dark:text-gray-400">Dilute </span>
@@ -153,9 +206,25 @@ export default function FastVerdictCard({
         {(verdict.flags.length > 0 || verdict.unavailable.length > 0) && (
           <div className="pt-2 border-t border-black/5 dark:border-white/10 text-xs space-y-1">
             {verdict.flags.length > 0 && (
-              <p>
-                <span className="font-semibold">Flags:</span> {verdict.flags.join(" · ")}
-              </p>
+              <div>
+                <span className="font-semibold">Flags:</span>{" "}
+                <ul className="mt-1 space-y-1 list-none">
+                  {verdict.flags.map((flag, i) => {
+                    const tip = describeFastWalkAwayFlag(flag);
+                    return (
+                      <li key={i} className="text-gray-700 dark:text-gray-300">
+                        {tip ? (
+                          <Tooltip content={tip} side="bottom">
+                            <span className="underline decoration-dotted cursor-help">{flag}</span>
+                          </Tooltip>
+                        ) : (
+                          flag
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             )}
             {verdict.unavailable.length > 0 && (
               <p>

@@ -46,14 +46,14 @@ export default function ShortCheckResults({
     "High-Priority Short Candidate": "bg-red-500 text-white",
     "Moderate Short Candidate": "bg-yellow-500 text-white",
     "Speculative Short Candidate": "bg-blue-500 text-white",
-    "No-Trade": "bg-green-500 text-white",
+    "No-Trade": "bg-red-600 text-white",
   };
 
   const categoryBgColors = {
     "High-Priority Short Candidate": "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
     "Moderate Short Candidate": "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
     "Speculative Short Candidate": "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
-    "No-Trade": "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800",
+    "No-Trade": "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800",
   };
 
 

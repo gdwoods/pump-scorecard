@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { droppinessHex } from "@/lib/droppiness/colors";
 import {
   RadialBarChart,
   RadialBar,
@@ -19,18 +20,13 @@ export default function DroppinessCard({
   detail: Array<{ date: string; spikePct: number; retraced: boolean }>;
   verdict: string;
 }) {
-  // --- Dial color logic ---
-  const getColor = (score: number) => {
-    if (score >= 70) return "#16a34a"; // green - spikes fade
-    if (score < 40) return "#dc2626"; // red - spikes hold
-    return "#f59e0b"; // yellow - mixed
-  };
+  const gaugeColor = droppinessHex(score);
 
   const gaugeData = [
     {
       name: "Droppiness",
       value: score,
-      fill: getColor(score),
+      fill: gaugeColor,
     },
   ];
 
@@ -86,7 +82,7 @@ export default function DroppinessCard({
                 dominantBaseline="middle"
                 fontSize="32"
                 fontWeight="700"
-                fill={getColor(score)}
+                fill={gaugeColor}
               >
                 {score}%
               </text>

@@ -5,6 +5,10 @@ import { Card } from "@/components/ui/card";
 import { ScoreBreakdown } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { getRedFlagTags, getCategoryExplanation } from "@/lib/shortCheckHelpers";
+import {
+  droppinessTailwindClass,
+  parseDroppinessScoreFromText,
+} from "@/lib/droppiness/colors";
 import { Tooltip } from "@/components/ui/tooltip";
 
 interface ShortCheckScoreBreakdownProps {
@@ -141,7 +145,15 @@ export default function ShortCheckScoreBreakdown({
                     {item.max > 0 && ` / ${item.max}`}
                   </span>
                   {item.actualValue && (
-                    <span className="text-gray-500 dark:text-gray-400 text-xs">
+                    <span
+                      className={`text-xs ${
+                        item.label === "Droppiness"
+                          ? droppinessTailwindClass(
+                              parseDroppinessScoreFromText(item.actualValue)
+                            )
+                          : "text-gray-500 dark:text-gray-400"
+                      }`}
+                    >
                       ({item.actualValue})
                     </span>
                   )}

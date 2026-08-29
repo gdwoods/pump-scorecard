@@ -102,7 +102,12 @@ function baseWalk(over: Partial<Parameters<typeof evaluateWalkAways>[0]> = {}) {
 assert(baseWalk().verdict === 'REVIEW', 'clean REVIEW');
 assert(baseWalk({ dataCompleteness: 0.5 }).verdict === 'WATCH', 'W1');
 assert(baseWalk({ dataCompleteness: 0.5 }).reason === 'W1:dataCompleteness', 'W1 reason');
-assert(baseWalk({ todayMovePct: 0.1 }).reason === 'W2:todayMove', 'W2');
+assert(baseWalk({ todayMovePct: 0.1 }).verdict === 'REVIEW', 'W2 soft flag still REVIEW');
+assert(
+  baseWalk({ todayMovePct: 0.1 }).flags.some((f) => f.startsWith('W2:todayMove')),
+  'W2 soft flag present'
+);
+assert(baseWalk({ todayMovePct: 0.1 }).reason !== 'W2:todayMove', 'W2 not hard reason');
 assert(baseWalk({ newsClass: 'FATAL' }).reason === 'W3:fatalNews', 'W3');
 assert(baseWalk({ runnerClass: 'RUNNER_YESTERDAY' }).reason === 'W4:RUNNER_YESTERDAY', 'W4');
 assert(baseWalk({ borrowAvailable: false }).reason === 'W5:borrowUnavailable', 'W5');

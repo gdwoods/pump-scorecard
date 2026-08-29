@@ -13,6 +13,7 @@ export const T = {
   instOwn: { ideal: 0.10, walkAway: 0.40 }, // fractions; ExtractedData uses 0–100
   runway: { ideal: 6, walkAway: 18 }, // months
   runner: { priorDay: 0.30, threeDay: 0.30 },
+  /** Min intraday move for pump-day context. Soft flag only (W2) — not a hard walk-away. */
   todayMove: { min: 0.30 },
   borrow: { requireAvailable: true },
   volume: { minSharesPerMin: 50_000, anomalyMult: 5 },
