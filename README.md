@@ -22,7 +22,7 @@ It is a **research signal**, not a short label and not proof of dilution.
 | Item | Detail |
 |------|--------|
 | Lookback | **12 months** for events; **24 months** only for S-1/S-3/F-1/F-3 registration capacity |
-| Overall score | **Not** included in `weightedRiskScore` (feature flag off) |
+| Overall score | Capped **+10** bonus from CP score when `INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE` is on |
 | Docs | [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md) |
 | Code | `lib/capitalPressure/`, `lib/capitalPressureScoring.ts`, `components/CapitalPressureCard.tsx` |
 
@@ -44,8 +44,10 @@ Copy `.env.example` if present, or set:
 | `FMP_API_KEY` | Financial Modeling Prep (quotes, fundamentals) |
 | `POLYGON_API_KEY` | Optional market data |
 | `ALPHA_VANTAGE_API_KEY` | Optional |
-| `OPENAI_API_KEY` | Optional AI features |
-| `SEC_USER_AGENT` | Required for EDGAR (identify your app/email) |
+| `GROQ_API_KEY` | AI thesis synthesis (server-side) |
+| `AI_THESIS_RATE_LIMIT_WHITELIST` | Comma-separated IPs bypassing thesis rate limit |
+| `DROPPINESS_WATCHLIST` | Tickers for nightly droppiness cron seeding (comma-separated) |
+| `CRON_SECRET` | Auth for `/api/cron/droppiness` manual triggers |
 
 ## Scripts
 
@@ -54,7 +56,7 @@ npm run dev          # development server
 npm run build        # production build
 npm run start        # serve production build
 npm run lint         # ESLint
-npm test             # Jest (includes capital pressure fixtures)
+npm run verify       # Run all tsx verification scripts (npx tsx if needed)
 ```
 
 ## Project layout

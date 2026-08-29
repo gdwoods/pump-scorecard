@@ -17,7 +17,7 @@ export const maxDuration = 60;
 const SEED = ['DFNS', 'AAPL'];
 
 /** Polygon 1m history is heavy — keep per-run budget small on Hobby. */
-const MAX_TICKERS_PER_RUN = 5;
+const MAX_TICKERS_PER_RUN = 8;
 
 function authorized(req: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;

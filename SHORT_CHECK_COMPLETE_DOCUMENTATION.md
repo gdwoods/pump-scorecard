@@ -1,5 +1,9 @@
 # Short Check — Complete Documentation
 
+> **Note (Aug 2026):** This file may lag behind production. For current behavior see
+> [`docs/framework/Short-Selling-Framework-3.0.md`](docs/framework/Short-Selling-Framework-3.0.md),
+> [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md), and `lib/config/thresholds.ts`.
+
 ## Table of Contents
 1. [Overview](#overview)
 2. [Core Features](#core-features)

@@ -32,13 +32,13 @@ const PHRASE_PATTERNS: Array<{
   { type: 'registered_direct', re: /\bregistered\s+direct\b/i, capacityDefault: false },
   {
     type: 'private_placement',
-    re: /\bprivate\s+placement(?:\s+financing)?\b|\bsecurities\s+purchase\s+agreement\b/i,
+    re: /\bprivate\s+placement(?:\s+financing)?\b|\bsecurities\s+purchase\s+agreement\b|\b(?:closed|closing)\s+(?:the\s+)?(?:private\s+placement|PIPE)\b/i,
     capacityDefault: false,
   },
   { type: 'convertible_note', re: /\bconvertible\s+(?:notes?|debentures?|debt)\b|\bconversion\s+price\b|\blowest\s+daily\s+VWAP\b/i, capacityDefault: true },
   { type: 'note_conversion', re: /\bconversion\s+of\s+(?:the\s+)?(?:notes?|debentures?)\b|\bconverted\s+into\s+.*common\s+stock\b/i, capacityDefault: false },
   { type: 'debt_for_equity', re: /\bdebt.{0,40}common\s+stock\b|\bexchanged?\s+.{0,40}(?:debt|notes?).{0,40}(?:shares|common\s+stock)\b/i, capacityDefault: false },
-  { type: 'warrant_exercise', re: /\bwarrant\s+exercis/i, capacityDefault: false },
+  { type: 'warrant_exercise', re: /\bwarrants?\s+to\s+purchase\b|\bwarrant\s+exercis/i, capacityDefault: false },
   { type: 'prospectus_supplement', re: /\bprospectus\s+supplement\b/i, capacityDefault: true },
   { type: 'shelf_registration', re: /\bshelf\s+registration\b|\bregistration\s+statement\b|\bon\s+Form\s+S-3\b|\bon\s+Form\s+F-3\b/i, capacityDefault: true },
   { type: 'reverse_split', re: /\breverse\s+stock\s+split\b|\breverse\s+split\b/i, capacityDefault: false },
@@ -63,7 +63,10 @@ const RETROSPECTIVE_REVERSE_SPLIT =
   /\bretrospectively\s+restated\b|\bas\s+adjusted\s+for\b.{0,60}reverse\s+(?:stock\s+)?split\b|\bgive\s+effect\s+to\b.{0,60}reverse\s+(?:stock\s+)?split\b|\bafter\s+(?:giving\s+)?effect\s+to\b.{0,60}reverse\s+(?:stock\s+)?split\b|\bsee\s+Note\s+\d+.{0,40}reverse\s+(?:stock\s+)?split\b|\b\*+\s*.{0,40}reverse\s+(?:stock\s+)?split\b/i;
 
 const EFFECTED_REVERSE_SPLIT =
-  /\b(?:effected|effectuate[sd]?|completed|consummated|implemented)\s+(?:a\s+)?(?:\d[\d,]*[\s-]*for[\s-]*\d[\d,]*\s+)?reverse\s+(?:stock\s+)?split\b|\breverse\s+(?:stock\s+)?split\s+(?:became|was)\s+effective\b|\bboard\s+(?:of\s+directors\s+)?(?:has\s+)?approved\s+a\s+reverse\s+(?:stock\s+)?split\b/i;
+  /\b(?:effected|effectuate[sd]?|completed|consummated|implemented)\s+(?:a\s+)?(?:\d[\d,]*[\s-]*for[\s-]*\d[\d,]*\s+)?reverse\s+(?:stock\s+)?split\b|\breverse\s+(?:stock\s+)?split\s+(?:became|was)\s+effective\b/i;
+
+const UPCOMING_REVERSE_SPLIT =
+  /\bboard\s+(?:of\s+directors\s+)?(?:has\s+)?approved\s+(?:a\s+)?reverse\s+(?:stock\s+)?split\b|\b(?:expected\s+to\s+be\s+effective|becomes?\s+effective|effective\s+(?:on|as\s+of)).{0,80}reverse\s+(?:stock\s+)?split\b|\breverse\s+(?:stock\s+)?split.{0,80}(?:expected\s+to\s+be\s+effective|becomes?\s+effective)\b/i;
 
 /** True when the match is under a clear negation (did not / no / without / not). */
 function isNegated(text: string, matchIndex: number): boolean {
@@ -351,6 +354,7 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
       let scoreEligible = true;
       let isSellingShareholder = false;
       let isRetrospective = false;
+      let isUpcoming = false;
       let eventConfidence = confidence;
 
       // Selling-shareholder / resale registrations are not company ATM/ELOC capacity
@@ -379,14 +383,19 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
 
       // Retrospective reverse-split footnotes: timeline only, never +10
       if (finalType === 'reverse_split') {
-        const retrospective = RETROSPECTIVE_REVERSE_SPLIT.test(window);
-        const effected = EFFECTED_REVERSE_SPLIT.test(window);
+        const rsWindow = text.slice(idx, Math.min(text.length, idx + 2800));
+        const retrospective = RETROSPECTIVE_REVERSE_SPLIT.test(rsWindow);
+        const effected = EFFECTED_REVERSE_SPLIT.test(rsWindow);
+        const upcoming = UPCOMING_REVERSE_SPLIT.test(rsWindow);
         if (retrospective && !effected) {
           isRetrospective = true;
           scoreEligible = false;
           title = 'Reverse stock split (retrospective footnote)';
-        } else if (!effected && !hasDateNear(window)) {
-          // Ambiguous mention without effectuation language → needs review, no auto points
+        } else if (upcoming && !effected) {
+          isUpcoming = true;
+          scoreEligible = false;
+          title = 'Reverse stock split (upcoming)';
+        } else if (!effected && !hasDateNear(rsWindow)) {
           scoreEligible = false;
           eventConfidence = 'needs_review';
         }
@@ -403,6 +412,7 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
         scoreEligible,
         isSellingShareholder: isSellingShareholder || undefined,
         isRetrospective: isRetrospective || undefined,
+        isUpcoming: isUpcoming || undefined,
         filedAt: doc.filingDate,
         verifiedAt,
         evidence: makeEvidence(doc, excerpt, eventConfidence),

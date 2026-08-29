@@ -417,6 +417,49 @@ export default function CapitalPressureCard({
           </div>
         )}
 
+        {data.upcomingReverseSplit && (
+          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/25 px-3 py-2 space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">
+              Upcoming reverse split
+            </p>
+            <p className="text-sm text-amber-900 dark:text-amber-100">
+              {data.upcomingReverseSplit.ratio
+                ? `${data.upcomingReverseSplit.ratio} effective ${data.upcomingReverseSplit.effectiveDate}`
+                : `Effective ${data.upcomingReverseSplit.effectiveDate}`}
+              {" "}
+              <span className="text-xs text-amber-700 dark:text-amber-300">
+                ({data.upcomingReverseSplit.source === "edgar" ? "SEC filing" : "exchange data"})
+              </span>
+            </p>
+            {data.upcomingReverseSplit.documentUrl && (
+              <SecLink url={data.upcomingReverseSplit.documentUrl} label="View filing" />
+            )}
+          </div>
+        )}
+
+        {data.unscoredFilings && data.unscoredFilings.length > 0 && (
+          <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 px-3 py-2 space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Recent filings not auto-scored
+            </p>
+            <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
+              {data.unscoredFilings.slice(0, 5).map((f) => (
+                <li key={`${f.filingDate}-${f.form}`}>
+                  <a
+                    href={f.documentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-blue-600 dark:hover:text-blue-400"
+                  >
+                    {f.form} · {f.filingDate}
+                  </a>
+                  {" — no capital-pressure phrase matched; review manually"}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Issuance windows + utilization bar */}
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2 bg-gray-50/50 dark:bg-gray-900/30">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">

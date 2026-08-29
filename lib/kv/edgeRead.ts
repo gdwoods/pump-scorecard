@@ -72,3 +72,15 @@ export async function edgeKvExpire(key: string, seconds: number): Promise<boolea
   const json = await upstashFetch(creds, `expire/${encodeURIComponent(key)}/${seconds}`);
   return json?.result === 1;
 }
+
+/** SET a string value with TTL (seconds). Returns false on failure or when KV is unavailable. */
+export async function edgeKvSet(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+  const creds = parseUpstashCreds();
+  if (!creds) return false;
+
+  const json = await upstashFetch(
+    creds,
+    `set/${encodeURIComponent(key)}/${encodeURIComponent(value)}/EX/${ttlSeconds}`
+  );
+  return json?.result === 'OK';
+}

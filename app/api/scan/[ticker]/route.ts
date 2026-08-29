@@ -11,6 +11,7 @@ import { computeDroppiness } from "@/lib/droppiness/compute";
 import { persistDroppiness } from "@/lib/droppiness/kv";
 import { runCapitalPressure } from "@/lib/capitalPressure/run";
 import { unavailableCapitalPressure } from "@/lib/capitalPressure/unavailable";
+import { INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE } from "@/lib/config/features";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -771,16 +772,6 @@ try {
     if (RISKY.has(country)) weightedRiskScore += 15;
     if (weightedRiskScore < 0) weightedRiskScore = 0;
 
-    let summaryVerdict: "Low risk" | "Moderate risk" | "High risk" = "Low risk";
-    if (weightedRiskScore >= 70) summaryVerdict = "High risk";
-    else if (weightedRiskScore >= 40) summaryVerdict = "Moderate risk";
-
-    const summaryText = summaryVerdict === "Low risk"
-        ? "This one looks pretty clean — no major pump-and-dump signals right now."
-        : summaryVerdict === "Moderate risk"
-        ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
-        : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
-
     let droppinessVerdict = "Mixed behavior — some spikes retraced quickly, while others held their gains.";
     if (droppinessScore === 0 && !droppinessData.detail.length) {
       droppinessVerdict = "No qualifying spikes were detected in the last 18 months — the stock has not shown pump-like behavior recently.";
@@ -790,13 +781,14 @@ try {
       droppinessVerdict = "Spikes often hold — many large moves remained elevated after the initial run-up.";
     }
 
-    // Capital Pressure (additive; does not affect weightedRiskScore)
+    // Capital Pressure (+ optional capped bonus applied to weightedRiskScore below)
     let capitalPressure;
     try {
       capitalPressure = await runCapitalPressure({
         ticker: upperTicker,
         cik: secData.cik,
         submissions: secData.submissions,
+        polygonSplits: filteredSplits,
         context: {
           floatShares,
           shortFloat: toPercent(shortFloat),
@@ -823,6 +815,21 @@ try {
         err instanceof Error ? err.message : 'Capital pressure computation failed'
       );
     }
+
+    if (INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE && capitalPressure?.available) {
+      const cpBonus = Math.min(10, Math.round((capitalPressure.score ?? 0) / 10));
+      weightedRiskScore = Math.min(100, weightedRiskScore + cpBonus);
+    }
+
+    let summaryVerdict: "Low risk" | "Moderate risk" | "High risk" = "Low risk";
+    if (weightedRiskScore >= 70) summaryVerdict = "High risk";
+    else if (weightedRiskScore >= 40) summaryVerdict = "Moderate risk";
+
+    const summaryText = summaryVerdict === "Low risk"
+        ? "This one looks pretty clean — no major pump-and-dump signals right now."
+        : summaryVerdict === "Moderate risk"
+        ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
+        : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
 
     const responseData = {
       ticker: upperTicker,
