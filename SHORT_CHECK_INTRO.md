@@ -38,8 +38,10 @@ After uploading a screenshot, enter the ticker to get:
 - **Droppiness Analysis**: Historical spike behavior
 - **Pump Risk Scorecard**: Comprehensive risk breakdown
 - **SEC Filings**: Recent filings and dilution events
+- **Capital Pressure**: SEC evidence of capital need + issuance mechanisms (research signal; see [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md))
 - **Promotions & Fraud Evidence**: Red flag detection
 - **Charts & Fundamentals**: Full market context
+- **Social Sentiment**: StockTwits (shown below Capital Pressure)
 
 ### 🔗 **Actions & Sharing**
 - **Copy Summary** (full formatted report)
