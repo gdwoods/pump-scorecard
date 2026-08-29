@@ -28,21 +28,47 @@ function parseUpstashCreds(): UpstashCreds | null {
   }
 }
 
+async function upstashFetch(
+  creds: UpstashCreds,
+  command: string
+): Promise<{ result?: unknown; error?: string } | null> {
+  try {
+    const res = await fetch(`${creds.url}/${command}`, {
+      headers: { Authorization: `Bearer ${creds.token}` },
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as { result?: unknown; error?: string };
+  } catch {
+    return null;
+  }
+}
+
 /** GET a string value from Upstash REST. Returns null on miss or error. */
 export async function edgeKvGet(key: string): Promise<string | null> {
   const creds = parseUpstashCreds();
   if (!creds) return null;
 
-  try {
-    const res = await fetch(`${creds.url}/get/${encodeURIComponent(key)}`, {
-      headers: { Authorization: `Bearer ${creds.token}` },
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { result?: string | null };
-    if (json.result == null || json.result === '') return null;
-    return json.result;
-  } catch {
-    return null;
-  }
+  const json = await upstashFetch(creds, `get/${encodeURIComponent(key)}`);
+  if (!json || json.result == null || json.result === '') return null;
+  return String(json.result);
+}
+
+/** INCR a counter. Returns null when KV is unavailable or the command fails. */
+export async function edgeKvIncr(key: string): Promise<number | null> {
+  const creds = parseUpstashCreds();
+  if (!creds) return null;
+
+  const json = await upstashFetch(creds, `incr/${encodeURIComponent(key)}`);
+  if (json?.result == null || typeof json.result !== 'number') return null;
+  return json.result;
+}
+
+/** EXPIRE a key after `seconds`. Returns false on failure or when KV is unavailable. */
+export async function edgeKvExpire(key: string, seconds: number): Promise<boolean> {
+  const creds = parseUpstashCreds();
+  if (!creds) return false;
+
+  const json = await upstashFetch(creds, `expire/${encodeURIComponent(key)}/${seconds}`);
+  return json?.result === 1;
 }

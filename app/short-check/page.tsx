@@ -11,6 +11,7 @@ import DroppinessScatter from "@/components/DroppinessChart";
 import Fundamentals from "@/components/Fundamentals";
 import SecFilings from "@/components/SecFilings";
 import CapitalPressureCard from "@/components/CapitalPressureCard";
+import AiThesisCard from "@/components/AiThesisCard";
 import NewsSection from "@/components/NewsSection";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import HistoryCard from "@/components/HistoryCard";
@@ -24,7 +25,7 @@ import { saveScanToHistory } from "@/lib/history";
 import type { FastVerdict } from "@/lib/fast/types";
 import { enrichFastVerdictFromShortCheck } from "@/lib/fast/enrichFromShortCheck";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
-import { SHOW_FAST_VERDICT_ON_SHORT_CHECK } from "@/lib/config/features";
+import { SHOW_FAST_VERDICT_ON_SHORT_CHECK, SHOW_AI_THESIS } from "@/lib/config/features";
 
 function buildDisplayFastVerdict(
   fastVerdict: FastVerdict | null,
@@ -290,6 +291,20 @@ export default function ShortCheckPage() {
       />
     ) : null;
 
+  const aiThesisBlock =
+    SHOW_AI_THESIS &&
+    ticker &&
+    !loadingPumpData &&
+    (result || (hasAnalyzedTicker && pumpScorecardData) || enrichedFastVerdict) ? (
+      <AiThesisCard
+        ticker={ticker}
+        result={result}
+        extractedData={extractedData}
+        scanData={pumpScorecardData}
+        fastVerdict={enrichedFastVerdict}
+      />
+    ) : null;
+
   // Fetch Pump Scorecard data when ticker is available
   // Also recalculate Short Check score when droppiness becomes available
   useEffect(() => {
@@ -494,7 +509,7 @@ export default function ShortCheckPage() {
             extractedData={extractedData || undefined}
             pumpScorecardData={pumpScorecardData}
             afterQuickActions={fastVerdictCard}
-            afterFastVerdict={capitalPressureBlock}
+            afterFastVerdict={<>{capitalPressureBlock}{aiThesisBlock}</>}
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
               setHasAnalyzedTicker(true);
@@ -551,6 +566,8 @@ export default function ShortCheckPage() {
           fastVerdictCard}
 
         {hasAnalyzedTicker && !result && capitalPressureBlock}
+
+        {hasAnalyzedTicker && !result && aiThesisBlock}
 
         {/* Additional Pump Scorecard Cards - Show when we have ticker data */}
         {ticker && pumpScorecardData && !loadingPumpData && (
