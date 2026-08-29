@@ -7,13 +7,11 @@ import { Card } from "@/components/ui/card";
 import AppNav from "@/components/AppNav";
 import FastVerdictCard from "@/components/short-check/FastVerdictCard";
 import DroppinessCard from "@/components/DroppinessCard";
-import CombinedPumpRiskCard from "@/components/short-check/CombinedPumpRiskCard";
 import Chart from "@/components/Chart";
 import DroppinessScatter from "@/components/DroppinessChart";
 import Fundamentals from "@/components/Fundamentals";
 import SecFilings from "@/components/SecFilings";
 import NewsSection from "@/components/NewsSection";
-import FraudEvidence from "@/components/FraudEvidence";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import SentimentCard from "@/components/SentimentCard";
 import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
@@ -30,7 +28,6 @@ function FastScanInner() {
   const [pumpData, setPumpData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [manualFlags, setManualFlags] = useState<Record<string, boolean>>({});
   const [didAutoScan, setDidAutoScan] = useState(false);
 
   const runScan = useCallback(async (symbol: string) => {
@@ -42,7 +39,6 @@ function FastScanInner() {
     setTicker(upper);
     setFastVerdict(null);
     setPumpData(null);
-    setManualFlags({});
 
     try {
       const scanPromise = fetch(`/api/scan/${encodeURIComponent(upper)}`);
@@ -89,10 +85,6 @@ function FastScanInner() {
       void runScan(initial);
     }
   }, [initial, didAutoScan, runScan]);
-
-  const toggleManualFlag = (key: string) => {
-    setManualFlags((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
@@ -223,17 +215,7 @@ function FastScanInner() {
               />
             )}
 
-            <CombinedPumpRiskCard
-              ticker={ticker}
-              pumpScorecardData={pumpData}
-              manualFlags={manualFlags}
-              toggleManualFlag={toggleManualFlag}
-            />
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FraudEvidence ticker={ticker} fraudImages={pumpData.fraudImages || []} />
-              <NewsSection ticker={ticker} items={pumpData.news || []} />
-            </div>
+            <NewsSection ticker={ticker} items={pumpData.news || []} />
 
             {pumpData.borrowData && (
               <BorrowDeskCard ticker={ticker} borrowData={pumpData.borrowData} />

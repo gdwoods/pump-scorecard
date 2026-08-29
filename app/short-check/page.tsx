@@ -6,14 +6,12 @@ import ShortCheckUpload from "@/components/short-check/ShortCheckUpload";
 import ShortCheckResults from "@/components/short-check/ShortCheckResults";
 import FastVerdictCard from "@/components/short-check/FastVerdictCard";
 import DroppinessCard from "@/components/DroppinessCard";
-import CombinedPumpRiskCard from "@/components/short-check/CombinedPumpRiskCard";
 import Chart from "@/components/Chart";
 import DroppinessScatter from "@/components/DroppinessChart";
 import Fundamentals from "@/components/Fundamentals";
 import SecFilings from "@/components/SecFilings";
 import CapitalPressureCard from "@/components/CapitalPressureCard";
 import NewsSection from "@/components/NewsSection";
-import FraudEvidence from "@/components/FraudEvidence";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
@@ -33,7 +31,6 @@ export default function ShortCheckPage() {
   const [error, setError] = useState<string | null>(null);
   const [ticker, setTicker] = useState<string>("");
   const [pumpScorecardData, setPumpScorecardData] = useState<any>(null);
-  const [manualFlags, setManualFlags] = useState<Record<string, boolean>>({});
   const [loadingPumpData, setLoadingPumpData] = useState(false);
   const [hasAnalyzedTicker, setHasAnalyzedTicker] = useState(false);
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
@@ -285,10 +282,6 @@ export default function ShortCheckPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, result]);
 
-  const toggleManualFlag = (key: string) => {
-    setManualFlags((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
@@ -314,7 +307,6 @@ export default function ShortCheckPage() {
                         setTicker("");
                         setError(null);
                         setPumpScorecardData(null);
-                        setManualFlags({});
                         setHasAnalyzedTicker(false);
                         setFastVerdict(null);
                         setFastVerdictError(null);
@@ -545,38 +537,9 @@ export default function ShortCheckPage() {
           </>
         )}
 
-        {/* Combined Pump Risk Card - Show when we have ticker (after charts) */}
-        {ticker && (
-          <>
-            {loadingPumpData ? (
-              <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 rounded-xl">
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-                  Loading Pump Risk analysis...
-                </p>
-              </Card>
-            ) : (
-              <CombinedPumpRiskCard
-                ticker={ticker}
-                pumpScorecardData={pumpScorecardData}
-                manualFlags={manualFlags}
-                toggleManualFlag={toggleManualFlag}
-              />
-            )}
-          </>
-        )}
-
-        {/* Additional Pump Scorecard Cards - Show when we have ticker data */}
         {ticker && pumpScorecardData && !loadingPumpData && (
           <>
-
-            {/* Fraud Evidence and News */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FraudEvidence
-                ticker={ticker}
-                fraudImages={pumpScorecardData.fraudImages || []}
-              />
-              <NewsSection ticker={ticker} items={pumpScorecardData.news || []} />
-            </div>
+            <NewsSection ticker={ticker} items={pumpScorecardData.news || []} />
 
             {/* Borrow Desk Card */}
             {pumpScorecardData.borrowData && (
@@ -606,7 +569,6 @@ export default function ShortCheckPage() {
                 setTicker("");
                 setError(null);
                 setPumpScorecardData(null);
-                setManualFlags({});
                 setHasAnalyzedTicker(false);
                 // Scroll to top to show upload component
                 window.scrollTo({ top: 0, behavior: 'smooth' });
