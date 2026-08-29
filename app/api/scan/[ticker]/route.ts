@@ -849,6 +849,9 @@ try {
       promotions,
       fraudImages,
       droppinessScore,
+      droppinessSpikeCount: Array.isArray(droppinessData.detail)
+        ? droppinessData.detail.length
+        : 0,
       droppinessDetail: droppinessData.detail,
       droppinessVerdict,
       borrowData,

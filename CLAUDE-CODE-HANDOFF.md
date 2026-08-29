@@ -91,8 +91,9 @@ Keep: **`short-check`**, **`ask-edgar-dashboards`**. Deleted duplicates: `pump-s
 
 ## Next work
 
-- **Fast Scan** (widely used): burn enrichment on ticker-only path, droppiness KV
-  reliability, then re-enable `SHOW_FAST_VERDICT_UI`
+- **Fast Scan** (widely used): burn on `/api/fast` (Polygon/Finnhub), daily-bar droppiness
+  fallback when KV cold, Edge REST KV reads, scan→verdict enrichment,
+  `SHOW_FAST_VERDICT_UI` re-enabled
 - Monthly entry-log calibration → tune `lib/config/thresholds.ts`
 - Optional: denser cron via external scheduler or Pro (Hobby = once/day)
 - Optional env: `DROPPINESS_WATCHLIST=TICK1,TICK2` seeds nightly refresh universe

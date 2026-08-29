@@ -6,6 +6,7 @@ import { fetchBorrowDesk } from '@/utils/fetchBorrowDesk';
 import { fetchRecentNews } from '@/utils/fetchNews';
 import { normalizeShareCount } from '@/lib/normalizeShares';
 import { settleSource, withTimeout, type SettledSource } from './withTimeout';
+import { fetchBurnRunway, type BurnRunwayData } from './fetchBurn';
 import type { DailyBar, FilingSignal } from './types';
 
 const SEC_UA = 'pump-scorecard short-check (garthwoods@gmail.com)';
@@ -206,6 +207,11 @@ export async function fetchSecFilings(ticker: string): Promise<{
   filings: FilingItem[];
   daysSinceLast: number | null;
   cik: string | null;
+  shelfSignals: {
+    effectRecently: boolean;
+    shelfFiled: boolean;
+    atmRecently: boolean;
+  };
 }> {
   const upper = ticker.toUpperCase();
 
@@ -239,6 +245,9 @@ export async function fetchSecFilings(ticker: string): Promise<{
   const filings: FilingItem[] = [];
   let daysSinceLast: number | null = null;
   const now = Date.now();
+  let effectRecently = false;
+  let shelfFiled = false;
+  let atmRecently = false;
 
   for (let i = 0; i < Math.min(forms.length, 40); i++) {
     const form = (forms[i] || '').toUpperCase();
@@ -250,12 +259,25 @@ export async function fetchSecFilings(ticker: string): Promise<{
     const ageFloor = Math.floor(ageDays);
     if (daysSinceLast == null || ageFloor < daysSinceLast) daysSinceLast = ageFloor;
 
+    if (ageDays <= 180) {
+      if (form === 'EFFECT') effectRecently = true;
+      if (form === 'S-1' || form === 'S-3' || form === 'S-3ASR' || form.startsWith('S-3')) {
+        shelfFiled = true;
+      }
+      if (form.startsWith('424B')) atmRecently = true;
+    }
+
     if (ageDays <= 2) {
       filings.push({ form, filedAt, signal: classifyForm(form) });
     }
   }
 
-  return { filings, daysSinceLast, cik };
+  return {
+    filings,
+    daysSinceLast,
+    cik,
+    shelfSignals: { effectRecently, shelfFiled, atmRecently },
+  };
 }
 
 export async function fetchBorrow(ticker: string): Promise<{
@@ -357,11 +379,12 @@ export type Tier2Bundle = {
   borrow: SettledSource<Awaited<ReturnType<typeof fetchBorrow>>>;
   news: SettledSource<Awaited<ReturnType<typeof fetchNewsBundle>>>;
   droppiness: SettledSource<Awaited<ReturnType<typeof fetchDroppinessCached>>>;
+  burn: SettledSource<BurnRunwayData>;
 };
 
 export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
   const ms = T.timeouts.perSourceMs;
-  const [snapshot, bars, fundamentals, filings, borrow, news, droppiness] =
+  const [snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn] =
     await Promise.all([
       settleSource('polygon-snapshot', Math.min(ms, 800), () => fetchPolygonSnapshot(ticker)),
       settleSource('polygon-aggs', Math.min(ms, 1000), () => fetchPolygonDailyBars(ticker)),
@@ -371,9 +394,9 @@ export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
       settleSource('sec-filings', Math.min(ms, 1200), () => fetchSecFilings(ticker)),
       settleSource('borrow', Math.min(ms, 1000), () => fetchBorrow(ticker)),
       settleSource('news', Math.min(ms, 1000), () => fetchNewsBundle(ticker)),
-      // Dedicated 200ms budget — never block the hot path on a slow KV miss
       settleSource('droppiness-kv', 200, () => fetchDroppinessCached(ticker)),
+      settleSource('burn-runway', Math.min(ms, 1200), () => fetchBurnRunway(ticker)),
     ]);
 
-  return { snapshot, bars, fundamentals, filings, borrow, news, droppiness };
+  return { snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn };
 }

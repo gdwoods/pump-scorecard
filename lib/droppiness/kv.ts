@@ -1,5 +1,6 @@
 // lib/droppiness/kv.ts
 import { T } from '@/lib/config/thresholds';
+import { edgeKvGet } from '@/lib/kv/edgeRead';
 import { getKVClient } from '@/lib/shareStorage';
 import { cacheFromCompute } from './map';
 import {
@@ -20,10 +21,25 @@ export function dropTtlSeconds(): number {
 export async function readDroppiness(
   ticker: string
 ): Promise<CachedDroppiness | null> {
+  const key = keyFor(ticker);
+
+  // Edge runtime: REST read (node-redis does not run on /api/fast)
+  try {
+    const rawEdge = await edgeKvGet(key);
+    if (rawEdge) {
+      const parsed = JSON.parse(rawEdge) as CachedDroppiness;
+      if (typeof parsed?.score === 'number' && typeof parsed?.spikeCount === 'number') {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('[droppiness] edge KV read failed', ticker, err);
+  }
+
   const kv = await getKVClient();
   if (!kv) return null;
   try {
-    const raw = await kv.get(keyFor(ticker));
+    const raw = await kv.get(key);
     if (!raw) return null;
     const parsed =
       typeof raw === 'string' ? (JSON.parse(raw) as CachedDroppiness) : (raw as CachedDroppiness);

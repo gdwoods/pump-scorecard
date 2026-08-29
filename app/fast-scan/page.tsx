@@ -17,6 +17,7 @@ import SentimentCard from "@/components/SentimentCard";
 import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import type { FastVerdict } from "@/lib/fast/types";
 import { SHOW_FAST_VERDICT_UI } from "@/lib/config/features";
+import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
 
 function FastScanInner() {
   const searchParams = useSearchParams();
@@ -62,7 +63,12 @@ function FastScanInner() {
       }
 
       if (SHOW_FAST_VERDICT_UI && fastRes?.ok && fastJson) {
-        setFastVerdict(fastJson as FastVerdict);
+        const base = fastJson as FastVerdict;
+        const enriched =
+          scanRes.ok && scanJson
+            ? enrichFastVerdictFromScan(base, scanJson)
+            : base;
+        setFastVerdict(enriched);
       }
       if (scanRes.ok && scanJson) setPumpData(scanJson);
 

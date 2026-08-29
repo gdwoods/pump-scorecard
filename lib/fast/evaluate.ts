@@ -3,7 +3,8 @@ import { classifyNewsHeadline } from './newsClassifier';
 import { computeBabyShelf } from './babyShelf';
 import { classifyRunner } from './runner';
 import { evaluateWalkAways } from './walkAway';
-import { toFastDroppiness } from '@/lib/droppiness/map';
+import { droppinessFromDailyBars } from './droppinessDaily';
+import { toFastDroppiness, cacheFromCompute } from '@/lib/droppiness/map';
 import type { Tier2Bundle } from './fetchTier2';
 import type { FastVerdict } from './types';
 
@@ -66,18 +67,23 @@ export function buildFastVerdict(
     classified.matchedTerms.fatal.length > 0 &&
     classified.matchedTerms.weasel.length > 0;
 
-  // Runway / burn not always available from Yahoo quoteSummary — leave null for now
-  // (W9 won't fire without data; completeness already reflects missing sources)
-  const runwayMonths: number | null = null;
-  const quarterlyBurn: number | null = null;
-  const positiveFcf = false;
+  const burnData = tier2.burn.ok ? tier2.burn.value : null;
+  const runwayMonths = burnData?.runwayMonths ?? null;
+  const quarterlyBurn = burnData?.quarterlyBurn ?? null;
+  const positiveFcf = burnData?.positiveFcf ?? false;
+
+  const shelf = filings?.shelfSignals;
+  const hasEffectiveShelf = shelf
+    ? shelf.effectRecently || (shelf.shelfFiled ? true : null)
+    : null;
+  const atmDetected = shelf?.atmRecently ? true : null;
 
   const dilution = computeBabyShelf({
     floatShares,
     price: last,
     quarterlyBurn,
-    atmDetected: null,
-    hasEffectiveShelf: null,
+    atmDetected,
+    hasEffectiveShelf,
   });
 
   // If we only have float×price baby shelf and capacity unknown, prefer LOW when thin
@@ -92,7 +98,30 @@ export function buildFastVerdict(
     derivedOfferingAbility = 'LOW';
   }
 
-  const droppiness = toFastDroppiness(cachedDrop ?? null);
+  let droppiness = toFastDroppiness(cachedDrop ?? null);
+  if (droppiness.reason === 'not_cached' && bars.length >= 10) {
+    const daily = droppinessFromDailyBars(bars);
+    droppiness = toFastDroppiness(
+      cacheFromCompute({
+        score: daily.score,
+        spikeCount: daily.spikeCount,
+        nEff: daily.spikeCount,
+        detail: [],
+        intraday: [],
+      })
+    );
+    if (droppiness.status === 'UNVERIFIED' && daily.spikeCount >= 3) {
+      droppiness = {
+        status: 'OK',
+        score: daily.score,
+        spikeCount: daily.spikeCount,
+        computedAt: new Date().toISOString(),
+        reason: 'daily_approx',
+      };
+    } else if (droppiness.status === 'UNVERIFIED') {
+      droppiness = { ...droppiness, reason: 'daily_approx' };
+    }
+  }
 
   const walk = evaluateWalkAways({
     dataCompleteness,
@@ -156,7 +185,7 @@ export function buildFastVerdict(
     dilution: {
       ...dilution,
       derivedOfferingAbility,
-      atmDetected: null,
+      atmDetected,
       equityLineCounterparty: null,
     },
     flags,
