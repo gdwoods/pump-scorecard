@@ -10,6 +10,9 @@
 // exposed to the client). Free tier: no credit card, no training opt-in
 // on submitted data, ~30 RPM / ~1,000 RPD as of writing. Get a key at
 // https://console.groq.com/keys
+//
+// Rate limit: 10 req/hour per IP on /api/ai-thesis (see lib/ai/rateLimit.ts).
+// Set AI_THESIS_RATE_LIMIT_WHITELIST to a comma-separated list of IPs to bypass.
 
 export interface GroqChatMessage {
   role: 'system' | 'user';
@@ -73,7 +76,7 @@ export async function callGroq(
       if (response.status === 429) {
         return {
           success: false,
-          error: 'Groq free-tier rate limit reached for today — try again later.',
+          error: 'Groq rate limit reached — try again in a few minutes.',
         };
       }
       const bodyText = await response.text().catch(() => '');

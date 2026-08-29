@@ -23,8 +23,6 @@ export interface AiThesisResult {
   generatedAt: string;
 }
 
-/** What the client sends to /api/ai-thesis. All sections optional — the
- *  route builds the best prompt it can from whatever is present. */
 export interface ThesisPromptInput {
   ticker: string;
   shortCheck?: {
@@ -62,4 +60,26 @@ export interface ThesisPromptInput {
   };
   /** ISO timestamp used as "now" for recency framing — inject a fixed value in tests. */
   now?: string;
+  /** Fast Scan /api/fast verdict — second-highest precedence after vetoes. */
+  fastVerdict?: FastVerdictPromptSlice;
 }
+
+/** Slim Fast Verdict fields sent to the AI thesis prompt. */
+export interface FastVerdictPromptSlice {
+  verdict: string;
+  reason: string | null;
+  flags: string[];
+  runnerClass: string;
+  priorDayPct: number | null;
+  threeDayRunPct: number | null;
+  droppinessStatus: string;
+  droppinessScore: number | null;
+  newsClass: string;
+  newsHeadline: string | null;
+  babyShelfCapacity: number | null;
+  capacityQuarters: number | null;
+  derivedOfferingAbility: string;
+  unavailable: string[];
+}
+
+/** What the client sends to /api/ai-thesis. All sections optional except ticker. */

@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SHOW_AI_THESIS } from "@/lib/config/features";
+import { fastVerdictToPromptSlice } from "@/lib/ai/fastVerdictPrompt";
 import type { ShortCheckResult } from "@/lib/shortCheckScoring";
 import type { ExtractedData } from "@/lib/shortCheckTypes";
+import type { FastVerdict } from "@/lib/fast/types";
 import type { AiThesisResult, ThesisPromptInput } from "@/lib/ai/types";
 
 interface CapitalPressureSummary {
@@ -28,6 +31,7 @@ interface AiThesisCardProps {
   result?: ShortCheckResult | null;
   extractedData?: ExtractedData | null;
   scanData?: ScanDataForThesis | null;
+  fastVerdict?: FastVerdict | null;
 }
 
 const significanceStyles: Record<string, string> = {
@@ -37,20 +41,61 @@ const significanceStyles: Record<string, string> = {
   stale: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500",
 };
 
-export default function AiThesisCard({ ticker, result, extractedData, scanData }: AiThesisCardProps) {
+export default function AiThesisCard({
+  ticker,
+  result,
+  extractedData,
+  scanData,
+  fastVerdict,
+}: AiThesisCardProps) {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [thesis, setThesis] = useState<AiThesisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [serviceState, setServiceState] = useState<"checking" | "ready" | "unconfigured" | "disabled">(
+    "checking"
+  );
 
-  const canGenerate = Boolean(ticker) && (Boolean(result) || Boolean(scanData));
+  useEffect(() => {
+    if (!SHOW_AI_THESIS) {
+      setServiceState("disabled");
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/ai-thesis")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (!data.enabled) {
+          setServiceState("disabled");
+        } else if (!data.configured) {
+          setServiceState("unconfigured");
+        } else {
+          setServiceState("ready");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setServiceState("unconfigured");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!SHOW_AI_THESIS || serviceState === "disabled") {
+    return null;
+  }
+
+  const canGenerate =
+    serviceState === "ready" && Boolean(ticker) && (Boolean(result) || Boolean(scanData) || Boolean(fastVerdict));
 
   async function handleGenerate() {
-    if (!ticker) return;
+    if (!ticker || serviceState !== "ready") return;
     setStatus("loading");
     setError(null);
 
     const payload: ThesisPromptInput = {
       ticker,
+      fastVerdict: fastVerdict ? fastVerdictToPromptSlice(fastVerdict) : undefined,
       shortCheck: result
         ? {
             rating: result.rating,
@@ -107,30 +152,40 @@ export default function AiThesisCard({ ticker, result, extractedData, scanData }
   return (
     <Card className="p-4 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700">
       <CardContent className="p-0 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100">AI Thesis</h3>
-          {status !== "success" && (
+          {serviceState === "ready" && (
             <Button
               variant="outline"
-              className="text-sm px-3 py-1.5"
+              className="text-sm px-3 py-1.5 shrink-0"
               onClick={handleGenerate}
               disabled={!canGenerate || status === "loading"}
             >
-              {status === "loading" ? "Generating…" : "Generate AI Thesis"}
+              {status === "loading" ? "Generating…" : status === "success" ? "Regenerate" : "Generate AI Thesis"}
             </Button>
           )}
         </div>
 
-        {!canGenerate && status === "idle" && (
+        {serviceState === "checking" && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">Checking AI thesis availability…</p>
+        )}
+
+        {serviceState === "unconfigured" && (
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Run a scan first — the thesis synthesizes the Short Check score and scan data above.
+            AI thesis is not configured on this deployment (missing <code>GROQ_API_KEY</code>).
+          </p>
+        )}
+
+        {serviceState === "ready" && !canGenerate && status === "idle" && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Run a scan first — the thesis synthesizes Fast Verdict, Short Check score, and scan data above.
           </p>
         )}
 
         {status === "error" && (
           <p className="text-sm text-amber-700 dark:text-amber-400">
             {error}{" "}
-            <button className="underline" onClick={handleGenerate}>
+            <button className="underline" onClick={handleGenerate} disabled={!canGenerate}>
               Retry
             </button>
           </p>

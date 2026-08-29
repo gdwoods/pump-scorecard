@@ -4,7 +4,7 @@
 // Pure functions — no I/O — so this can be unit-tested without a live key.
 
 import type { GroqChatMessage } from './groqClient';
-import type { ThesisPromptInput } from './types';
+import type { FastVerdictPromptSlice, ThesisPromptInput } from './types';
 
 const SYSTEM_PROMPT = `You are a research assistant embedded in a short-seller's scanning tool, which runs on "Short-Selling Framework 3.0." That framework has an explicit precedence order: Vetoes > Fast-scan walk-away flags > the framework document itself > the computed Short Check score > your judgment. You are the LOWEST-precedence input in that chain.
 
@@ -56,12 +56,47 @@ function formatNewsList(news: NewsItem[] | undefined): string {
     .join('\n');
 }
 
+function formatFastVerdict(fv: FastVerdictPromptSlice): string {
+  const lines: string[] = [];
+  lines.push(`Verdict: ${fv.verdict}${fv.reason ? ` — ${fv.reason}` : ''}`);
+  if (fv.flags.length) {
+    lines.push(
+      `Walk-away / binding flags (BINDING — do not argue around): ${fv.flags.join(' | ')}`
+    );
+  }
+  lines.push(`Runner class: ${fv.runnerClass}`);
+  if (fv.priorDayPct != null) lines.push(`Prior-day move: ${fv.priorDayPct.toFixed(1)}%`);
+  if (fv.threeDayRunPct != null) lines.push(`3-day run: ${fv.threeDayRunPct.toFixed(1)}%`);
+  lines.push(
+    `Droppiness: ${fv.droppinessStatus}${
+      fv.droppinessScore != null ? ` (score ${fv.droppinessScore})` : ''
+    }`
+  );
+  lines.push(`News class: ${fv.newsClass}${fv.newsHeadline ? ` — "${fv.newsHeadline}"` : ''}`);
+  if (fv.babyShelfCapacity != null) {
+    lines.push(`Baby-shelf capacity: $${(fv.babyShelfCapacity / 1e6).toFixed(2)}M`);
+  }
+  if (fv.capacityQuarters != null) {
+    lines.push(`Capacity quarters: ${fv.capacityQuarters.toFixed(1)}`);
+  }
+  lines.push(`Derived offering ability: ${fv.derivedOfferingAbility}`);
+  if (fv.unavailable.length) {
+    lines.push(`Unavailable inputs: ${fv.unavailable.join(', ')}`);
+  }
+  return lines.join('\n');
+}
+
 export function buildThesisMessages(input: ThesisPromptInput): GroqChatMessage[] {
   const now = input.now ?? new Date().toISOString();
   const parts: string[] = [];
 
   parts.push(`Ticker: ${input.ticker}`);
   parts.push(`Current time (for recency judgments): ${now}`);
+
+  if (input.fastVerdict) {
+    parts.push('\n--- Fast Verdict (Framework 3.0 — binding walk-away flags) ---');
+    parts.push(formatFastVerdict(input.fastVerdict));
+  }
 
   if (input.shortCheck) {
     const sc = input.shortCheck;

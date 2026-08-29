@@ -10,55 +10,64 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callGroq, GROQ_MODEL } from '@/lib/ai/groqClient';
 import { buildThesisMessages } from '@/lib/ai/buildThesisPrompt';
-import type { AiThesisResult, ThesisPromptInput } from '@/lib/ai/types';
+import { parseThesisContent } from '@/lib/ai/parseThesisContent';
+import { checkAiThesisRateLimit, getClientIpFromHeaders } from '@/lib/ai/rateLimit';
+import { SHOW_AI_THESIS } from '@/lib/config/features';
+import type { ThesisPromptInput } from '@/lib/ai/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
-function isValidCatalystArray(value: unknown): value is AiThesisResult['catalysts'] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (c) =>
-        c &&
-        typeof c === 'object' &&
-        typeof (c as { description?: unknown }).description === 'string' &&
-        typeof (c as { significance?: unknown }).significance === 'string'
-    )
-  );
+function hasPromptData(body: ThesisPromptInput): boolean {
+  return Boolean(body.shortCheck || body.scan || body.extractedData || body.fastVerdict);
 }
 
-function parseThesisContent(content: string): AiThesisResult | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(content);
-  } catch {
-    return null;
-  }
-
-  if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Record<string, unknown>;
-
-  if (typeof r.summary !== 'string' || typeof r.thesis !== 'string') return null;
-  const catalysts = isValidCatalystArray(r.catalysts) ? r.catalysts : [];
-  const keyRisks = Array.isArray(r.keyRisks) ? r.keyRisks.filter((x) => typeof x === 'string') : [];
-
-  return {
-    summary: r.summary,
-    thesis: r.thesis,
-    catalysts,
-    keyRisks,
-    model: GROQ_MODEL,
-    generatedAt: new Date().toISOString(),
-  };
+export async function GET() {
+  return NextResponse.json({
+    enabled: SHOW_AI_THESIS,
+    configured: Boolean(process.env.GROQ_API_KEY),
+  });
 }
 
 export async function POST(req: NextRequest) {
   try {
+    if (!SHOW_AI_THESIS) {
+      return NextResponse.json({ success: false, error: 'AI thesis is disabled' });
+    }
+
+    if (!process.env.GROQ_API_KEY) {
+      return NextResponse.json({
+        success: false,
+        error: 'GROQ_API_KEY not configured on the server',
+      });
+    }
+
+    const clientIp = getClientIpFromHeaders(req.headers);
+    const rateLimit = await checkAiThesisRateLimit(clientIp);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `AI thesis rate limit reached — try again in ${rateLimit.retryAfterSec} seconds.`,
+        },
+        { status: 429 }
+      );
+    }
+
     const body = (await req.json()) as ThesisPromptInput;
 
     if (!body?.ticker) {
       return NextResponse.json({ success: false, error: 'ticker is required' }, { status: 400 });
+    }
+
+    if (!hasPromptData(body)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Run a scan first — AI thesis needs Short Check, Fast Verdict, or scan data.',
+        },
+        { status: 400 }
+      );
     }
 
     const messages = buildThesisMessages(body);
@@ -68,7 +77,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: groqResult.error ?? 'AI thesis unavailable' });
     }
 
-    const thesis = parseThesisContent(groqResult.content);
+    const thesis = parseThesisContent(groqResult.content, GROQ_MODEL);
     if (!thesis) {
       return NextResponse.json({
         success: false,

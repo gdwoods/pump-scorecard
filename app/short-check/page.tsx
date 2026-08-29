@@ -25,7 +25,7 @@ import { saveScanToHistory } from "@/lib/history";
 import type { FastVerdict } from "@/lib/fast/types";
 import { enrichFastVerdictFromShortCheck } from "@/lib/fast/enrichFromShortCheck";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
-import { SHOW_FAST_VERDICT_ON_SHORT_CHECK } from "@/lib/config/features";
+import { SHOW_FAST_VERDICT_ON_SHORT_CHECK, SHOW_AI_THESIS } from "@/lib/config/features";
 
 function buildDisplayFastVerdict(
   fastVerdict: FastVerdict | null,
@@ -292,12 +292,16 @@ export default function ShortCheckPage() {
     ) : null;
 
   const aiThesisBlock =
-    ticker && result ? (
+    SHOW_AI_THESIS &&
+    ticker &&
+    !loadingPumpData &&
+    (result || (hasAnalyzedTicker && pumpScorecardData) || enrichedFastVerdict) ? (
       <AiThesisCard
         ticker={ticker}
         result={result}
         extractedData={extractedData}
         scanData={pumpScorecardData}
+        fastVerdict={enrichedFastVerdict}
       />
     ) : null;
 
@@ -562,6 +566,8 @@ export default function ShortCheckPage() {
           fastVerdictCard}
 
         {hasAnalyzedTicker && !result && capitalPressureBlock}
+
+        {hasAnalyzedTicker && !result && aiThesisBlock}
 
         {/* Additional Pump Scorecard Cards - Show when we have ticker data */}
         {ticker && pumpScorecardData && !loadingPumpData && (

@@ -10,3 +10,6 @@ export const SHOW_FAST_VERDICT_ON_SHORT_CHECK = true;
  * overall score until manual filing review is complete.
  */
 export const INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE = false;
+
+/** On-demand AI thesis synthesis (Groq). Requires GROQ_API_KEY server-side. */
+export const SHOW_AI_THESIS = true;
