@@ -3,6 +3,11 @@
 **Repo:** `/Volumes/Projects/pump-scorecard`
 **For:** Claude Code, opened on the repo root.
 
+**Status (29 Aug 2026):** Task A and Task B are **complete** on `main`. Verify:
+`npx tsx scripts/verify-task-a.ts`, `verify-task-b.ts`, `verify-enrich-short-check.ts`,
+`verify-current-price-fallback.ts`. Rollback baseline:
+`rollback/short-check-stable-2026-08-29` @ `247ef57`.
+
 Attach alongside:
 - `Short-Selling-Framework-3.0.md` — the governing trading document
 - `fast-verdict-endpoint-spec.md` + `fast-verdict-spec-addendum.md` — Task B design
@@ -301,35 +306,40 @@ copy the pattern.
 # Definition of done
 
 **Task A**
-- [ ] QURE-profile input (droppiness 0, 4 spikes) returns `No-Trade`
-- [ ] Rating cannot exceed 100%
-- [ ] `spikeCount < 3` surfaces as `UNVERIFIED`, not neutral
-- [ ] Scalp override deleted, or provably cannot bypass Double Green,
-      institutional ownership, or droppiness — trader consulted either way
-- [ ] Float normalization centralized; all comparisons audited
-- [ ] `dataCompleteness` in the result; below threshold forces `No-Trade`
-- [ ] Borrow unavailable is a walk-away
-- [ ] `SHORT_CHECK_COMPLETE_DOCUMENTATION.md` matches the code
-- [ ] `__tests__/shortCheckScoring.test.ts` extended; existing tests still pass
+- [x] QURE-profile input (droppiness 0, 4 spikes) returns `No-Trade`
+- [x] Rating cannot exceed 100%
+- [x] `spikeCount < 3` surfaces as `UNVERIFIED`, not neutral
+- [x] Scalp override deleted (removed from `lib/shortCheckScoring.ts`)
+- [x] Float normalization centralized (`lib/normalizeShares.ts`); comparisons audited
+- [x] `dataCompleteness` in the result; below threshold forces `No-Trade`
+- [x] Borrow unavailable is a walk-away
+- [x] `SHORT_CHECK_COMPLETE_DOCUMENTATION.md` matches the code (denominator 162 w/ droppiness)
+- [x] `__tests__/shortCheckScoring.test.ts` extended; existing tests still pass
 
 **Task B**
-- [ ] `GET /api/fast/DFNS` returns valid JSON under 1.5s warm
-- [ ] Runner classification matches all five DFNS fixtures
-- [ ] Baby shelf math yields `LOW` for DFNS
-- [ ] Killing any one source still returns a response, source listed in
+- [x] `GET /api/fast/DFNS` returns valid JSON under 1.5s warm
+- [x] Runner classification matches all five DFNS fixtures (`verify-task-b.ts`)
+- [x] Baby shelf math yields `LOW` for DFNS
+- [x] Killing any one source still returns a response, source listed in
       `unavailable[]`, `dataCompleteness` reduced
-- [ ] Every walk-away rule has a test proving it fires alone
-- [ ] No code path emits a verdict other than `NO_TRADE` / `WATCH` / `REVIEW`
-- [ ] Screenshot flow untouched; its tests still pass
+- [x] Every walk-away rule has a test proving it fires alone (`verify-task-b.ts`)
+- [x] No code path emits a verdict other than `NO_TRADE` / `WATCH` / `REVIEW`
+- [x] Screenshot flow untouched; its tests still pass
 
 ---
 
 # Later — not now
 
-1. KV droppiness cache + nightly cron over a recurring-gainers universe
+1. ~~KV droppiness cache + nightly cron~~ — **done** (`/api/cron/droppiness`, 06:00 UTC).
+   Prod smoke (Aug 2026): droppiness still `not_cached` for DFNS/AAPL — verify KV
+   token auth and optional `DROPPINESS_WATCHLIST` env.
 2. Wire RSS poller (GlobeNewswire, ACCESSWIRE, Business Wire, PRNewswire) →
    `news:{ticker}` in KV. The current news source misses microcap catalysts
    entirely — verified: `/v2/reference/news` returned nothing for either July
    DFNS spike.
 3. Extend the Green-Offering float penalty through the 5M band (currently stops
    at 1M)
+4. **Fast Scan improvements** — widely used; next: burn enrichment on ticker-only
+   path, droppiness KV hits, re-enable `SHOW_FAST_VERDICT_UI` when trustworthy.
+5. **Threshold calibration** — monthly entry-log review:
+   `docs/framework/entry-log-calibration.md`

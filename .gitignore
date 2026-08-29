@@ -46,3 +46,6 @@ next-env.d.ts
 # SMB/NAS lock junk
 .smbdelete*
 **/.smbdelete*
+
+# Private trade log (template + example are tracked)
+data/entry-log.csv

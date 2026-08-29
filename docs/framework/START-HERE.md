@@ -1,6 +1,6 @@
 # Start Here — Short Selling Stack
 
-Status as of 26 Jul 2026. Read this before the other files.
+Status as of 29 Aug 2026. Read this before the other files.
 
 ---
 
@@ -11,14 +11,15 @@ Status as of 26 Jul 2026. Read this before the other files.
 | `Short-Selling-Framework-3.0.md` | The governing document | ✅ **Live** — read it |
 | `catalyst-reader-PASTE.md` | Chrome sidebar skill | ✅ **Live** — paste and use |
 | `framework-v3-recommendations.md` | Why 3.0 changed | 📖 Reference |
-| `fast-verdict-endpoint-spec.md` | `/api/fast/[ticker]` design | 🔨 **Spec only — not built** |
-| `fast-verdict-spec-addendum.md` | News + dilution amendments | 🔨 **Spec only — not built** |
+| `fast-verdict-endpoint-spec.md` | `/api/fast/[ticker]` design | ✅ **Built** — see `lib/fast/` |
+| `fast-verdict-spec-addendum.md` | News + dilution amendments | ✅ **Built** |
+| `TASK-A-B-HANDOFF.md` | Scorer + Fast endpoint build spec | ✅ **Complete** — see checkboxes |
+| `entry-log-calibration.md` | Monthly threshold review | ✅ **Live** — run calibration script |
 | `short-screen-gem-prompt-v2.md` | Screening Gem instructions | ⚠️ Superseded in part — see §4 |
 | `catalyst-reader-prompt-v2.md` | Annotated version of the skill | 📖 Reference only |
 
-**Framework 3.0 references `lib/config/thresholds.ts`, which does not exist yet.**
-Until it does, §0's "no numbers in prose" rule points at nothing. That's the first
-gap to close and it's about twenty lines.
+**`lib/config/thresholds.ts` exists** — single source of truth for screening numbers.
+Tune via monthly entry-log review (`docs/framework/entry-log-calibration.md`).
 
 ---
 

@@ -1,0 +1,7 @@
+date,ticker,droppiness_score,spike_count,float_shares,market_cap,inst_own_pct,capacity_quarters,short_check_rating,outcome_pnl_pct,took_trade,bypassed_walkaway,notes
+2026-07-10,QURE,12,4,3200000,45000000,8,0.8,72,-4.2,y,n,Low droppiness — should have been vetoed
+2026-07-15,DFNS,78,5,1010000,12000000,5,0.41,81,6.1,y,n,Good fade
+2026-07-18,DFNS,82,5,1010000,15000000,5,0.38,79,3.4,y,n,Second entry same name
+2026-07-22,ADTX,65,8,2100000,28000000,12,,76,-2.1,y,n,Missing shelf data at entry
+2026-08-01,SCNX,55,6,890000,9000000,0.3,,68,1.8,y,n,Microcap grind
+2026-08-05,BTCT,25,5,4500000,35000000,15,1.2,58,-5.5,y,y,Took despite low droppiness — rule break
