@@ -25,7 +25,7 @@ import { ExtractedData } from "@/lib/shortCheckTypes";
 import { saveScanToHistory } from "@/lib/history";
 import type { FastVerdict } from "@/lib/fast/types";
 import { enrichFastVerdictFromShortCheck } from "@/lib/fast/enrichFromShortCheck";
-import { SHOW_FAST_VERDICT_UI } from "@/lib/config/features";
+import { SHOW_FAST_VERDICT_ON_SHORT_CHECK } from "@/lib/config/features";
 export default function ShortCheckPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ShortCheckResult | null>(null);
@@ -195,7 +195,7 @@ export default function ShortCheckPage() {
 
   // Fast verdict fetch — skipped while UI is hidden
   useEffect(() => {
-    if (!SHOW_FAST_VERDICT_UI) {
+    if (!SHOW_FAST_VERDICT_ON_SHORT_CHECK) {
       setFastVerdict(null);
       setFastVerdictError(null);
       setLoadingFastVerdict(false);
@@ -442,8 +442,7 @@ export default function ShortCheckPage() {
         )}
 
         {/* Fast verdict — first thing you see after analyzing a ticker */}
-        {/* Fast verdict — hidden until results are trusted (SHOW_FAST_VERDICT_UI) */}
-        {SHOW_FAST_VERDICT_UI && (loadingFastVerdict || fastVerdict || fastVerdictError) && (
+        {SHOW_FAST_VERDICT_ON_SHORT_CHECK && (loadingFastVerdict || fastVerdict || fastVerdictError) && (
           <FastVerdictCard
             verdict={
               fastVerdict
