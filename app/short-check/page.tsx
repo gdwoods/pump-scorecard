@@ -274,6 +274,14 @@ export default function ShortCheckPage() {
     />
   ) : null;
 
+  const capitalPressureBlock =
+    ticker && pumpScorecardData?.capitalPressure && !loadingPumpData ? (
+      <CapitalPressureCard
+        ticker={ticker.toUpperCase()}
+        data={pumpScorecardData.capitalPressure}
+      />
+    ) : null;
+
   // Fetch Pump Scorecard data when ticker is available
   // Also recalculate Short Check score when droppiness becomes available
   useEffect(() => {
@@ -478,6 +486,7 @@ export default function ShortCheckPage() {
             extractedData={extractedData || undefined}
             pumpScorecardData={pumpScorecardData}
             afterQuickActions={fastVerdictCard}
+            afterFastVerdict={capitalPressureBlock}
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
               setHasAnalyzedTicker(true);
@@ -533,6 +542,8 @@ export default function ShortCheckPage() {
           pumpScorecardData?.droppinessScore !== undefined &&
           fastVerdictCard}
 
+        {hasAnalyzedTicker && !result && capitalPressureBlock}
+
         {/* Additional Pump Scorecard Cards - Show when we have ticker data */}
         {ticker && pumpScorecardData && !loadingPumpData && (
           <>
@@ -545,13 +556,6 @@ export default function ShortCheckPage() {
                 insiderTransactions={pumpScorecardData.insiderTransactions}
               />
             </div>
-
-            {pumpScorecardData.capitalPressure && (
-              <CapitalPressureCard
-                ticker={ticker.toUpperCase()}
-                data={pumpScorecardData.capitalPressure}
-              />
-            )}
 
             {/* Social Sentiment — below Capital Pressure */}
             {pumpScorecardData.sentiment && (

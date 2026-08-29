@@ -21,6 +21,7 @@ interface ShortCheckResultsProps {
   pumpScorecardData?: any; // Pump Scorecard data to include in PDF
   onTickerChange?: (newTicker: string) => void; // Callback when ticker is overridden
   afterQuickActions?: ReactNode;
+  afterFastVerdict?: ReactNode;
 }
 
 export default function ShortCheckResults({
@@ -30,6 +31,7 @@ export default function ShortCheckResults({
   pumpScorecardData,
   onTickerChange,
   afterQuickActions,
+  afterFastVerdict,
 }: ShortCheckResultsProps) {
   const [showScoringGuide, setShowScoringGuide] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -487,6 +489,8 @@ export default function ShortCheckResults({
       )}
 
       {afterQuickActions}
+
+      {afterFastVerdict}
 
       {/* Main Rating Card */}
       <Card
