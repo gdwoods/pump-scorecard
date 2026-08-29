@@ -437,13 +437,29 @@ export default function CapitalPressureCard({
           </div>
           {utilization && (
             <div className="space-y-1">
-              <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden">
-                <div
-                  className="h-full bg-red-500 dark:bg-red-400"
-                  style={{ width: `${Math.round(utilization.pct * 100)}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-gray-600 dark:text-gray-400">{utilization.label}</p>
+              <Tooltip
+                content={`Registered shelf/ATM capacity used in the last 90 days. ${utilization.label}. Red dots below are individual filing events.`}
+                side="top"
+              >
+                <button
+                  type="button"
+                  className="w-full text-left rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  aria-label={utilization.label}
+                >
+                  <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Capacity used (90d)
+                  </p>
+                  <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-600 overflow-hidden">
+                    <div
+                      className="h-full bg-red-500 dark:bg-red-400 transition-[width]"
+                      style={{ width: `${Math.round(utilization.pct * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-1">
+                    {utilization.label}
+                  </p>
+                </button>
+              </Tooltip>
             </div>
           )}
           <EventSparkline events={events} />
