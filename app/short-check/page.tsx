@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import ShortCheckUpload from "@/components/short-check/ShortCheckUpload";
 import ShortCheckResults from "@/components/short-check/ShortCheckResults";
@@ -266,9 +266,14 @@ export default function ShortCheckPage() {
     (loadingFastVerdict || fastVerdict || fastVerdictError) &&
     (result !== null || hasAnalyzedTicker);
 
+  const enrichedFastVerdict = useMemo(
+    () => buildDisplayFastVerdict(fastVerdict, pumpScorecardData, extractedData),
+    [fastVerdict, pumpScorecardData, extractedData]
+  );
+
   const fastVerdictCard = showFastVerdictCard ? (
     <FastVerdictCard
-      verdict={buildDisplayFastVerdict(fastVerdict, pumpScorecardData, extractedData)}
+      verdict={enrichedFastVerdict}
       loading={loadingFastVerdict}
       error={fastVerdictError}
     />
@@ -279,6 +284,9 @@ export default function ShortCheckPage() {
       <CapitalPressureCard
         ticker={ticker.toUpperCase()}
         data={pumpScorecardData.capitalPressure}
+        extractedData={extractedData}
+        capacityQuarters={enrichedFastVerdict?.dilution?.capacityQuarters ?? null}
+        derivedOfferingAbility={enrichedFastVerdict?.dilution?.derivedOfferingAbility ?? null}
       />
     ) : null;
 
