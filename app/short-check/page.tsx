@@ -23,7 +23,31 @@ import { ExtractedData } from "@/lib/shortCheckTypes";
 import { saveScanToHistory } from "@/lib/history";
 import type { FastVerdict } from "@/lib/fast/types";
 import { enrichFastVerdictFromShortCheck } from "@/lib/fast/enrichFromShortCheck";
+import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
 import { SHOW_FAST_VERDICT_ON_SHORT_CHECK } from "@/lib/config/features";
+
+function buildDisplayFastVerdict(
+  fastVerdict: FastVerdict | null,
+  pumpScorecardData: any,
+  extractedData: ExtractedData | null | undefined
+): FastVerdict | null {
+  if (!fastVerdict) return null;
+  if (extractedData) {
+    return enrichFastVerdictFromShortCheck(fastVerdict, {
+      scanDroppiness: pumpScorecardData
+        ? {
+            score: pumpScorecardData.droppinessScore,
+            detail: pumpScorecardData.droppinessDetail,
+            spikeCount: Array.isArray(pumpScorecardData.droppinessDetail)
+              ? pumpScorecardData.droppinessDetail.length
+              : pumpScorecardData.droppinessSpikeCount,
+          }
+        : null,
+      extracted: extractedData,
+    });
+  }
+  return enrichFastVerdictFromScan(fastVerdict, pumpScorecardData);
+}
 export default function ShortCheckPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ShortCheckResult | null>(null);
@@ -237,6 +261,19 @@ export default function ShortCheckPage() {
     };
   }, [ticker, result, hasAnalyzedTicker]);
 
+  const showFastVerdictCard =
+    SHOW_FAST_VERDICT_ON_SHORT_CHECK &&
+    (loadingFastVerdict || fastVerdict || fastVerdictError) &&
+    (result !== null || hasAnalyzedTicker);
+
+  const fastVerdictCard = showFastVerdictCard ? (
+    <FastVerdictCard
+      verdict={buildDisplayFastVerdict(fastVerdict, pumpScorecardData, extractedData)}
+      loading={loadingFastVerdict}
+      error={fastVerdictError}
+    />
+  ) : null;
+
   // Fetch Pump Scorecard data when ticker is available
   // Also recalculate Short Check score when droppiness becomes available
   useEffect(() => {
@@ -440,31 +477,7 @@ export default function ShortCheckPage() {
             ticker={ticker}
             extractedData={extractedData || undefined}
             pumpScorecardData={pumpScorecardData}
-            afterQuickActions={
-              SHOW_FAST_VERDICT_ON_SHORT_CHECK &&
-              (loadingFastVerdict || fastVerdict || fastVerdictError) ? (
-                <FastVerdictCard
-                  verdict={
-                    fastVerdict
-                      ? enrichFastVerdictFromShortCheck(fastVerdict, {
-                          scanDroppiness: pumpScorecardData
-                            ? {
-                                score: pumpScorecardData.droppinessScore,
-                                detail: pumpScorecardData.droppinessDetail,
-                                spikeCount: Array.isArray(pumpScorecardData.droppinessDetail)
-                                  ? pumpScorecardData.droppinessDetail.length
-                                  : undefined,
-                              }
-                            : null,
-                          extracted: extractedData,
-                        })
-                      : null
-                  }
-                  loading={loadingFastVerdict}
-                  error={fastVerdictError}
-                />
-              ) : null
-            }
+            afterQuickActions={fastVerdictCard}
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
               setHasAnalyzedTicker(true);
@@ -484,6 +497,20 @@ export default function ShortCheckPage() {
             }}
           />
         )}
+
+        {/* Quick Ticker path — same Fast Verdict as Fast Scan (no Short Check score) */}
+        {hasAnalyzedTicker && !result && ticker && (
+          <Card className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Ticker:</span>
+              <span className="font-semibold">{ticker.toUpperCase()}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                Quick analysis — no DT screenshot
+              </span>
+            </div>
+          </Card>
+        )}
+        {hasAnalyzedTicker && !result && fastVerdictCard}
 
         {/* Droppiness Card - Show when we have ticker (with or without Short Check result) */}
         {ticker && pumpScorecardData?.droppinessScore !== undefined && (
@@ -571,6 +598,9 @@ export default function ShortCheckPage() {
                 setError(null);
                 setPumpScorecardData(null);
                 setHasAnalyzedTicker(false);
+                setFastVerdict(null);
+                setFastVerdictError(null);
+                setLoadingFastVerdict(false);
                 // Scroll to top to show upload component
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}

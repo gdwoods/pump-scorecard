@@ -375,9 +375,7 @@ export default function ShortCheckResults({
         </Card>
       )}
 
-      {afterQuickActions}
-
-      {/* Ticker Override Warning and Input */}
+      {/* Ticker Override Warning and Input — above Fast Verdict */}
       {isSingleLetterTicker && (
         <Card className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
           <div className="flex items-start gap-3">
@@ -413,7 +411,6 @@ export default function ShortCheckResults({
                         if (onTickerChange) {
                           onTickerChange(tickerOverride);
                         } else {
-                          // Fallback: reload with query param
                           window.location.href = `/short-check?ticker=${tickerOverride}`;
                         }
                       }
@@ -437,8 +434,7 @@ export default function ShortCheckResults({
           </div>
         </Card>
       )}
-      
-      {/* Ticker Override Field (for any ticker, not just single-letter) */}
+
       {!isSingleLetterTicker && ticker && (
         <Card className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
@@ -467,7 +463,6 @@ export default function ShortCheckResults({
                       if (onTickerChange) {
                         onTickerChange(tickerOverride);
                       } else {
-                        // Fallback: reload with query param
                         window.location.href = `/short-check?ticker=${tickerOverride}`;
                       }
                     }
@@ -490,6 +485,8 @@ export default function ShortCheckResults({
           </div>
         </Card>
       )}
+
+      {afterQuickActions}
 
       {/* Main Rating Card */}
       <Card
