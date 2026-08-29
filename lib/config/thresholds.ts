@@ -6,6 +6,10 @@ export const T = {
   droppiness: { walkAway: 40, strong: 70, minSpikes: 3, cacheDays: 7 },
   marketCap: { ideal: 10e6, max: 50e6 },
   float: { squeezeFloor: 2e6, thin: 5e6 },
+  /** Framework 3.0 §3.3 baby-shelf (S-3 I.B.6) capacity check. Starting
+   *  value — tune against the entry log per the framework's own guidance
+   *  that these numbers are guesses until logged trades calibrate them. */
+  babyShelf: { criticalQuarters: 1 },
   instOwn: { ideal: 0.10, walkAway: 0.40 }, // fractions; ExtractedData uses 0–100
   runway: { ideal: 6, walkAway: 18 }, // months
   runner: { priorDay: 0.30, threeDay: 0.30 },

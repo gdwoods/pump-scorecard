@@ -30,6 +30,7 @@ export interface ExtractedData {
   /** Borrow availability from iBorrowDesk. null/undefined = unknown. */
   borrowAvailable?: boolean | null;
   currentPrice?: number; // in dollars
+  currentPriceSource?: 'ocr' | 'yahoo-finance' | 'manual'; // source of currentPrice
   confidence: number; // overall confidence score (0-1)
 }
 

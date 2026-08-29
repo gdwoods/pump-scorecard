@@ -2,6 +2,7 @@
 import { ExtractedData } from './shortCheckTypes';
 import { T } from './config/thresholds';
 import { normalizeShareCount } from './normalizeShares';
+import { computeBabyShelfCapacity, formatBabyShelfCapacity, BabyShelfCapacity } from './babyShelf';
 
 export interface ScoreBreakdown {
   cashNeed: number;
@@ -821,6 +822,7 @@ function checkWalkAwayFlags(
     droppinessStatus: DroppinessStatus;
     spikeCount: number | null;
     offeringColor: OfferingColor;
+    babyShelf?: BabyShelfCapacity;
   }
 ): string[] {
   const flags: string[] = [];
@@ -905,7 +907,20 @@ function checkWalkAwayFlags(
     floatShares < T.float.squeezeFloor &&
     opts.offeringColor === 'Green'
   ) {
-    flags.push('TRAP_RISK: thin float with Green offering ability (squeeze geometry)');
+    const suffix = opts.babyShelf ? ` — ${formatBabyShelfCapacity(opts.babyShelf)}` : '';
+    flags.push(`TRAP_RISK: thin float with Green offering ability (squeeze geometry)${suffix}`);
+  }
+
+  // Framework §3.3 baby-shelf check, computed directly rather than inferred
+  // from a badge. Independent of the TRAP_RISK trigger above — it can fire
+  // even when the offering badge doesn't read Green, since a thin computed
+  // capacity is dangerous on its own merits per the framework doc.
+  if (
+    opts.babyShelf?.babyShelfEligible &&
+    opts.babyShelf.capacityQuarters !== undefined &&
+    opts.babyShelf.capacityQuarters < T.babyShelf.criticalQuarters
+  ) {
+    flags.push(`Baby Shelf Critical (I.B.6): ${formatBabyShelfCapacity(opts.babyShelf)}`);
   }
 
   return flags;
@@ -1071,6 +1086,10 @@ export function calculateShortRating(
   // Determine offering color for float adjustment (pass O/S and float for better detection)
   const offeringColor = getOfferingColor(data.atmShelfStatus, data.outstandingShares, data.float);
 
+  // Framework 3.0 §3.3 — computed directly from float/price/burn rather than
+  // trusted from an OCR'd badge. Undefined when price or float is missing.
+  const babyShelf = computeBabyShelfCapacity(data.float, data.currentPrice, data.quarterlyBurnRate);
+
   // Calculate runway from cash and burn rate if not provided
   let effectiveRunway = data.cashRunway;
   if (!effectiveRunway && data.cashOnHand && data.quarterlyBurnRate && data.quarterlyBurnRate < 0) {
@@ -1154,7 +1173,12 @@ export function calculateShortRating(
           ? `-${Math.abs(effectiveRunway).toFixed(1)} months (negative cash)`
           : `${effectiveRunway.toFixed(1)} months`
         : undefined,
-      offeringAbility: data.atmShelfStatus || undefined,
+      offeringAbility: (() => {
+        const badge = data.atmShelfStatus || undefined;
+        const computed = babyShelf ? formatBabyShelfCapacity(babyShelf) : undefined;
+        if (badge && computed) return `${badge} — ${computed}`;
+        return badge || computed;
+      })(),
       historicalDilution: (() => {
         const parts: string[] = [];
         if (data.outstandingShares !== undefined) {
@@ -1268,6 +1292,7 @@ export function calculateShortRating(
     droppinessStatus,
     spikeCount,
     offeringColor,
+    babyShelf,
   });
 
   if (dataCompleteness < T.dataQuality.minCompleteness) {
@@ -1310,6 +1335,10 @@ export function calculateShortRating(
 
   if (walkAwayFlags.some(f => f.includes('Double Green'))) {
     alertLabels.push({ label: 'DOUBLE_GREEN_LOCKOUT', color: 'red' });
+  }
+
+  if (walkAwayFlags.some(f => f.includes('Baby Shelf Critical'))) {
+    alertLabels.push({ label: 'BABY_SHELF_CRITICAL', color: 'red' });
   }
 
   const isCashNeedHigh = breakdown.cashNeed === 25;
