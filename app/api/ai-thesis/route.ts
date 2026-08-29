@@ -8,7 +8,7 @@
 // this app's fetch-fallback conventions.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { callGroq, GROQ_MODEL } from '@/lib/ai/groqClient';
+import { callGroq, getGroqModel } from '@/lib/ai/groqClient';
 import { buildThesisMessages } from '@/lib/ai/buildThesisPrompt';
 import { parseThesisContent } from '@/lib/ai/parseThesisContent';
 import { checkAiThesisRateLimit, getClientIpFromHeaders } from '@/lib/ai/rateLimit';
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: groqResult.error ?? 'AI thesis unavailable' });
     }
 
-    const thesis = parseThesisContent(groqResult.content, GROQ_MODEL);
+    const thesis = parseThesisContent(groqResult.content, getGroqModel());
     if (!thesis) {
       return NextResponse.json({
         success: false,

@@ -29,8 +29,14 @@ export interface GroqCallResult {
 export type GroqFetcher = (apiKey: string, body: Record<string, unknown>) => Promise<Response>;
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+/** Groq retired llama-3.3-70b-versatile 2026-08-16; override via GROQ_MODEL env. */
+const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b';
 const REQUEST_TIMEOUT_MS = 20_000;
+
+export function getGroqModel(): string {
+  const fromEnv = process.env.GROQ_MODEL?.trim();
+  return fromEnv || DEFAULT_GROQ_MODEL;
+}
 
 const defaultFetcher: GroqFetcher = (apiKey, body) => {
   const controller = new AbortController();
@@ -65,7 +71,7 @@ export async function callGroq(
 
   try {
     const response = await fetcher(apiKey, {
-      model: GROQ_MODEL,
+      model: getGroqModel(),
       messages,
       temperature: opts.temperature ?? 0.3,
       max_completion_tokens: opts.maxTokens ?? 900,
@@ -99,4 +105,4 @@ export async function callGroq(
   }
 }
 
-export { GROQ_MODEL, GROQ_ENDPOINT };
+export { GROQ_ENDPOINT, DEFAULT_GROQ_MODEL };
