@@ -532,6 +532,40 @@ describe('capitalPressure scoring fixtures', () => {
     void equity;
   });
 
+  it('parses private placement / securities purchase agreement 6-K as issuance', () => {
+    const pipeText =
+      'Private Placement Financing. On August 24, 2026, the Company entered into a securities purchase agreement with certain investors. ' +
+      'Under the Purchase Agreement, the Company agreed to sell to the Purchasers 15,000,000 Class A ordinary shares at a purchase price of $1.266 per share, ' +
+      'together with warrants to purchase 15,000,000 Ordinary Shares at an exercise price of $0.50 per share, for an aggregate purchase price of $18,990,000.';
+    const parsed = parseCapitalPressureDocuments(
+      [
+        {
+          form: '6-K',
+          filingDate: '2026-08-28',
+          accessionNumber: 'aehl-pp',
+          documentUrl: 'https://example.com/6k.htm',
+          text: pipeText,
+        },
+      ],
+      {
+        windowStart: '2025-08-01',
+        windowEnd: '2026-08-28',
+        asOf: '2026-08-29',
+      }
+    );
+    const pp = parsed.events.find((e) => e.type === 'private_placement');
+    expect(pp).toBeDefined();
+    expect(pp!.isCapacityOnly).toBe(false);
+    expect(pp!.sharesIssued).toBe(15_000_000);
+    expect(pp!.grossProceedsUsd).toBe(18_990_000);
+    const result = scoreCapitalPressure({
+      parsed,
+      context: { asOf: '2026-08-29' },
+    });
+    expect(result.reasons.some((r) => r.label.includes('Private placement'))).toBe(true);
+    expect(result.recentIssuance.shares30d).toBe(15_000_000);
+  });
+
   it('treats retrospective reverse-split footnotes as timeline-only (no +10)', () => {
     const parsed = parseCapitalPressureDocuments(
       [

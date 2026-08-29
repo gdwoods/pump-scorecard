@@ -7,6 +7,7 @@ export type CapitalEventType =
   | 'atm_program'
   | 'equity_line'
   | 'registered_direct'
+  | 'private_placement'
   | 'convertible_note'
   | 'note_conversion'
   | 'debt_for_equity'

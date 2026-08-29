@@ -65,6 +65,7 @@ function isIssuanceEvent(event: CapitalEvent): boolean {
   if (event.isCapacityOnly === true) return false;
   return [
     "registered_direct",
+    "private_placement",
     "note_conversion",
     "debt_for_equity",
     "warrant_exercise",

@@ -112,6 +112,7 @@ function sumIssuance(
     if (
       ![
         'registered_direct',
+        'private_placement',
         'note_conversion',
         'debt_for_equity',
         'warrant_exercise',
@@ -489,6 +490,20 @@ export function scoreCapitalPressure(
     unknowns.push('Registered direct in last 90 days not verified');
   }
 
+  // --- Private placement in last 90 days (18)
+  const pp = events.find(
+    (e) =>
+      highConfidence(e) &&
+      e.type === 'private_placement' &&
+      !e.isCapacityOnly &&
+      withinDays(e.eventDate, asOf, 90)
+  );
+  if (pp) {
+    addReason('Private placement in last 90 days', 18, pp.evidence);
+  } else {
+    unknowns.push('Private placement in last 90 days not verified');
+  }
+
   // --- Convertible debt variable/discounted VWAP (18) or fixed (10)
   const convertibles = events.filter(
     (e) => highConfidence(e) && e.type === 'convertible_note'
@@ -572,7 +587,7 @@ export function scoreCapitalPressure(
       highConfidence(e) &&
       !e.isCapacityOnly &&
       withinDays(e.eventDate, asOf, 30) &&
-      ['atm_program', 'equity_line', 'note_conversion', 'prospectus_supplement'].includes(
+      ['atm_program', 'equity_line', 'note_conversion', 'prospectus_supplement', 'private_placement'].includes(
         e.type
       )
   );
@@ -602,6 +617,7 @@ export function scoreCapitalPressure(
     if (reasons.some((r) => r.label.includes('ATM') || r.label.includes('equity line')) && u.includes('ATM')) return false;
     if (reasons.some((r) => r.label.includes('shelf')) && u.includes('shelf')) return false;
     if (reasons.some((r) => r.label.includes('Registered direct')) && u.includes('Registered direct')) return false;
+    if (reasons.some((r) => r.label.includes('Private placement')) && u.includes('Private placement')) return false;
     if (reasons.some((r) => r.label.includes('Convertible')) && u.includes('Convertible debt not verified')) return false;
     if (reasons.some((r) => r.label.includes('Debt-for-equity')) && u.includes('Debt-for-equity')) return false;
     if (reasons.some((r) => r.label.includes('Reverse split')) && u.includes('Reverse split')) return false;

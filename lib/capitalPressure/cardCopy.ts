@@ -16,6 +16,7 @@ const EVENT_LABELS: Record<CapitalEventType, string> = {
   atm_program: 'ATM program',
   equity_line: 'Equity line',
   registered_direct: 'Registered direct',
+  private_placement: 'Private placement',
   convertible_note: 'Convertible note',
   note_conversion: 'Note conversion',
   debt_for_equity: 'Debt for equity',

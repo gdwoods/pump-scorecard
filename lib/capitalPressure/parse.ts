@@ -30,6 +30,11 @@ const PHRASE_PATTERNS: Array<{
     capacityDefault: true,
   },
   { type: 'registered_direct', re: /\bregistered\s+direct\b/i, capacityDefault: false },
+  {
+    type: 'private_placement',
+    re: /\bprivate\s+placement(?:\s+financing)?\b|\bsecurities\s+purchase\s+agreement\b/i,
+    capacityDefault: false,
+  },
   { type: 'convertible_note', re: /\bconvertible\s+(?:notes?|debentures?|debt)\b|\bconversion\s+price\b|\blowest\s+daily\s+VWAP\b/i, capacityDefault: true },
   { type: 'note_conversion', re: /\bconversion\s+of\s+(?:the\s+)?(?:notes?|debentures?)\b|\bconverted\s+into\s+.*common\s+stock\b/i, capacityDefault: false },
   { type: 'debt_for_equity', re: /\bdebt.{0,40}common\s+stock\b|\bexchanged?\s+.{0,40}(?:debt|notes?).{0,40}(?:shares|common\s+stock)\b/i, capacityDefault: false },
@@ -43,7 +48,7 @@ const PHRASE_PATTERNS: Array<{
 ];
 
 const ISSUANCE_VERBS =
-  /\b(?:issued|sold|sells|selling|closed\s+the\s+sale|completed\s+the\s+sale|purchased\s+from\s+the\s+company|shares\s+were\s+issued)\b/i;
+  /\b(?:issued|sold|sells|selling|agreed\s+to\s+sell|closed\s+the\s+sale|completed\s+the\s+sale|purchased\s+from\s+the\s+company|shares\s+were\s+issued)\b/i;
 
 const VARIABLE_VWAP =
   /\b(?:lowest\s+daily\s+VWAP|variable\s+conversion|discount(?:ed)?\s+(?:to\s+)?(?:the\s+)?(?:VWAP|market)|%\s*of\s+(?:the\s+)?(?:lowest|average)\s+(?:daily\s+)?VWAP)\b/i;
@@ -151,6 +156,7 @@ function titleFor(type: CapitalEventType, capacityOnly: boolean): string {
     atm_program: 'ATM program',
     equity_line: 'Equity line',
     registered_direct: 'Registered direct',
+    private_placement: 'Private placement',
     convertible_note: 'Convertible note',
     note_conversion: 'Note conversion',
     debt_for_equity: 'Debt-for-equity settlement',
@@ -185,8 +191,17 @@ function classifyIssuance(
     return { capacityOnly: !issued, isIssuance: issued };
   }
 
-  if (type === 'registered_direct' || type === 'note_conversion' || type === 'debt_for_equity' || type === 'warrant_exercise') {
-    const issued = ISSUANCE_VERBS.test(window) || /\bissued\b|\bsold\b|\bconverted\b/i.test(window);
+  if (
+    type === 'registered_direct' ||
+    type === 'private_placement' ||
+    type === 'note_conversion' ||
+    type === 'debt_for_equity' ||
+    type === 'warrant_exercise'
+  ) {
+    const issued =
+      ISSUANCE_VERBS.test(window) ||
+      /\baggregate\s+purchase\s+price\b/i.test(window) ||
+      /\bissued\b|\bsold\b|\bconverted\b/i.test(window);
     return { capacityOnly: !issued && capacityDefault, isIssuance: issued };
   }
 
@@ -224,7 +239,11 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
 
       const window = text.slice(Math.max(0, idx - 120), Math.min(text.length, idx + match[0].length + 200));
       const excerpt = clipExcerpt(text, idx, match[0].length);
-      const hasContext = hasNumericOrDateContext(window);
+      const contextWindow =
+        phrase.type === 'private_placement'
+          ? text.slice(idx, Math.min(text.length, idx + 2800))
+          : window;
+      const hasContext = hasNumericOrDateContext(contextWindow);
       const confidence: 'high' | 'needs_review' = hasContext ? 'high' : 'needs_review';
 
       if (phrase.type === 'going_concern') {
@@ -240,6 +259,15 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
 
       const type = phrase.type as CapitalEventType;
 
+      // Resale / selling-shareholder SPAs are not company-side private placements
+      if (
+        type === 'private_placement' &&
+        SELLING_SHAREHOLDER.test(window) &&
+        !/\bprivate\s+placement\b/i.test(window)
+      ) {
+        continue;
+      }
+
       // Skip "non-convertible" loan language
       if (
         type === 'convertible_note' &&
@@ -253,7 +281,9 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
       const { capacityOnly, isIssuance } = classifyIssuance(
         type,
         phrase.capacityDefault,
-        window,
+        type === 'private_placement'
+          ? text.slice(idx, Math.min(text.length, idx + 2800))
+          : window,
         doc.form
       );
 
@@ -276,9 +306,14 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
         finalType = 'prospectus_supplement';
       }
 
-      const amount = parseNumberNear(window);
-      const sharesMatch = window.match(
-        /([\d,]+(?:\.\d+)?)\s*(million|m)?\s*(?:shares|share)/i
+      const numericWindow =
+        type === 'private_placement'
+          ? text.slice(idx, Math.min(text.length, idx + 2800))
+          : window;
+
+      const amount = parseNumberNear(numericWindow);
+      const sharesMatch = numericWindow.match(
+        /([\d,]+(?:\.\d+)?)\s*(million|m)?\s*(?:[\w-]+\s+){0,6}(?:shares|share)/i
       );
       let shares: number | undefined;
       if (sharesMatch) {
@@ -287,11 +322,23 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
         shares = finiteOrUndefined(shares);
       }
 
-      const moneyMatch = window.match(
+      const moneyMatch = numericWindow.match(
         /\$\s*([\d,]+(?:\.\d+)?)\s*(million|billion|m|b)?/i
       );
       let proceeds: number | undefined;
-      if (moneyMatch && /\$/.test(window)) {
+      if (type === 'private_placement') {
+        const aggMatch = numericWindow.match(
+          /\baggregate\s+purchase\s+price\s+of\s+\$\s*([\d,]+(?:\.\d+)?)\s*(million|billion|m|b)?/i
+        );
+        if (aggMatch) {
+          proceeds = parseFloat(aggMatch[1].replace(/,/g, ''));
+          const unit = (aggMatch[2] || '').toLowerCase();
+          if (unit === 'million' || unit === 'm') proceeds *= 1_000_000;
+          if (unit === 'billion' || unit === 'b') proceeds *= 1_000_000_000;
+          proceeds = finiteOrUndefined(proceeds);
+        }
+      }
+      if (proceeds === undefined && moneyMatch && /\$/.test(numericWindow)) {
         proceeds = parseFloat(moneyMatch[1].replace(/,/g, ''));
         const unit = (moneyMatch[2] || '').toLowerCase();
         if (unit === 'million' || unit === 'm') proceeds *= 1_000_000;
