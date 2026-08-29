@@ -277,7 +277,9 @@ function scoreCashRunway(
 
 /**
  * Calculate Offering Ability & Overhead Supply score (-30 to +25 points)
- * Uses Red/Yellow/Green matrix
+ * Uses Red/Yellow/Green matrix from the DT badge (getOfferingColor), not
+ * computeBabyShelfCapacity — the computed capacity drives walk-away flags
+ * and display text only; badge reflects DT's ATM/shelf effectiveness view.
  */
 function scoreOfferingAbility(
   atmShelfStatus: string | undefined,

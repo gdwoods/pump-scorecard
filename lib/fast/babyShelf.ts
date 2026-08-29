@@ -1,4 +1,5 @@
 // lib/fast/babyShelf.ts
+import { T } from '@/lib/config/thresholds';
 import type { OfferingAbility } from './types';
 
 const BABY_SHELF_FLOAT_VALUE_CAP = 75e6;
@@ -43,13 +44,13 @@ export function computeBabyShelf(input: {
 
   let derivedOfferingAbility: OfferingAbility = 'UNKNOWN';
 
-  if (input.atmDetected && input.hasEffectiveShelf && capacityQuarters != null && capacityQuarters > 1) {
+  if (input.atmDetected && input.hasEffectiveShelf && capacityQuarters != null && capacityQuarters > T.babyShelf.fastHighQuarters) {
     derivedOfferingAbility = 'HIGH';
-  } else if (capacityQuarters != null && capacityQuarters < 0.3) {
+  } else if (capacityQuarters != null && capacityQuarters < T.babyShelf.fastLowQuarters) {
     derivedOfferingAbility = 'LOW';
   } else if (input.hasEffectiveShelf === false || input.hasEffectiveShelf == null) {
     // No known effective shelf → LOW (DT "Offering Ability: LOW" class)
-    // even when raw baby-shelf capacity is 0.3–1 quarters of burn.
+    // even when raw baby-shelf capacity is fastLowQuarters–criticalQuarters.
     derivedOfferingAbility = 'LOW';
   } else if (capacityQuarters != null) {
     derivedOfferingAbility = 'MEDIUM';

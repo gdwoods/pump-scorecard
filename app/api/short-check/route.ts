@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { extractDataFromImage } from '@/lib/ocrParser';
 import { calculateShortRating } from '@/lib/shortCheckScoring';
 import { fetchDebtCashFromYahoo } from '@/utils/fetchDebtCash';
-import { fetchCurrentPriceFromYahoo } from '@/utils/fetchCurrentPrice';
+import { applyCurrentPriceFallback } from '@/lib/shortCheck/currentPriceFallback';
 import { fetchHistoricalOS } from '@/utils/fetchHistoricalOS';
 import { fetchRecentNews, getNewsForScoring } from '@/utils/fetchNews';
 import { fetchBorrowDesk } from '@/utils/fetchBorrowDesk';
@@ -97,25 +97,14 @@ export async function POST(req: NextRequest) {
         }
       }
       
-      // If OCR didn't capture a current price (it discards the raw price after
-      // computing priceSpikePct), fetch a live quote from Yahoo Finance so
-      // price-dependent scoring (e.g. Framework 3.0 §3.3 baby-shelf capacity)
-      // has a real value to work with.
+      // If OCR didn't capture a current price, fetch a live quote so
+      // price-dependent scoring (Framework 3.0 §3.3 baby-shelf) has a value.
       if (extractedData.currentPrice === undefined && extractedData.ticker) {
-        console.log(`Short check API: Missing current price, fetching from Yahoo Finance for ${extractedData.ticker}...`);
-        try {
-          const priceData = await fetchCurrentPriceFromYahoo(extractedData.ticker);
-          if (priceData.price !== null) {
-            extractedData.currentPrice = priceData.price;
-            extractedData.currentPriceSource = priceData.source;
-            console.log(`Short check API: Fetched current price from Yahoo Finance: ${priceData.price}`);
-          } else {
-            console.log(`Short check API: Yahoo Finance did not return a current price`);
-          }
-        } catch (priceError) {
-          console.error('Short check API: Failed to fetch current price from Yahoo Finance:', priceError);
-          // Continue with OCR data only - don't fail the whole request
-        }
+        console.log(`Short check API: Missing current price, fetching for ${extractedData.ticker}...`);
+      }
+      await applyCurrentPriceFallback(extractedData);
+      if (extractedData.currentPrice !== undefined) {
+        console.log(`Short check API: Current price: ${extractedData.currentPrice} (${extractedData.currentPriceSource ?? 'unknown'})`);
       }
 
       // Fetch historical O/S for Historical Dilution calculation
@@ -224,20 +213,8 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Manual entry has no price field either - fall back to a live Yahoo
-    // Finance quote so price-dependent scoring still has a real value.
-    if (extractedData.currentPrice === undefined && extractedData.ticker) {
-      try {
-        const priceData = await fetchCurrentPriceFromYahoo(extractedData.ticker);
-        if (priceData.price !== null) {
-          extractedData.currentPrice = priceData.price;
-          extractedData.currentPriceSource = priceData.source;
-        }
-      } catch (priceError) {
-        console.error('Short check manual API: Failed to fetch current price from Yahoo Finance:', priceError);
-        // Continue without a live price - scoring will use default handling
-      }
-    }
+    // Manual entry has no price field — fall back to a live quote.
+    await applyCurrentPriceFallback(extractedData);
     
     // Calculate short rating with manual data
     const result = calculateShortRating(extractedData);

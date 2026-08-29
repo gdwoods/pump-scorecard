@@ -162,6 +162,11 @@ capacity          = publicFloatValue / 3
 capacityQuarters  = (capacity − trailing 12mo takedowns) / quarterly burn
 ```
 
+*Implementation note:* Short Check and Fast Scan both compute
+`capacityQuarters` as `capacity / quarterlyBurn` today — trailing-12-month
+takedowns are not subtracted because no reliable takedown-history source is
+wired yet. Treat the takedown term as aspirational until that data exists.
+
 Worked example — DFNS, July 2026:
 
 ```
@@ -169,10 +174,10 @@ Worked example — DFNS, July 2026:
 $6.04M / 3                  =  $2.01M annual shelf capacity
 quarterly burn                 $4.93M
                             ────────────
-capacity ÷ burn             ≈  12 days of operations
+capacity ÷ burn             ≈  0.41 quarters (~37 days of operations)
 ```
 
-Their entire annual shelf capacity funds under two weeks. That is *why* the badge
+Their entire annual shelf capacity funds under six weeks. That is *why* the badge
 reads LOW, and it converts V5 from a heuristic into a mechanism.
 
 **Limit:** the cap applies to S-3 primary offerings only. S-1 registrations and

@@ -9,7 +9,13 @@ export const T = {
   /** Framework 3.0 §3.3 baby-shelf (S-3 I.B.6) capacity check. Starting
    *  value — tune against the entry log per the framework's own guidance
    *  that these numbers are guesses until logged trades calibrate them. */
-  babyShelf: { criticalQuarters: 1 },
+  /** Short Check walk-away when computed capacity is below this (quarters). */
+  babyShelf: {
+    criticalQuarters: 1,
+    /** Fast Scan offering-ability classification (LOW / HIGH cutoffs). */
+    fastLowQuarters: 0.3,
+    fastHighQuarters: 1,
+  },
   instOwn: { ideal: 0.10, walkAway: 0.40 }, // fractions; ExtractedData uses 0–100
   runway: { ideal: 6, walkAway: 18 }, // months
   runner: { priorDay: 0.30, threeDay: 0.30 },
