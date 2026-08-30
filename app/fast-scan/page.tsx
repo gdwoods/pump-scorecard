@@ -17,9 +17,11 @@ import SentimentCard from "@/components/SentimentCard";
 import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import CapitalPressureCard from "@/components/CapitalPressureCard";
 import AiThesisCard from "@/components/AiThesisCard";
+import { PairGrid } from "@/components/layout/PairGrid";
 import type { FastVerdict } from "@/lib/fast/types";
 import { SHOW_FAST_VERDICT_UI, SHOW_AI_THESIS } from "@/lib/config/features";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
+import { PAGE_CONTENT_CLASS } from "@/lib/ui/pageLayout";
 
 function FastScanInner() {
   const searchParams = useSearchParams();
@@ -94,9 +96,33 @@ function FastScanInner() {
     }
   }, [initial, didAutoScan, runScan]);
 
+  const capitalPressureBlock =
+    pumpData?.capitalPressure ? (
+      <CapitalPressureCard ticker={ticker.toUpperCase()} data={pumpData.capitalPressure} />
+    ) : null;
+
+  const aiThesisBlock =
+    SHOW_AI_THESIS && ticker && pumpData ? (
+      <AiThesisCard ticker={ticker} scanData={pumpData} fastVerdict={fastVerdict} />
+    ) : null;
+
+  const droppinessBlock =
+    pumpData?.droppinessScore !== undefined ? (
+      <DroppinessCard
+        ticker={ticker}
+        score={pumpData.droppinessScore}
+        detail={pumpData.droppinessDetail || []}
+        verdict={pumpData.droppinessVerdict || "No verdict available"}
+      />
+    ) : null;
+
+  const scatterBlock = pumpData ? (
+    <DroppinessScatter detail={pumpData.droppinessDetail || []} ticker={ticker} />
+  ) : null;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
-      <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
+      <div className={PAGE_CONTENT_CLASS}>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400">
@@ -159,7 +185,6 @@ function FastScanInner() {
                     setFastVerdict(null);
                     setPumpData(null);
                     setError(null);
-                    setManualFlags({});
                   }}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
                 >
@@ -180,10 +205,6 @@ function FastScanInner() {
           <FastVerdictCard verdict={fastVerdict} loading={loading && !fastVerdict} />
         )}
 
-        {SHOW_AI_THESIS && ticker && pumpData && !loading && (
-          <AiThesisCard ticker={ticker} scanData={pumpData} fastVerdict={fastVerdict} />
-        )}
-
         {loading && !pumpData && (
           <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 rounded-xl">
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
@@ -194,26 +215,11 @@ function FastScanInner() {
 
         {ticker && pumpData && !loading && (
           <>
-            {pumpData.droppinessScore !== undefined && (
-              <DroppinessCard
-                ticker={ticker}
-                score={pumpData.droppinessScore}
-                detail={pumpData.droppinessDetail || []}
-                verdict={pumpData.droppinessVerdict || "No verdict available"}
-              />
-            )}
+            <PairGrid first={capitalPressureBlock} second={aiThesisBlock} breakpoint="xl" />
 
-            <DroppinessScatter detail={pumpData.droppinessDetail || []} ticker={ticker} />
+            <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
 
-            {pumpData.capitalPressure && (
-              <CapitalPressureCard ticker={ticker.toUpperCase()} data={pumpData.capitalPressure} />
-            )}
-
-            {pumpData.sentiment && (
-              <SentimentCard ticker={ticker} sentiment={pumpData.sentiment} />
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <Fundamentals result={pumpData} />
               <SecFilings
                 ticker={ticker}
@@ -221,6 +227,10 @@ function FastScanInner() {
                 insiderTransactions={pumpData.insiderTransactions}
               />
             </div>
+
+            {pumpData.sentiment && (
+              <SentimentCard ticker={ticker} sentiment={pumpData.sentiment} />
+            )}
 
             <Chart result={pumpData} />
 
@@ -231,11 +241,15 @@ function FastScanInner() {
               />
             )}
 
-            <NewsSection ticker={ticker} items={pumpData.news || []} />
-
-            {pumpData.borrowData && (
-              <BorrowDeskCard ticker={ticker} borrowData={pumpData.borrowData} />
-            )}
+            <PairGrid
+              breakpoint="lg"
+              first={<NewsSection ticker={ticker} items={pumpData.news || []} />}
+              second={
+                pumpData.borrowData ? (
+                  <BorrowDeskCard ticker={ticker} borrowData={pumpData.borrowData} />
+                ) : null
+              }
+            />
           </>
         )}
       </div>

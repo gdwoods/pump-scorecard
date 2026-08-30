@@ -18,6 +18,7 @@ import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import Link from "next/link";
 import PumpScorecardUrlBootstrap from "@/components/PumpScorecardUrlBootstrap";
+import { PAGE_CONTENT_CLASS } from "@/lib/ui/pageLayout";
 
 export default function Page() {
   const [ticker, setTicker] = useState("");
@@ -150,7 +151,8 @@ export default function Page() {
   const activeTicker = result?.ticker || ticker;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
+      <div className={PAGE_CONTENT_CLASS}>
       <Suspense fallback={null}>
         <PumpScorecardUrlBootstrap onRun={(sym) => scan(sym)} />
       </Suspense>
@@ -266,6 +268,7 @@ export default function Page() {
       )}
 
       <PerformanceMonitor />
+      </div>
     </div>
   );
 }

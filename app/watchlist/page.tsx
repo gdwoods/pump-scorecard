@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import AppNav from "@/components/AppNav";
+import { PAGE_CONTENT_CLASS } from "@/lib/ui/pageLayout";
 import type { FastVerdict, FastVerdictKind } from "@/lib/fast/types";
 
 type Row = {
@@ -92,7 +93,7 @@ export default function WatchlistPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
-      <div className="max-w-5xl mx-auto space-y-4">
+      <div className={PAGE_CONTENT_CLASS}>
         <div className="flex flex-col md:flex-row justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400">Watchlist</h1>

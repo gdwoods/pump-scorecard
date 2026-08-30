@@ -48,9 +48,11 @@ export default function DroppinessCard({
           <p><strong>Higher scores</strong> = more consistent retraces (better for short sellers). <strong>Lower scores</strong> = spikes tend to hold (riskier for shorts).</p>
         </div>
 
-        {/* --- Gauge Chart --- */}
-        <div className="flex items-center justify-center mt-4 h-48">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 items-start mt-2">
+          <div>
+            {/* --- Gauge Chart --- */}
+            <div className="flex items-center justify-center h-48">
+              <ResponsiveContainer width="100%" height="100%">
             <RadialBarChart
               cx="50%"
               cy="80%"
@@ -90,21 +92,22 @@ export default function DroppinessCard({
           </ResponsiveContainer>
         </div>
 
-        {/* Date and time stamp */}
-        <p className="text-xs text-gray-500 dark:text-gray-500 text-center mt-1">
-          {new Date().toLocaleString()}
-        </p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 text-center mt-1">
+              {new Date().toLocaleString()}
+            </p>
 
-        <p className="text-sm mt-2 text-gray-700 dark:text-gray-300 text-center italic">
-          {verdict}
-        </p>
+            <p className="text-sm mt-2 text-gray-700 dark:text-gray-300 text-center italic">
+              {verdict}
+            </p>
+          </div>
 
+          <div>
         {Array.isArray(detail) && detail.length > 0 ? (
-          <div className="mt-4">
+          <div className="mt-2 md:mt-0">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
               Recent spikes:
             </h3>
-            <ul className="text-sm text-gray-600 dark:text-gray-400 max-h-40 overflow-y-auto space-y-0.5">
+            <ul className="text-sm text-gray-600 dark:text-gray-400 max-h-48 overflow-y-auto space-y-0.5">
               {detail.slice().reverse().slice(0, 10).map((d, i) => (
                 <li key={i} className="py-0.5">
                   {new Date(d.date).toLocaleDateString()} — {d.spikePct.toFixed(1)}%{" "}
@@ -114,12 +117,14 @@ export default function DroppinessCard({
             </ul>
           </div>
         ) : (
-          <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="mt-2 md:mt-0 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400 text-center italic">
               No qualifying spikes detected in the last 18 months. The score reflects the neutral prior (50%).
             </p>
           </div>
         )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

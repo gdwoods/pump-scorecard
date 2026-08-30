@@ -31,6 +31,8 @@ import type { FastVerdict } from "@/lib/fast/types";
 import { enrichFastVerdictFromShortCheck } from "@/lib/fast/enrichFromShortCheck";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
 import { SHOW_FAST_VERDICT_ON_SHORT_CHECK, SHOW_AI_THESIS } from "@/lib/config/features";
+import { PAGE_CONTENT_CLASS } from "@/lib/ui/pageLayout";
+import { PairGrid } from "@/components/layout/PairGrid";
 
 function buildDisplayFastVerdict(
   fastVerdict: FastVerdict | null,
@@ -370,9 +372,26 @@ export default function ShortCheckPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, result]);
 
+  const showMarketData = Boolean(ticker && pumpScorecardData && !loadingPumpData);
+
+  const droppinessBlock =
+    ticker && pumpScorecardData?.droppinessScore !== undefined ? (
+      <DroppinessCard
+        ticker={ticker.toUpperCase()}
+        score={pumpScorecardData.droppinessScore}
+        detail={pumpScorecardData.droppinessDetail || []}
+        verdict={pumpScorecardData.droppinessVerdict || "No verdict available"}
+      />
+    ) : null;
+
+  const scatterBlock =
+    showMarketData ? (
+      <DroppinessScatter detail={pumpScorecardData.droppinessDetail || []} ticker={ticker} />
+    ) : null;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
-      <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
+      <div className={PAGE_CONTENT_CLASS}>
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -529,7 +548,6 @@ export default function ShortCheckPage() {
             extractedData={extractedData || undefined}
             pumpScorecardData={pumpScorecardData}
             afterQuickActions={fastVerdictCard}
-            afterFastVerdict={<>{capitalPressureBlock}{aiThesisBlock}</>}
             synopsisInVerdictStack={verdictStackActive}
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
@@ -564,37 +582,17 @@ export default function ShortCheckPage() {
           </Card>
         )}
 
-        {/* Droppiness Card - Show when we have ticker (with or without Short Check result) */}
-        {ticker && pumpScorecardData?.droppinessScore !== undefined && (
-          <DroppinessCard
-            ticker={ticker.toUpperCase()}
-            score={pumpScorecardData.droppinessScore}
-            detail={pumpScorecardData.droppinessDetail || []}
-            verdict={pumpScorecardData.droppinessVerdict || "No verdict available"}
-          />
-        )}
+        {/* Quick Ticker path — Fast Verdict before market enrichment */}
+        {hasAnalyzedTicker && !result && fastVerdictCard}
 
-        {/* Droppiness Scatter Plot - Full Width */}
-        {ticker && pumpScorecardData && !loadingPumpData && (
-          <DroppinessScatter detail={pumpScorecardData.droppinessDetail || []} ticker={ticker} />
-        )}
-
-        {/* Quick Ticker only — Fast Verdict after droppiness gauge + scatter */}
-        {hasAnalyzedTicker &&
-          !result &&
-          !loadingPumpData &&
-          pumpScorecardData?.droppinessScore !== undefined &&
-          fastVerdictCard}
-
-        {hasAnalyzedTicker && !result && capitalPressureBlock}
-
-        {hasAnalyzedTicker && !result && aiThesisBlock}
-
-        {/* Additional Pump Scorecard Cards - Show when we have ticker data */}
-        {ticker && pumpScorecardData && !loadingPumpData && (
+        {/* Unified scan enrichment — same layout for DT screenshot and Quick Ticker paths */}
+        {showMarketData && (
           <>
-            {/* Score Breakdown and Fundamentals */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <PairGrid first={capitalPressureBlock} second={aiThesisBlock} breakpoint="xl" />
+
+            <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <Fundamentals result={pumpScorecardData} />
               <SecFilings
                 ticker={ticker}
@@ -603,35 +601,32 @@ export default function ShortCheckPage() {
               />
             </div>
 
-            {/* Social Sentiment — below Capital Pressure */}
             {pumpScorecardData.sentiment && (
               <SentimentCard ticker={ticker.toUpperCase()} sentiment={pumpScorecardData.sentiment} />
             )}
 
-            {/* Price and Volume Chart - Full Width */}
             <Chart result={pumpScorecardData} />
 
-            {/* Insider Transactions Table */}
-            {pumpScorecardData.insiderTransactions && pumpScorecardData.insiderTransactions.length > 0 && (
-              <InsiderTransactionOverlay
-                transactions={pumpScorecardData.insiderTransactions}
-                history={pumpScorecardData.history || []}
-              />
-            )}
-          </>
-        )}
+            {pumpScorecardData.insiderTransactions &&
+              pumpScorecardData.insiderTransactions.length > 0 && (
+                <InsiderTransactionOverlay
+                  transactions={pumpScorecardData.insiderTransactions}
+                  history={pumpScorecardData.history || []}
+                />
+              )}
 
-        {ticker && pumpScorecardData && !loadingPumpData && (
-          <>
-            <NewsSection ticker={ticker} items={pumpScorecardData.news || []} />
-
-            {/* Borrow Desk Card */}
-            {pumpScorecardData.borrowData && (
-              <BorrowDeskCard
-                ticker={ticker.toUpperCase()}
-                borrowData={pumpScorecardData.borrowData}
-              />
-            )}
+            <PairGrid
+              breakpoint="lg"
+              first={<NewsSection ticker={ticker} items={pumpScorecardData.news || []} />}
+              second={
+                pumpScorecardData.borrowData ? (
+                  <BorrowDeskCard
+                    ticker={ticker.toUpperCase()}
+                    borrowData={pumpScorecardData.borrowData}
+                  />
+                ) : null
+              }
+            />
           </>
         )}
 
