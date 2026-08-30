@@ -121,11 +121,6 @@ function generateQuickSummary(
     lines.push('');
   }
 
-  // Pump Risk (if available)
-  if (pumpScorecardData?.weightedRiskScore !== undefined) {
-    lines.push(`Pump Risk: ${pumpScorecardData.weightedRiskScore.toFixed(1)} - ${pumpScorecardData.summaryVerdict || 'N/A'}`);
-  }
-
   return lines.join('\n');
 }
 
@@ -247,19 +242,6 @@ function generateFullSummary(
       }
       if (pumpScorecardData.droppinessDetail && pumpScorecardData.droppinessDetail.length > 0) {
         lines.push(`Spike History: ${pumpScorecardData.droppinessDetail.length} spikes analyzed`);
-      }
-      lines.push('');
-    }
-
-    // Pump Risk Scorecard
-    if (pumpScorecardData.weightedRiskScore !== undefined) {
-      lines.push('PUMP RISK SCORECARD:');
-      lines.push(`Weighted Risk Score: ${pumpScorecardData.weightedRiskScore.toFixed(1)}`);
-      if (pumpScorecardData.summaryVerdict) {
-        lines.push(`Verdict: ${pumpScorecardData.summaryVerdict}`);
-      }
-      if (pumpScorecardData.summaryText) {
-        lines.push(pumpScorecardData.summaryText);
       }
       lines.push('');
     }

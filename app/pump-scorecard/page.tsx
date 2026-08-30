@@ -120,7 +120,19 @@ export default function Page() {
       const res = await fetch("/api/export-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: result.ticker }),
+        body: JSON.stringify({
+          ticker: result.ticker,
+          scan: {
+            ticker: result.ticker,
+            companyName: result.companyName,
+            lastPrice: result.lastPrice,
+            droppinessScore: result.droppinessScore,
+            droppinessVerdict: result.droppinessVerdict,
+            capitalPressure: result.capitalPressure,
+            marketCap: result.marketCap,
+            floatShares: result.floatShares,
+          },
+        }),
       });
       if (!res.ok) throw new Error("PDF export failed");
 
@@ -236,8 +248,6 @@ export default function Page() {
           <AiThesisCard
             ticker={activeTicker}
             scanData={{
-              weightedRiskScore: result.weightedRiskScore,
-              summaryVerdict: result.summaryVerdict,
               droppinessVerdict: result.droppinessVerdict,
               capitalPressure: result.capitalPressure,
               news: result.news,

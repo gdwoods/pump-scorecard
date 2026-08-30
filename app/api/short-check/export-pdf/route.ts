@@ -318,42 +318,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Pump Risk Scorecard
-      if (pumpScorecardData.weightedRiskScore !== undefined) {
-        yPosition = addSectionHeader('Pump Risk Scorecard', yPosition);
-        yPosition -= 10;
-
-        const riskColor = pumpScorecardData.weightedRiskScore >= 70
-          ? rgb(0.8, 0, 0)
-          : pumpScorecardData.weightedRiskScore >= 40
-            ? rgb(0.8, 0.6, 0)
-            : rgb(0, 0.6, 0);
-
-        currentPage.drawText(`Weighted Risk Score: ${pumpScorecardData.weightedRiskScore.toFixed(1)}`, {
-          x: margin,
-          y: yPosition,
-          size: 14,
-          font: boldFont,
-          color: riskColor,
-        });
-        yPosition -= lineHeight;
-
-        if (pumpScorecardData.summaryVerdict) {
-          currentPage.drawText(`Verdict: ${pumpScorecardData.summaryVerdict}`, {
-            x: margin,
-            y: yPosition,
-            size: 12,
-            font: font,
-          });
-          yPosition -= lineHeight;
-        }
-
-        if (pumpScorecardData.summaryText) {
-          yPosition = addText(pumpScorecardData.summaryText, margin, yPosition, 10, false);
-          yPosition -= sectionSpacing;
-        }
-      }
-
       // Fundamentals
       if (pumpScorecardData.marketCap || pumpScorecardData.floatShares) {
         yPosition = addSectionHeader('Fundamentals', yPosition);
