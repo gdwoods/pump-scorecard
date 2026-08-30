@@ -7,9 +7,19 @@ import { formatTaggedClaimPlain, parseInlineClaimTag } from '@/lib/claims';
 import type { AiThesisResult } from '@/lib/ai/types';
 import type { ForensicFactPack } from './types';
 
+export type BriefSectionKind =
+  | 'snapshot'
+  | 'alerts'
+  | 'conflicts'
+  | 'prose'
+  | 'bullets'
+  | 'catalysts'
+  | 'forward-dates';
+
 export interface BriefSection {
   title: string;
   lines: string[];
+  kind?: BriefSectionKind;
 }
 
 /** Format inline VERIFY:/CONFLICT:/OPINION: prose for PDF/plain export. */
@@ -67,13 +77,14 @@ export function buildBriefSections(
     );
   }
   if (snapshotLines.length) {
-    sections.push({ title: '1. Snapshot', lines: snapshotLines });
+    sections.push({ title: '1. Snapshot', lines: snapshotLines, kind: 'snapshot' });
   }
 
   if (factPack.alerts.length) {
     sections.push({
       title: '2. Alerts (binding / high-signal)',
       lines: factPack.alerts.map((a) => formatTaggedClaimPlain(a)),
+      kind: 'alerts',
     });
   }
 
@@ -81,6 +92,7 @@ export function buildBriefSections(
     sections.push({
       title: '3. Conflicts (EDGAR/scan governs)',
       lines: factPack.conflicts.map((c) => formatTaggedClaimPlain(c)),
+      kind: 'conflicts',
     });
   }
 
@@ -88,6 +100,7 @@ export function buildBriefSections(
     sections.push({
       title: '4. Rubric',
       lines: factPack.rubric.map((r) => `${r.label}: ${r.value}`),
+      kind: 'bullets',
     });
   }
 
@@ -95,6 +108,7 @@ export function buildBriefSections(
     sections.push({
       title: '5. SEC evidence notes',
       lines: factPack.notes,
+      kind: 'bullets',
     });
   }
 
@@ -103,6 +117,7 @@ export function buildBriefSections(
       sections.push({
         title: '6. Data gaps',
         lines: factPack.dataGaps.map((g) => formatTaggedClaimPlain(g)),
+        kind: 'bullets',
       });
     }
     return sections;
@@ -112,23 +127,27 @@ export function buildBriefSections(
     sections.push({
       title: '6. Regulatory alert',
       lines: [formatProseForExport(thesis.regulatoryAlert)],
+      kind: 'alerts',
     });
   }
 
   sections.push({
     title: '7. Summary',
     lines: [formatProseForExport(thesis.summary)],
+    kind: 'prose',
   });
 
   sections.push({
     title: '8. Thesis',
     lines: thesis.thesis.split(/\n\n+/).map(formatProseForExport).filter(Boolean),
+    kind: 'prose',
   });
 
   if (thesis.rubricNarrative?.trim()) {
     sections.push({
       title: '9. Rubric narrative',
       lines: [formatProseForExport(thesis.rubricNarrative)],
+      kind: 'prose',
     });
   }
 
@@ -136,6 +155,7 @@ export function buildBriefSections(
     sections.push({
       title: '10. CEO lens (issuer constraints)',
       lines: [formatProseForExport(thesis.ceoLens)],
+      kind: 'prose',
     });
   }
 
@@ -143,6 +163,7 @@ export function buildBriefSections(
     sections.push({
       title: '11. Trader lens (setup mechanics)',
       lines: [formatProseForExport(thesis.traderLens)],
+      kind: 'prose',
     });
   }
 
@@ -151,8 +172,9 @@ export function buildBriefSections(
       title: '12. Catalysts',
       lines: thesis.catalysts.map(
         (c) =>
-          `[${c.significance.toUpperCase()}] ${c.description}${c.date ? ` (${c.date})` : ''} — ${c.rationale}`
+          `[${c.significance.toUpperCase()}] ${c.description}${c.date ? ` (${c.date})` : ''} - ${c.rationale}`
       ),
+      kind: 'catalysts',
     });
   }
 
@@ -163,6 +185,7 @@ export function buildBriefSections(
         (f) =>
           `${f.date}: ${f.event} [${f.significance}]${f.tag ? ` (${f.tag.toUpperCase()})` : ''}`
       ),
+      kind: 'forward-dates',
     });
   }
 
@@ -171,13 +194,14 @@ export function buildBriefSections(
     ...(thesis.dataGaps ?? []).map(formatProseForExport),
   ];
   if (gapLines.length) {
-    sections.push({ title: '14. Data gaps', lines: gapLines });
+    sections.push({ title: '14. Data gaps', lines: gapLines, kind: 'bullets' });
   }
 
   if (thesis.keyRisks.length) {
     sections.push({
       title: '15. What could invalidate this',
       lines: thesis.keyRisks.map(formatProseForExport),
+      kind: 'bullets',
     });
   }
 
@@ -196,7 +220,7 @@ export function formatBriefPlainText(
 
   if (thesis?.reportVersion) lines.push(`Report: ${thesis.reportVersion}`);
   if (thesis?.generatedAt) lines.push(`Generated: ${thesis.generatedAt}`);
-  if (thesis?.model) lines.push(`Model: ${thesis.model}`);
+  if (thesis?.model) lines.push(`Model: Groq (${thesis.model})`);
   lines.push('');
 
   for (const section of buildBriefSections(factPack, thesis)) {
