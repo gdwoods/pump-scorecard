@@ -23,8 +23,10 @@ export interface GroqCallResult {
   success: boolean;
   content?: string;
   error?: string;
-  /** Groq error code when present (e.g. json_validate_failed). */
+  /** Groq error code when present (e.g. json_validate_failed, rate_limit). */
   errorCode?: string;
+  /** Seconds to wait before retrying, when Groq returns 429. */
+  retryAfterSec?: number;
 }
 
 /** Injectable so route/prompt logic can be verified without a live network call or API key. */
@@ -87,9 +89,18 @@ export async function callGroq(
 
     if (!response.ok) {
       if (response.status === 429) {
+        const retryAfterHeader = response.headers.get('retry-after');
+        const retryAfterSec = retryAfterHeader
+          ? Math.max(1, Number.parseInt(retryAfterHeader, 10) || 60)
+          : 60;
         return {
           success: false,
-          error: 'Groq rate limit reached — try again in a few minutes.',
+          errorCode: 'rate_limit',
+          retryAfterSec,
+          error:
+            retryAfterSec >= 60
+              ? `Groq rate limit reached — try again in about ${Math.ceil(retryAfterSec / 60)} minute(s).`
+              : `Groq rate limit reached — try again in ${retryAfterSec} seconds.`,
         };
       }
       const bodyText = await response.text().catch(() => '');

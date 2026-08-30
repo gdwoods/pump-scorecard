@@ -199,13 +199,16 @@ async function testCallGroqSuccess() {
 }
 
 async function testCallGroqRateLimit() {
-  const mockFetcher: GroqFetcher = async () => new Response('rate limited', { status: 429 });
+  const mockFetcher: GroqFetcher = async () =>
+    new Response('rate limited', { status: 429, headers: { 'retry-after': '120' } });
   const originalKey = process.env.GROQ_API_KEY;
   process.env.GROQ_API_KEY = 'test-key';
   const result = await callGroq([{ role: 'user', content: 'hi' }], { fetcher: mockFetcher });
   process.env.GROQ_API_KEY = originalKey;
   assert(result.success === false, 'callGroq returns failure on 429');
-  assert(!!result.error?.includes('rate limit'), 'callGroq surfaces a clear rate-limit message');
+  assert(result.errorCode === 'rate_limit', 'callGroq tags rate_limit error code');
+  assert(result.retryAfterSec === 120, 'callGroq parses retry-after header');
+  assert(!!result.error?.includes('minute'), 'callGroq surfaces retry timing in message');
 }
 
 async function testCallGroqNoKey() {
