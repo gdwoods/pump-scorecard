@@ -22,7 +22,7 @@ It is a **research signal**, not a short label and not proof of dilution.
 | Item | Detail |
 |------|--------|
 | Lookback | **12 months** for events; **24 months** only for S-1/S-3/F-1/F-3 registration capacity |
-| Overall score | Capped **+10** bonus from CP score when `INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE` is on |
+| Overall score | **Not** included in deprecated `weightedRiskScore` (use CP card + Short Check instead) |
 | Docs | [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md) |
 | Code | `lib/capitalPressure/`, `lib/capitalPressureScoring.ts`, `components/CapitalPressureCard.tsx` |
 

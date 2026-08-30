@@ -4,22 +4,36 @@ import { useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import AppNav from "@/components/AppNav";
-import type { FastVerdict } from "@/lib/fast/types";
+import type { FastVerdict, FastVerdictKind } from "@/lib/fast/types";
 
 type Row = {
   ticker: string;
   status: "pending" | "ok" | "error";
   fastVerdict?: FastVerdict | null;
-  pumpScore?: number | null;
+  droppinessScore?: number | null;
   cpScore?: number | null;
   cpStatus?: string | null;
   error?: string;
+};
+
+const FAST_BADGE: Record<FastVerdictKind, string> = {
+  NO_TRADE: "bg-red-600 text-white",
+  WATCH: "bg-amber-500 text-white",
+  REVIEW: "bg-sky-600 text-white",
 };
 
 function parseTickers(raw: string): string[] {
   return [...new Set(raw.split(/[\s,]+/).map((t) => t.trim().toUpperCase()).filter(Boolean))].slice(
     0,
     20
+  );
+}
+
+function FastBadge({ verdict }: { verdict: FastVerdictKind }) {
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${FAST_BADGE[verdict]}`}>
+      {verdict.replace("_", " ")}
+    </span>
   );
 }
 
@@ -50,7 +64,7 @@ export default function WatchlistPage() {
                     ticker,
                     status: "ok",
                     fastVerdict: fastJson,
-                    pumpScore: scanJson?.weightedRiskScore ?? null,
+                    droppinessScore: scanJson?.droppinessScore ?? null,
                     cpScore: scanJson?.capitalPressure?.score ?? null,
                     cpStatus: scanJson?.capitalPressure?.status ?? null,
                   }
@@ -83,7 +97,7 @@ export default function WatchlistPage() {
           <div>
             <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400">Watchlist</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Scan up to 20 tickers in parallel — Fast Verdict + Pump risk + Capital Pressure.
+              Scan up to 20 tickers in parallel — Fast Verdict, Droppiness, and Capital Pressure.
             </p>
           </div>
           <AppNav />
@@ -117,7 +131,7 @@ export default function WatchlistPage() {
                 <tr>
                   <th className="px-3 py-2">Ticker</th>
                   <th className="px-3 py-2">Fast</th>
-                  <th className="px-3 py-2">Pump</th>
+                  <th className="px-3 py-2">Drop</th>
                   <th className="px-3 py-2">CP</th>
                   <th className="px-3 py-2"></th>
                 </tr>
@@ -131,20 +145,29 @@ export default function WatchlistPage() {
                       {row.status === "error" && (
                         <span className="text-red-600 dark:text-red-400">{row.error}</span>
                       )}
-                      {row.status === "ok" && (row.fastVerdict?.verdict ?? "—")}
+                      {row.status === "ok" && row.fastVerdict?.verdict && (
+                        <FastBadge verdict={row.fastVerdict.verdict} />
+                      )}
+                      {row.status === "ok" && !row.fastVerdict?.verdict && "—"}
                     </td>
                     <td className="px-3 py-2">
-                      {row.pumpScore != null ? row.pumpScore : "—"}
+                      {row.droppinessScore != null ? row.droppinessScore : "—"}
                     </td>
                     <td className="px-3 py-2">
                       {row.cpScore != null ? `${row.cpScore} (${row.cpStatus})` : "—"}
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-2 text-right space-x-2">
                       <Link
                         href={`/fast-scan?t=${row.ticker}`}
                         className="text-blue-600 dark:text-blue-400 underline"
                       >
-                        Open
+                        Fast
+                      </Link>
+                      <Link
+                        href={`/short-check/${row.ticker}`}
+                        className="text-blue-600 dark:text-blue-400 underline"
+                      >
+                        Short
                       </Link>
                     </td>
                   </tr>

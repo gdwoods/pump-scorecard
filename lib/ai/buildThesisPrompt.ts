@@ -132,10 +132,12 @@ export function buildThesisMessages(input: ThesisPromptInput): GroqChatMessage[]
   if (input.scan) {
     const s = input.scan;
     parts.push('\n--- Pump Scorecard / live scan data ---');
-    if (s.weightedRiskScore !== undefined || s.summaryVerdict) {
-      parts.push(`Pump risk score: ${s.weightedRiskScore ?? 'n/a'} — ${s.summaryVerdict ?? 'n/a'}`);
-    }
     if (s.droppinessVerdict) parts.push(`Droppiness: ${s.droppinessVerdict}`);
+    if (s.weightedRiskScore !== undefined) {
+      parts.push(
+        `(Deprecated legacy scan score ${s.weightedRiskScore} — ${s.summaryVerdict ?? 'n/a'}; ignore for decisions.)`
+      );
+    }
     if (s.capitalPressure) {
       const cp = s.capitalPressure;
       parts.push(

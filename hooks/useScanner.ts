@@ -31,7 +31,9 @@ export interface ScanResult {
     droppinessDetail: any[];
     droppinessVerdict: string;
     borrowData: any;
+    /** @deprecated Legacy headline heuristic — prefer Fast Verdict, Short Check, CP. */
     weightedRiskScore: number;
+    weightedRiskScoreDeprecated?: boolean;
     summaryVerdict: "Low risk" | "Moderate risk" | "High risk";
     summaryText: string;
     sudden_volume_spike: boolean;

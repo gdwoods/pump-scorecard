@@ -194,9 +194,9 @@ useEffect(() => {
   let score = result?.weightedRiskScore ?? 0;
   const log: { label: string; value: number; color?: string; actualValue?: string | number }[] = [];
 
-  // --- Base model (only once)
+  // --- Legacy scan signals (vol/price spike, S-1/424B, country — no fraud/droppiness)
   log.push({
-    label: "Base model risk",
+    label: "Legacy scan signals",
     value: score,
     color: "text-gray-400 italic",
   });

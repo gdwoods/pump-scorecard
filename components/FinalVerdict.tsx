@@ -36,7 +36,7 @@ export default function FinalVerdict({
 
   // ✅ Filter out any accidental duplicate "Base model risk"
   const filteredLog = scoreLog.filter(
-    (item) => !/base model/i.test(item.label)
+    (item) => !/base model|legacy scan/i.test(item.label)
   );
 
   const totalScore = baseScore + filteredLog.reduce((a, b) => a + b.value, 0);

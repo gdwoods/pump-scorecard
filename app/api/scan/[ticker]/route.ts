@@ -11,7 +11,7 @@ import { computeDroppiness } from "@/lib/droppiness/compute";
 import { persistDroppiness } from "@/lib/droppiness/kv";
 import { runCapitalPressure } from "@/lib/capitalPressure/run";
 import { unavailableCapitalPressure } from "@/lib/capitalPressure/unavailable";
-import { INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE } from "@/lib/config/features";
+import { computeLegacyWeightedRiskScore } from "@/lib/scan/legacyWeightedRiskScore";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -758,19 +758,23 @@ try {
     const sudden_volume_spike = !!(latest as { volume?: number }).volume && avgVol > 0 && ((latest as { volume?: number }).volume || 0) > avgVol * 3;
     const sudden_price_spike = ((latest as { close?: number }).close || 0) > ((prev as { close?: number }).close || (latest as { close?: number }).close || 0) * 1.25;
 
-    let weightedRiskScore = 0;
-    if (sudden_volume_spike) weightedRiskScore += 20;
-    if (sudden_price_spike) weightedRiskScore += 20;
-    if (secData.filings.some((f: Filing) => f.title.includes("S-1") || f.title.includes("424B"))) weightedRiskScore += 20;
-    if (fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual")) weightedRiskScore += 20;
-
     const droppinessScore = droppinessData.score;
-    if (droppinessScore >= 70) weightedRiskScore -= 15;
-    else if (droppinessScore < 40) weightedRiskScore += 15;
-
     const RISKY = new Set(["China", "Hong Kong", "Malaysia", "Singapore"]);
-    if (RISKY.has(country)) weightedRiskScore += 15;
-    if (weightedRiskScore < 0) weightedRiskScore = 0;
+    const dilution_offering = secData.filings.some(
+      (f: Filing) => f.title.includes("S-1") || f.title.includes("424B")
+    );
+    const risky_country = RISKY.has(country);
+
+    const {
+      weightedRiskScore,
+      summaryVerdict,
+      summaryText,
+    } = computeLegacyWeightedRiskScore({
+      suddenVolumeSpike: sudden_volume_spike,
+      suddenPriceSpike: sudden_price_spike,
+      dilutionOffering: dilution_offering,
+      riskyCountry: risky_country,
+    });
 
     let droppinessVerdict = "Mixed behavior — some spikes retraced quickly, while others held their gains.";
     if (droppinessScore === 0 && !droppinessData.detail.length) {
@@ -781,7 +785,6 @@ try {
       droppinessVerdict = "Spikes often hold — many large moves remained elevated after the initial run-up.";
     }
 
-    // Capital Pressure (+ optional capped bonus applied to weightedRiskScore below)
     let capitalPressure;
     try {
       capitalPressure = await runCapitalPressure({
@@ -816,21 +819,6 @@ try {
       );
     }
 
-    if (INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE && capitalPressure?.available) {
-      const cpBonus = Math.min(10, Math.round((capitalPressure.score ?? 0) / 10));
-      weightedRiskScore = Math.min(100, weightedRiskScore + cpBonus);
-    }
-
-    let summaryVerdict: "Low risk" | "Moderate risk" | "High risk" = "Low risk";
-    if (weightedRiskScore >= 70) summaryVerdict = "High risk";
-    else if (weightedRiskScore >= 40) summaryVerdict = "Moderate risk";
-
-    const summaryText = summaryVerdict === "Low risk"
-        ? "This one looks pretty clean — no major pump-and-dump signals right now."
-        : summaryVerdict === "Moderate risk"
-        ? "Worth keeping an eye on. Not screaming pump yet, but caution is warranted."
-        : "This stock is lighting up the board — multiple risk signals make it look like a prime pump-and-dump candidate.";
-
     const responseData = {
       ticker: upperTicker,
       companyName: quote.longName || quote.shortName || upperTicker,
@@ -863,15 +851,16 @@ try {
       droppinessVerdict,
       borrowData,
       weightedRiskScore,
+      weightedRiskScoreDeprecated: true,
       summaryVerdict,
       summaryText,
       sudden_volume_spike,
       sudden_price_spike,
-      dilution_offering: secData.filings.some((f: Filing) => f.title.includes("S-1") || f.title.includes("424B")),
+      dilution_offering,
       promoted_stock: promotions.length > 0 && promotions[0].type !== "Manual Check",
       fraud_evidence: fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual") && !fraudImages[0].caption?.includes("Blocked"),
       fraud_api_blocked: fraudApiBlocked,
-      risky_country: RISKY.has(country),
+      risky_country,
       hasOptions,
       news,
       sentiment: sentimentData,

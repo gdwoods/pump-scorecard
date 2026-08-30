@@ -14,7 +14,7 @@ It is **not** a trade recommendation and does **not** label a ticker a short. Di
 
 Optional field on `GET /api/scan/[ticker]`: `capitalPressure`. Existing clients ignore unknown keys.
 
-**Overall Pump Scorecard weights are unchanged.** `INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE` in `lib/config/features.ts` stays `false` until a deliberate weight experiment.
+**Overall Pump Scorecard weights are unchanged.** `weightedRiskScore` is deprecated (legacy vol/price/filing/country flags only). Capital Pressure is shown separately — not folded into that headline number.
 
 ---
 

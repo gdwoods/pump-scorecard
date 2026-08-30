@@ -38,9 +38,9 @@ export default function CombinedPumpRiskCard({
     let score = pumpScorecardData.weightedRiskScore ?? 0;
     const breakdown: Array<{ label: string; value: number; color?: string; actualValue?: string | number }> = [];
 
-    // --- Base model (only once)
+    // --- Legacy scan signals (vol/price spike, S-1/424B, country)
     breakdown.push({
-      label: "Base model risk",
+      label: "Legacy scan signals",
       value: score,
       color: "text-gray-400 italic",
     });
