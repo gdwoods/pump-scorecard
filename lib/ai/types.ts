@@ -14,13 +14,41 @@ export interface AiThesisCatalyst {
 export interface AiThesisResult {
   /** 2-3 sentence at-a-glance summary. */
   summary: string;
-  /** Full synthesis paragraph(s) tying the scored factors into a coherent thesis. */
+  /** Full synthesis paragraph(s) tying the scored factors into a coherent narrative. */
   thesis: string;
   catalysts: AiThesisCatalyst[];
   /** What would invalidate this thesis / what the model is least confident about. */
   keyRisks: string[];
   model: string;
   generatedAt: string;
+}
+
+export interface ThesisSecEvidence {
+  form: string;
+  filingDate: string;
+  excerpt: string;
+  accessionNumber?: string;
+  documentUrl?: string;
+}
+
+export interface ThesisCapitalPressureReason {
+  label: string;
+  points: number;
+  evidence?: ThesisSecEvidence;
+}
+
+export interface ThesisCapitalPressureEvent {
+  eventDate: string;
+  type: string;
+  title: string;
+  description?: string;
+  evidence?: ThesisSecEvidence;
+}
+
+export interface ThesisDroppinessSpike {
+  date: string;
+  spikePct: number;
+  retraced: boolean;
 }
 
 export interface ThesisPromptInput {
@@ -31,6 +59,8 @@ export interface ThesisPromptInput {
     walkAwayFlags: string[];
     alertLabels: Array<{ label: string; color: string }>;
     actualValues?: Record<string, string | undefined>;
+    /** 0–1 populated-component fraction from Short Check scorer. */
+    dataCompleteness?: number;
   };
   extractedData?: {
     recentNews?: string;
@@ -44,11 +74,14 @@ export interface ThesisPromptInput {
     weightedRiskScore?: number;
     summaryVerdict?: string;
     droppinessVerdict?: string;
+    droppinessScore?: number;
+    droppinessDetail?: ThesisDroppinessSpike[];
     capitalPressure?: {
       score: number;
       status: string;
       summary: string;
-      reasons: Array<{ label: string; points: number }>;
+      reasons?: ThesisCapitalPressureReason[];
+      events?: ThesisCapitalPressureEvent[];
     };
     news?: Array<{
       title?: string;
@@ -79,6 +112,10 @@ export interface FastVerdictPromptSlice {
   babyShelfCapacity: number | null;
   capacityQuarters: number | null;
   derivedOfferingAbility: string;
+  borrowAvailable: boolean | null;
+  borrowFeePct: number | null;
+  /** 0–1 source availability fraction from fast evaluator. */
+  dataCompleteness: number;
   unavailable: string[];
 }
 

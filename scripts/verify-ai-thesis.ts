@@ -63,6 +63,7 @@ const fullInput: ThesisPromptInput = {
     walkAwayFlags: ['Baby Shelf Critical (I.B.6): $21.31M annual shelf capacity ~ 39 days of burn'],
     alertLabels: [{ label: 'BABY_SHELF_CRITICAL', color: 'red' }],
     actualValues: { cashNeed: '$50.0M burn', offeringAbility: '$21.31M annual shelf capacity ~ 39 days of burn' },
+    dataCompleteness: 0.42,
   },
   extractedData: {
     recentNews: 'Announces reverse split',
@@ -75,11 +76,28 @@ const fullInput: ThesisPromptInput = {
     weightedRiskScore: 40,
     summaryVerdict: 'Moderate risk',
     droppinessVerdict: 'Spikes usually fade quickly',
+    droppinessScore: 72,
+    droppinessDetail: [
+      { date: '2026-06-12', spikePct: 40.2, retraced: true },
+      { date: '2026-05-03', spikePct: 28.5, retraced: false },
+    ],
     capitalPressure: {
       score: 77,
       status: 'high',
       summary: 'High capital pressure',
-      reasons: [{ label: 'Active ATM/ELOC with confirmed draw', points: 22 }],
+      reasons: [
+        {
+          label: 'Active ATM/ELOC with confirmed draw',
+          points: 22,
+          evidence: {
+            form: '10-Q',
+            filingDate: '2026-08-01',
+            excerpt:
+              'During the quarter the Company issued 1,250,000 shares under the ELOC for aggregate proceeds of $3.1 million.',
+            accessionNumber: '0001234567-26-000123',
+          },
+        },
+      ],
     },
     news: [{ title: 'Announces reverse split', date: '2026-08-15' }],
     insiderTransactionsCount: 3,
@@ -101,6 +119,14 @@ assert(userContent.includes('BINDING'), 'user message marks walk-away flags as b
 assert(userContent.includes('2026-08-15'), 'user message includes catalyst date');
 assert(userContent.includes('Deprecated legacy scan score'), 'user message marks legacy pump score deprecated');
 assert(userContent.includes('77/100'), 'user message includes Capital Pressure score');
+assert(userContent.includes('Excerpt:'), 'user message includes SEC filing excerpt');
+assert(userContent.includes('ELOC'), 'user message includes filing excerpt text');
+assert(userContent.includes('2026-06-12'), 'user message includes droppiness spike date');
+assert(userContent.includes('retraced'), 'user message includes droppiness spike outcome');
+assert(userContent.includes('Borrow: available'), 'user message includes borrow availability');
+assert(userContent.includes('Short Check data completeness: 42%'), 'user message includes short check completeness');
+assert(userContent.includes('Fast Verdict data completeness: 90%'), 'user message includes fast verdict completeness');
+assert(userContent.includes('filing count only'), 'user message clarifies insider count limitation');
 
 const minimalMessages = buildThesisMessages({
   ticker: 'ABCD',

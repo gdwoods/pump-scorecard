@@ -20,6 +20,9 @@ export function fastVerdictToPromptSlice(verdict: FastVerdict): FastVerdictPromp
     babyShelfCapacity: verdict.dilution.babyShelfCapacity,
     capacityQuarters: verdict.dilution.capacityQuarters,
     derivedOfferingAbility: verdict.dilution.derivedOfferingAbility,
+    borrowAvailable: verdict.borrow.available,
+    borrowFeePct: verdict.borrow.feePct,
+    dataCompleteness: verdict.dataCompleteness,
     unavailable: verdict.unavailable,
   };
 }

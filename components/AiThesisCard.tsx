@@ -8,19 +8,28 @@ import { fastVerdictToPromptSlice } from "@/lib/ai/fastVerdictPrompt";
 import type { ShortCheckResult } from "@/lib/shortCheckScoring";
 import type { ExtractedData } from "@/lib/shortCheckTypes";
 import type { FastVerdict } from "@/lib/fast/types";
-import type { AiThesisResult, ThesisPromptInput } from "@/lib/ai/types";
+import type { AiThesisResult, ThesisPromptInput, ThesisSecEvidence } from "@/lib/ai/types";
 
 interface CapitalPressureSummary {
   score: number;
   status: string;
   summary: string;
-  reasons: Array<{ label: string; points: number }>;
+  reasons?: Array<{ label: string; points: number; evidence?: ThesisSecEvidence }>;
+  events?: Array<{
+    eventDate: string;
+    type: string;
+    title: string;
+    description?: string;
+    evidence?: ThesisSecEvidence;
+  }>;
 }
 
 interface ScanDataForThesis {
   weightedRiskScore?: number;
   summaryVerdict?: string;
   droppinessVerdict?: string;
+  droppinessScore?: number;
+  droppinessDetail?: Array<{ date: string; spikePct: number; retraced: boolean }>;
   capitalPressure?: CapitalPressureSummary;
   news?: Array<{ title?: string; headline?: string; date?: string; published?: string | number | null }>;
   insiderTransactions?: unknown[];
@@ -103,6 +112,7 @@ export default function AiThesisCard({
             walkAwayFlags: result.walkAwayFlags,
             alertLabels: result.alertLabels,
             actualValues: result.scoreBreakdown?.actualValues,
+            dataCompleteness: result.dataCompleteness,
           }
         : undefined,
       extractedData: extractedData
@@ -120,6 +130,8 @@ export default function AiThesisCard({
             weightedRiskScore: scanData.weightedRiskScore,
             summaryVerdict: scanData.summaryVerdict,
             droppinessVerdict: scanData.droppinessVerdict,
+            droppinessScore: scanData.droppinessScore,
+            droppinessDetail: scanData.droppinessDetail,
             capitalPressure: scanData.capitalPressure,
             news: scanData.news,
             insiderTransactionsCount: Array.isArray(scanData.insiderTransactions)

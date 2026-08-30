@@ -61,10 +61,10 @@ The constant is exported as `SYSTEM_PROMPT` for tests.
 
 | Section | Source | Contents |
 |---------|--------|----------|
-| Fast Verdict | `input.fastVerdict` | Verdict, binding flags, runner class, droppiness, news class, baby-shelf, offering ability |
-| Short Check | `input.shortCheck` | Rating %, category, walk-aways, alert labels, `actualValues` from score breakdown |
+| Fast Verdict | `input.fastVerdict` | Verdict, binding flags, runner class, droppiness, news class, **borrow availability/fee**, **data completeness**, baby-shelf, offering ability |
+| Short Check | `input.shortCheck` | Rating %, category, **data completeness**, walk-aways, alert labels, `actualValues` from score breakdown |
 | DT / manual | `input.extractedData` | Offering badge, price, spike %, news catalyst |
-| Scan | `input.scan` | Droppiness verdict, Capital Pressure (+ reasons), news (up to 8), insider count; legacy `weightedRiskScore` labeled deprecated |
+| Scan | `input.scan` | **Droppiness spike history** (top 3 by magnitude), Capital Pressure score + **SEC filing excerpts** (top 3 weighted reasons), news (up to 8), insider filing count (direction not parsed); legacy `weightedRiskScore` labeled deprecated |
 
 To change **what data** the model sees, edit `buildThesisMessages()` and/or `fastVerdictToPromptSlice()` in `lib/ai/fastVerdictPrompt.ts`.
 
@@ -100,24 +100,31 @@ Defined in `lib/ai/types.ts`. Minimum: `{ "ticker": "ABCD" }` plus at least one 
     walkAwayFlags: string[];
     alertLabels: Array<{ label: string; color: string }>;
     actualValues?: Record<string, string | undefined>;
+    dataCompleteness?: number;     // 0–1
   };
-  extractedData?: {
-    recentNews?: string;
-    recentNewsDate?: string;
-    newsStatus?: string;
-    priceSpikePct?: number;
-    currentPrice?: number;
-    atmShelfStatus?: string;
-  };
+  extractedData?: { ... };
   scan?: {
     weightedRiskScore?: number;
     summaryVerdict?: string;
     droppinessVerdict?: string;
-    capitalPressure?: { score, status, summary, reasons[] };
+    droppinessScore?: number;
+    droppinessDetail?: Array<{ date: string; spikePct: number; retraced: boolean }>;
+    capitalPressure?: {
+      score: number;
+      status: string;
+      summary: string;
+      reasons?: Array<{ label: string; points: number; evidence?: { form, filingDate, excerpt, ... } }>;
+      events?: Array<{ eventDate, type, title, evidence? }>;
+    };
     news?: Array<{ title?, headline?, date?, published? }>;
     insiderTransactionsCount?: number;
   };
-}
+  fastVerdict?: {
+    ...
+    borrowAvailable: boolean | null;
+    borrowFeePct: number | null;
+    dataCompleteness: number;
+  };
 ```
 
 ### Groq output (parsed)
