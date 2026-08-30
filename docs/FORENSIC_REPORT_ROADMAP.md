@@ -73,11 +73,17 @@ Defined in `lib/forensic/types.ts`. Phase A ships a **subset**; later phases ext
 
 ---
 
-### Phase B — Forensic Brief PDF (1–2 weeks)
+### Phase B — Forensic Brief PDF ✅ *shipped (v1)*
 
-- HTML/PDF template mirroring sections 1, 5, 11–12 (snapshot, cash/runway narrative, radar, synthesis)
-- Reuse `generateFormattedSummary` / export-pdf route
-- Fact pack as single source for copy
+- `POST /api/forensic-brief/export-pdf` — fact pack + cached thesis → PDF
+- `lib/forensic/formatBriefForExport.ts` — shared plain-text sections
+- `lib/forensic/renderForensicBriefPdf.ts` — pdf-lib renderer
+- `AiThesisCard` — **Copy Brief** + **Export PDF** after generation
+- `scripts/verify-forensic-brief.ts`
+
+**Not in B v1:** HTML template, charts, multi-page CELU section numbers, thesis-less export.
+
+**Success:** Generate thesis → export PDF; snapshot + synthesis + VERIFY tags present; no Groq on export.
 
 ---
 

@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import TaggedText from "@/components/claims/TaggedText";
 import { SHOW_AI_THESIS } from "@/lib/config/features";
 import { fastVerdictToPromptSlice } from "@/lib/ai/fastVerdictPrompt";
+import { buildForensicFactPack } from "@/lib/forensic/buildFactPack";
+import { formatBriefPlainText } from "@/lib/forensic/formatBriefForExport";
 import type { ShortCheckResult } from "@/lib/shortCheckScoring";
 import type { ExtractedData } from "@/lib/shortCheckTypes";
 import type { FastVerdict } from "@/lib/fast/types";
@@ -72,6 +74,62 @@ function ThesisSection({ title, text }: { title: string; text: string }) {
   );
 }
 
+function buildThesisPayload(
+  ticker: string,
+  result?: ShortCheckResult | null,
+  extractedData?: ExtractedData | null,
+  scanData?: ScanDataForThesis | null,
+  fastVerdict?: FastVerdict | null
+): ThesisPromptInput {
+  return {
+    ticker,
+    fastVerdict: fastVerdict ? fastVerdictToPromptSlice(fastVerdict) : undefined,
+    shortCheck: result
+      ? {
+          rating: result.rating,
+          category: result.category,
+          walkAwayFlags: result.walkAwayFlags,
+          alertLabels: result.alertLabels,
+          actualValues: result.scoreBreakdown?.actualValues,
+          dataCompleteness: result.dataCompleteness,
+        }
+      : undefined,
+    extractedData: extractedData
+      ? {
+          recentNews: extractedData.recentNews,
+          recentNewsDate: extractedData.recentNewsDate,
+          newsStatus: extractedData.newsStatus,
+          priceSpikePct: extractedData.priceSpikePct,
+          currentPrice: extractedData.currentPrice,
+          atmShelfStatus: extractedData.atmShelfStatus,
+          float: extractedData.float,
+        }
+      : undefined,
+    scan: scanData
+      ? {
+          weightedRiskScore: scanData.weightedRiskScore,
+          summaryVerdict: scanData.summaryVerdict,
+          droppinessVerdict: scanData.droppinessVerdict,
+          droppinessScore: scanData.droppinessScore,
+          droppinessDetail: scanData.droppinessDetail,
+          capitalPressure: scanData.capitalPressure,
+          news: scanData.news,
+          insiderTransactionsCount: Array.isArray(scanData.insiderTransactions)
+            ? scanData.insiderTransactions.length
+            : undefined,
+          fundamentals: {
+            price: scanData.lastPrice,
+            marketCap: scanData.marketCap,
+            floatShares: scanData.floatShares,
+            sharesOutstanding: scanData.sharesOutstanding,
+            institutionalOwnership: scanData.institutionalOwnership,
+            shortFloat: scanData.shortFloat,
+          },
+        }
+      : undefined,
+  };
+}
+
 export default function AiThesisCard({
   ticker,
   result,
@@ -81,6 +139,8 @@ export default function AiThesisCard({
 }: AiThesisCardProps) {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [thesis, setThesis] = useState<AiThesisResult | null>(null);
+  const [lastPayload, setLastPayload] = useState<ThesisPromptInput | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serviceState, setServiceState] = useState<"checking" | "ready" | "unconfigured" | "disabled">(
     "checking"
@@ -124,53 +184,7 @@ export default function AiThesisCard({
     setStatus("loading");
     setError(null);
 
-    const payload: ThesisPromptInput = {
-      ticker,
-      fastVerdict: fastVerdict ? fastVerdictToPromptSlice(fastVerdict) : undefined,
-      shortCheck: result
-        ? {
-            rating: result.rating,
-            category: result.category,
-            walkAwayFlags: result.walkAwayFlags,
-            alertLabels: result.alertLabels,
-            actualValues: result.scoreBreakdown?.actualValues,
-            dataCompleteness: result.dataCompleteness,
-          }
-        : undefined,
-      extractedData: extractedData
-        ? {
-            recentNews: extractedData.recentNews,
-            recentNewsDate: extractedData.recentNewsDate,
-            newsStatus: extractedData.newsStatus,
-            priceSpikePct: extractedData.priceSpikePct,
-            currentPrice: extractedData.currentPrice,
-            atmShelfStatus: extractedData.atmShelfStatus,
-            float: extractedData.float,
-          }
-        : undefined,
-      scan: scanData
-        ? {
-            weightedRiskScore: scanData.weightedRiskScore,
-            summaryVerdict: scanData.summaryVerdict,
-            droppinessVerdict: scanData.droppinessVerdict,
-            droppinessScore: scanData.droppinessScore,
-            droppinessDetail: scanData.droppinessDetail,
-            capitalPressure: scanData.capitalPressure,
-            news: scanData.news,
-            insiderTransactionsCount: Array.isArray(scanData.insiderTransactions)
-              ? scanData.insiderTransactions.length
-              : undefined,
-            fundamentals: {
-              price: scanData.lastPrice,
-              marketCap: scanData.marketCap,
-              floatShares: scanData.floatShares,
-              sharesOutstanding: scanData.sharesOutstanding,
-              institutionalOwnership: scanData.institutionalOwnership,
-              shortFloat: scanData.shortFloat,
-            },
-          }
-        : undefined,
-    };
+    const payload = buildThesisPayload(ticker, result, extractedData, scanData, fastVerdict);
 
     try {
       const res = await fetch("/api/ai-thesis", {
@@ -181,6 +195,7 @@ export default function AiThesisCard({
       const data = await res.json();
       if (data.success && data.thesis) {
         setThesis(data.thesis);
+        setLastPayload(payload);
         setStatus("success");
       } else {
         setError(data.error || "AI thesis unavailable right now.");
@@ -192,21 +207,83 @@ export default function AiThesisCard({
     }
   }
 
+  async function handleExportPdf() {
+    if (!thesis || !lastPayload || exporting) return;
+    setExporting(true);
+    try {
+      const res = await fetch("/api/forensic-brief/export-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: lastPayload, thesis }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "PDF export failed");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${lastPayload.ticker.toUpperCase()}_forensic-brief.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not export forensic brief PDF.");
+      setStatus("error");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleCopyBrief() {
+    if (!thesis || !lastPayload) return;
+    const factPack = buildForensicFactPack(lastPayload);
+    const text = formatBriefPlainText(factPack, thesis);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      setError("Could not copy brief to clipboard.");
+      setStatus("error");
+    }
+  }
+
   return (
     <Card className="p-4 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700">
       <CardContent className="p-0 space-y-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100">AI Thesis</h3>
-          {serviceState === "ready" && (
-            <Button
-              variant="outline"
-              className="text-sm px-3 py-1.5 shrink-0"
-              onClick={handleGenerate}
-              disabled={!canGenerate || status === "loading"}
-            >
-              {status === "loading" ? "Generating…" : status === "success" ? "Regenerate" : "Generate AI Thesis"}
-            </Button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {status === "success" && thesis && lastPayload && (
+              <>
+                <Button
+                  variant="outline"
+                  className="text-sm px-3 py-1.5"
+                  onClick={handleCopyBrief}
+                  disabled={exporting}
+                >
+                  Copy Brief
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-sm px-3 py-1.5"
+                  onClick={handleExportPdf}
+                  disabled={exporting}
+                >
+                  {exporting ? "Exporting…" : "Export PDF"}
+                </Button>
+              </>
+            )}
+            {serviceState === "ready" && (
+              <Button
+                variant="outline"
+                className="text-sm px-3 py-1.5"
+                onClick={handleGenerate}
+                disabled={!canGenerate || status === "loading"}
+              >
+                {status === "loading" ? "Generating…" : status === "success" ? "Regenerate" : "Generate AI Thesis"}
+              </Button>
+            )}
+          </div>
         </div>
 
         {serviceState === "checking" && (

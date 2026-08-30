@@ -159,6 +159,27 @@ After parsing, the API adds `model`, `generatedAt`, and `reportVersion` (`forens
 
 UI renders inline tags via `components/claims/TaggedText.tsx`. See [`CLAIM_TAGGING.md`](CLAIM_TAGGING.md).
 
+After generation, **Copy Brief** (clipboard) and **Export PDF** buttons appear on `AiThesisCard`. Both use the deterministic fact pack + cached thesis — no second Groq call.
+
+---
+
+## Forensic Brief export (Phase B)
+
+```
+AiThesisCard (after thesis generated)
+  ├─ Copy Brief → buildForensicFactPack(input) + formatBriefPlainText()  (client)
+  └─ Export PDF → POST /api/forensic-brief/export-pdf { input, thesis }
+                    └─ buildForensicFactPack() + renderForensicBriefPdf()
+```
+
+| Endpoint | Body | Response |
+|----------|------|----------|
+| `POST /api/forensic-brief/export-pdf` | `{ input: ThesisPromptInput, thesis: AiThesisResult }` | PDF attachment |
+
+Sections: snapshot, alerts, conflicts, rubric, SEC notes, regulatory alert, summary/thesis, lenses, catalysts, forward dates, data gaps, key risks. VERIFY/CONFLICT/OPINION tags render as `[TAG] body` in export.
+
+Verify: `npx tsx scripts/verify-forensic-brief.ts`
+
 Invalid catalysts are **dropped** (not a hard fail). Missing `summary` or `thesis` → entire response rejected.
 
 ### API responses
@@ -216,9 +237,13 @@ Groq itself also rate-limits (~30 RPM / ~1k RPD on free tier as of writing). The
 | `lib/ai/rateLimit.ts` | Per-IP limit |
 | `lib/ai/types.ts` | TypeScript types |
 | `app/api/ai-thesis/route.ts` | API route |
-| `components/AiThesisCard.tsx` | UI card |
+| `components/AiThesisCard.tsx` | UI card + Copy Brief / Export PDF |
+| `lib/forensic/formatBriefForExport.ts` | Plain-text brief sections |
+| `lib/forensic/renderForensicBriefPdf.ts` | PDF renderer |
+| `app/api/forensic-brief/export-pdf/route.ts` | Forensic brief PDF API |
 | `lib/config/features.ts` | `SHOW_AI_THESIS` flag |
 | `scripts/verify-ai-thesis.ts` | Offline verification |
+| `scripts/verify-forensic-brief.ts` | Brief PDF/plain-text verification |
 
 ---
 

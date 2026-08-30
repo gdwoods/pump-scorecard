@@ -34,6 +34,9 @@ Codebase-wide convention for provenance and epistemic status. Inspired by forens
 | `lib/forensic/buildFactPack.ts` | Assemble fact pack from scan + Short Check input |
 | `lib/ai/buildThesisPrompt.ts` | Injects fact pack + tagging rules into Groq prompt |
 | `components/claims/TaggedText.tsx` | Renders inline tags in UI |
+| `lib/forensic/formatBriefForExport.ts` | Plain-text brief for copy/export |
+| `lib/forensic/renderForensicBriefPdf.ts` | PDF renderer (Phase B) |
+| `app/api/forensic-brief/export-pdf/route.ts` | PDF export API |
 
 ---
 
