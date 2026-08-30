@@ -491,6 +491,22 @@ export default function ShortCheckResults({
         </Card>
       )}
 
+      {/* Quick Stats - DT badge colors (above Fast Verdict) */}
+      {extractedData && getQuickStats() && (
+        <Card className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {getQuickStats()?.map((stat, i) => (
+              <div key={i} className="text-center">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{stat.label}</div>
+                <div className={`text-lg font-semibold ${stat.color || 'text-gray-900 dark:text-gray-100'}`}>
+                  {stat.value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {afterQuickActions}
 
       {afterFastVerdict}
@@ -601,30 +617,7 @@ export default function ShortCheckResults({
         )}
       </Card>
 
-      {/* Quick Stats - DT Card Values */}
-      {extractedData && getQuickStats() && (
-        <Card className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {getQuickStats()?.map((stat, i) => (
-              <div key={i} className="text-center">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{stat.label}</div>
-                <div className={`text-lg font-semibold ${stat.color || 'text-gray-900 dark:text-gray-100'}`}>
-                  {stat.value}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Score Breakdown */}
-      <ShortCheckScoreBreakdown
-        breakdown={result.scoreBreakdown}
-        total={result.rating}
-        data={extractedData || { confidence: 0 }}
-      />
-
-      {/* Alert Card */}
+      {/* Alert Card — above score breakdown */}
       <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700">
         <h2 className="text-lg font-semibold mb-4">Alert Card</h2>
         <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg font-mono text-sm whitespace-pre-wrap">
@@ -633,6 +626,13 @@ export default function ShortCheckResults({
             : result.alertCard}
         </div>
       </Card>
+
+      {/* Score Breakdown */}
+      <ShortCheckScoreBreakdown
+        breakdown={result.scoreBreakdown}
+        total={result.rating}
+        data={extractedData || { confidence: 0 }}
+      />
 
       {/* Scoring Guide Modal */}
       <ScoringGuideModal
