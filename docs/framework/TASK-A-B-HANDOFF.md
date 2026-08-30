@@ -3,9 +3,10 @@
 **Repo:** `/Volumes/Projects/pump-scorecard`
 **For:** Claude Code, opened on the repo root.
 
-**Status (29 Aug 2026):** Task A and Task B are **complete** on `main`. Verify:
-`npx tsx scripts/verify-task-a.ts`, `verify-task-b.ts`, `verify-enrich-short-check.ts`,
-`verify-current-price-fallback.ts`. Rollback baseline:
+**Status (29 Aug 2026):** Task A and Task B are **complete** on `main`. Post-handoff prod work (same branch):
+Watchlist, Fast Scan CP/AI parity, verdict stack on Short Check, deprecated `weightedRiskScore`,
+fraud API removed, Pump Scorecard headline score retired. Verify:
+`npx tsx scripts/verify-*.ts` (or `npm run verify`). Rollback baseline:
 `rollback/short-check-stable-2026-08-29` @ `247ef57`.
 
 Attach alongside:
@@ -22,12 +23,13 @@ actual source.
 
 Short Check scores short-selling candidates from DilutionTracker screenshots. The
 scoring lives in `lib/shortCheckScoring.ts` (1409 lines) and is exercised by
-`app/api/short-check/route.ts`. There is also a ticker-only path at
-`app/api/scan/[ticker]/route.ts` (966 lines) serving the Pump Scorecard view.
+`app/api/short-check/route.ts`. Scan enrichment at
+`app/api/scan/[ticker]/route.ts` powers Pump Scorecard, Watchlist, and Short Check.
+Legacy `weightedRiskScore` is deprecated (`lib/scan/legacyWeightedRiskScore.ts`);
+fraud evidence was removed from the pipeline.
 
-`SHORT_CHECK_COMPLETE_DOCUMENTATION.md` describes this system — **and it is stale
-in ways that matter.** Where the doc and the code disagree, the code is truth and
-the doc must be updated to match as part of Task A.
+`SHORT_CHECK_COMPLETE_DOCUMENTATION.md` is a long reference — prefer [`README.md`](../../README.md)
+and Framework 3.0 for current prod behavior.
 
 ### The governing principle
 

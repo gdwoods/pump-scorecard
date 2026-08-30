@@ -1,8 +1,11 @@
 # Short Check — Complete Documentation
 
 > **Note (Aug 2026):** This file may lag behind production. For current behavior see
-> [`docs/framework/Short-Selling-Framework-3.0.md`](docs/framework/Short-Selling-Framework-3.0.md),
+> [`README.md`](README.md), [`docs/framework/Short-Selling-Framework-3.0.md`](docs/framework/Short-Selling-Framework-3.0.md),
 > [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md), and `lib/config/thresholds.ts`.
+>
+> **Removed from prod:** fraud evidence API, legacy pump headline score (`weightedRiskScore` deprecated on scan API).
+> **Verdict stack:** Fast Verdict + fundamental context + walk-aways replace a separate Risk Synopsis card on Short Check.
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -46,16 +49,19 @@ The tool outputs a 0-100% rating that categorizes stocks into four risk tiers, h
 - **Speculative Short Candidate** (65–70%): Marginal setup; unverified droppiness also caps here
 - **No-Trade** (<65% or any walk-away): Disqualified
 
-### 3. **Integrated Pump Scorecard Analysis**
+### 3. **Integrated scan analysis**
 After uploading a screenshot, entering the ticker provides:
+- **Verdict stack** — Fast Verdict (Framework 3.0), DT synopsis, SEC Capital Pressure note, Short Check walk-aways
 - Droppiness analysis (Bayesian-calculated price behavior)
-- Pump risk scorecard
+- **Capital Pressure** — SEC EDGAR evidence of near-term capital need and documented issuance mechanisms. Research signal only; does not change Short Check % scoring. Full reference: [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md)
+- **AI Thesis** — Groq synthesis (24h KV cache). See [`docs/AI_THESIS.md`](docs/AI_THESIS.md) for prompt tuning.
 - SEC filings and insider transactions
-- **Capital Pressure** — SEC EDGAR evidence of near-term capital need and documented issuance mechanisms (ATM/shelf capacity vs confirmed issuance). Research signal only; does not change Short Check % scoring. Soft note under Risk Synopsis when present. Full reference: [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md)
-- Promotions and fraud evidence
+- Promotions (stock promotion tracker)
 - Charts, fundamentals, and market data
 - Social sentiment (StockTwits; below Capital Pressure on the page)
 - Borrow desk data (short availability)
+
+Legacy `weightedRiskScore` on `/api/scan/[ticker]` is **deprecated** (vol/price/filing/country flags only). It is not shown in the UI.
 
 ### 4. **Export & Sharing**
 - **Copy Summary**: Full formatted text report
@@ -497,14 +503,8 @@ scoreV2 = round(0.670 × 100) = 67
 
 ---
 
-#### 6. **Stop Nasdaq China Fraud** (Free, No API Key)
-**Used For**:
-- Fraud evidence images and data
-
-**Endpoint**:
-- `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText={ticker}`
-
-**Rate Limits**: Unknown (be respectful)
+#### 6. **Stop Nasdaq China Fraud** — *removed Aug 2026*
+Previously used for fraud evidence images. No longer called from the scan pipeline or UI.
 
 ---
 
@@ -742,18 +742,20 @@ If OCR fails or misses data, users can manually enter:
 
 ### 3. **Quick Ticker Analysis**
 - Enter ticker directly (without screenshot) for:
+  - Fast Verdict (Framework 3.0)
   - Droppiness analysis
-  - Pump risk scorecard
-  - Market data and charts
-- Does NOT include Short Check scoring (requires dilution tracker data)
+  - Capital Pressure, AI thesis, market data and charts
+- Does **not** include Short Check % scoring or fundamental context (requires dilution tracker data)
 
 ### 4. **History Tracking**
 - Saves Short Check results to local history
 - Includes: ticker, score, verdict, summary, factors, market data
 - Accessible via History Card component
 
-### 5. **Risk Synopsis Generation**
-Automatically generates plain-English risk summaries:
+### 5. **Fundamental context (verdict stack)**
+When scan data is present, Short Check shows DT-derived synopsis and optional SEC Capital Pressure note inside the verdict stack **Fundamental context** section — not a separate Risk Synopsis card.
+
+Example synopsis:
 > "XYZ has only 1.2 months of runway and multiple active dilution tools. With a float of 2.4M shares and institutional ownership of just 0.8%, it may face selling pressure."
 
 ### 6. **Alert Card**

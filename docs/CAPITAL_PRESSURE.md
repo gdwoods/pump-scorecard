@@ -8,13 +8,14 @@ It is **not** a trade recommendation and does **not** label a ticker a short. Di
 
 ## Where it appears
 
-- Pump Scorecard: full-width card after Filings
-- Short Check: soft note in the **verdict stack** (Fundamental context) when scan data is present
+- **Pump Scorecard:** leads with Droppiness + Capital Pressure (side by side), then fundamentals, filings, charts
+- **Short Check:** full **Capital Pressure** card after the verdict stack; SEC note also appears in the verdict stack **Fundamental context** when scan data is present
+- **Fast Scan / Watchlist:** Capital Pressure when scan data is available
 - Short Check PDF + Copy Summary (when `pumpScorecardData` includes the module)
 
 Optional field on `GET /api/scan/[ticker]`: `capitalPressure`. Existing clients ignore unknown keys.
 
-**Overall Pump Scorecard weights are unchanged.** `weightedRiskScore` is deprecated (legacy vol/price/filing/country flags only). Capital Pressure is shown separately — not folded into that headline number.
+`weightedRiskScore` on the same API is **deprecated** (legacy vol/price/filing/country flags only). Capital Pressure is always shown separately — not folded into that number.
 
 ---
 
@@ -72,9 +73,9 @@ Every automatic score reason includes an SEC excerpt and document link.
 - Expand: supply fields, sub-scores, full timeline, data gaps
 - Timeline filters: All / Issued / Capacity / Needs review
 - Copy top reason + SEC link
-- Criteria coverage meter (`N/10` verified)
-- Manual EDGAR link (CIK when available) if SEC is unavailable or in expanded details
-- Short Check: soft “SEC evidence also shows…” under Risk Synopsis; amber footnote if DilutionTracker offering tags disagree with SEC Capital Pressure (**does not change Short Check scoring**)
+- Upcoming reverse split detection (EDGAR + Polygon) when applicable
+- **Recent filings not auto-scored** — surfaced when parser found no phrase match
+- Short Check: soft “SEC evidence also shows…” in verdict stack **Fundamental context**; amber footnote if DilutionTracker offering tags disagree with SEC Capital Pressure (**does not change Short Check scoring**)
 
 ---
 

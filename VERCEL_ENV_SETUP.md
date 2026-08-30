@@ -60,6 +60,12 @@ Add these in Vercel → Project → Settings → Environment Variables (all envs
 2. Open `https://YOUR_DOMAIN/api/debug-env` and check `askEdgar.effectiveKeySet` and `askEdgar.whichVarsHaveValue`.
 3. No quotes around the value in the Vercel UI unless they are part of the secret (normally paste the raw key only).
 4. Trigger a new deployment after changing variables (Redeploy from the Deployments tab).
+
+Additional server-side variables:
+
+- `GROQ_API_KEY` — AI thesis synthesis (`/api/ai-thesis`)
+- `DROPPINESS_WATCHLIST` — comma-separated tickers seeded by `/api/cron/droppiness` (optional)
+- `CRON_SECRET` — auth header for droppiness cron
 - Vercel KV credentials (choose whichever pair your account provides):
   - `KV_REST_API_REDIS_URL` and `KV_REST_API_REDIS_TOKEN`
   - or `KV_REST_API_URL` and `KV_REST_API_TOKEN`

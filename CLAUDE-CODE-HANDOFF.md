@@ -48,8 +48,10 @@ npx vercel promote dpl_F63aWDycLoQ29NWvz4GFUT1SqLTM --scope garth-woods-projects
 - **Task A (scorer P1 fixes)** — done (`npx tsx scripts/verify-task-a.ts`)
 - **Task B (`/api/fast/[ticker]`)** — done (`npx tsx scripts/verify-task-b.ts`)
 - **Baby-shelf handoff** — done (`BABY-SHELF-HANDOFF.md` items closed Aug 2026)
+- **Watchlist, Fast Scan CP/AI, verdict stack, CP enhancements** — on `main` (PRs #18–#19)
+- **Deprecated `weightedRiskScore`; fraud API removed; Pump headline score retired**
 - **Entry log calibration** — `docs/framework/entry-log-calibration.md` +
-  `npx tsx scripts/calibrate-from-entry-log.ts`
+  `npx tsx scripts/calibrate-from-entry-log.ts` (log still empty)
 
 Governing docs:
 
@@ -72,7 +74,7 @@ Governing docs:
 **KV droppiness not caching** — likely causes:
 
 1. `KV_REST_API_REDIS_URL` missing embedded auth and no `KV_REST_API_TOKEN` set
-2. Cron runs once/day (06:00 UTC) and processes only 2 tickers/run (`MAX_TICKERS_PER_RUN`)
+2. Cron runs once/day (06:00 UTC) and processes up to 8 tickers/run (`MAX_TICKERS_PER_RUN`)
 3. First cold universe needs several days to warm
 
 **Mitigations:** set `DROPPINESS_WATCHLIST=DFNS,...` in Vercel; confirm KV writes in
@@ -91,9 +93,7 @@ Keep: **`short-check`**, **`ask-edgar-dashboards`**. Deleted duplicates: `pump-s
 
 ## Next work
 
-- **Fast Scan** (widely used): burn on `/api/fast` (Polygon/Finnhub), daily-bar droppiness
-  fallback when KV cold, Edge REST KV reads, scan→verdict enrichment,
-  `SHOW_FAST_VERDICT_UI` re-enabled
-- Monthly entry-log calibration → tune `lib/config/thresholds.ts`
-- Optional: denser cron via external scheduler or Pro (Hobby = once/day)
-- Optional env: `DROPPINESS_WATCHLIST=TICK1,TICK2` seeds nightly refresh universe
+- **Entry log** — start logging trades; monthly calibration → tune `lib/config/thresholds.ts`
+- **KV droppiness warming** — set `DROPPINESS_WATCHLIST`; cron `MAX_TICKERS_PER_RUN` is 8
+- **Optional:** remove `weightedRiskScore` from API; Watchlist v2 (persist/sort); PDF copy aligned to verdict stack
+- **Fast path gaps:** burn on `/api/fast` (Polygon/Finnhub), daily-bar droppiness fallback when KV cold

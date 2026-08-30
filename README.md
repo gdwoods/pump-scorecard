@@ -2,13 +2,27 @@
 
 Evidence-based risk analysis for microcap and OTC equities. Surfaces structural, volume, float, dilution, and capital-pressure signals from public market data and SEC EDGAR filings.
 
+**Production:** https://short-check.vercel.app
+
 ## What's included
 
-| Surface | Description |
-|---------|-------------|
-| **Pump Scorecard** | Full multi-factor scan (`/scan/[ticker]`) — Droppiness, Capital Pressure, fundamentals, filings |
-| **Short Check** | Focused short-setup analysis (`/short-check/[ticker]`) with Risk Synopsis, Dilution Timeline, Capital Pressure, and Social Sentiment |
-| **API** | `GET /api/scan/[ticker]` returns structured JSON including optional `capitalPressure` |
+| Surface | Route | Description |
+|---------|-------|-------------|
+| **Short Check** | `/short-check` | DT screenshot OCR → Short Rating %, **verdict stack** (Fast Verdict + fundamental context + walk-aways), Capital Pressure, AI thesis |
+| **Fast Scan** | `/fast-scan` | Ticker-only: Fast Verdict, Droppiness, Capital Pressure, AI thesis |
+| **Watchlist** | `/watchlist` | Parallel scan (up to 20 tickers): Fast verdict, Droppiness, CP |
+| **Pump Scorecard** | `/pump-scorecard` | Full scan UI: Droppiness + Capital Pressure lead; fundamentals, filings, charts |
+| **API** | `GET /api/scan/[ticker]` | Structured scan JSON + optional `capitalPressure` |
+| **Fast API** | `GET /api/fast/[ticker]` | Framework 3.0 fast verdict (JSON or `?fmt=text`) |
+
+## Short Check layout (DT screenshot path)
+
+1. **Verdict stack** (one card) — Fast Verdict · Framework 3.0, live metrics, fast flags; **Fundamental context** (DT synopsis + SEC CP note); **Short Check walk-aways**
+2. **Capital Pressure** + **AI Thesis**
+3. **Short Rating** card — % score, category, alert labels only
+4. Score breakdown, alert card, droppiness, fundamentals, etc.
+
+Quick Ticker (no screenshot) shows Fast Verdict + scan cards but **no** Short Rating % or fundamental context block.
 
 ## Capital Pressure
 
@@ -22,9 +36,18 @@ It is a **research signal**, not a short label and not proof of dilution.
 | Item | Detail |
 |------|--------|
 | Lookback | **12 months** for events; **24 months** only for S-1/S-3/F-1/F-3 registration capacity |
-| Overall score | **Not** included in deprecated `weightedRiskScore` (use CP card + Short Check instead) |
-| Docs | [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md) |
-| Code | `lib/capitalPressure/`, `lib/capitalPressureScoring.ts`, `components/CapitalPressureCard.tsx` |
+| Pump headline | **Not** folded into deprecated `weightedRiskScore` — shown on its own card |
+| Docs | [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md), [`docs/AI_THESIS.md`](docs/AI_THESIS.md) |
+| Code | `lib/capitalPressure/`, `components/CapitalPressureCard.tsx` |
+
+## Deprecated / removed (Aug 2026)
+
+| Item | Status |
+|------|--------|
+| `weightedRiskScore` | Deprecated on `/api/scan` (`weightedRiskScoreDeprecated: true`). Legacy vol/price/filing/country flags only — **do not use for decisions** |
+| Fraud evidence API | Removed from scan pipeline and UI |
+| Pump headline score UI | Removed from Pump Scorecard (Droppiness + CP only) |
+| `INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE` | `false` — frozen |
 
 ## Quick start
 
@@ -37,17 +60,18 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Environment
 
-Copy `.env.example` if present, or set:
-
 | Variable | Purpose |
 |----------|---------|
 | `FMP_API_KEY` | Financial Modeling Prep (quotes, fundamentals) |
-| `POLYGON_API_KEY` | Optional market data |
-| `ALPHA_VANTAGE_API_KEY` | Optional |
+| `POLYGON_API_KEY` | Market data / fundamentals |
 | `GROQ_API_KEY` | AI thesis synthesis (server-side) |
 | `AI_THESIS_RATE_LIMIT_WHITELIST` | Comma-separated IPs bypassing thesis rate limit |
-| `DROPPINESS_WATCHLIST` | Tickers for nightly droppiness cron seeding (comma-separated) |
-| `CRON_SECRET` | Auth for `/api/cron/droppiness` manual triggers |
+| `DROPPINESS_WATCHLIST` | Tickers for nightly droppiness cron seeding |
+| `CRON_SECRET` | Auth for `/api/cron/droppiness` |
+| `SEC_USER_AGENT` | EDGAR identification (email in user-agent string) |
+| `KV_*` / Upstash | Droppiness cache, AI thesis cache, share links |
+
+See also [`VERCEL_ENV_SETUP.md`](VERCEL_ENV_SETUP.md).
 
 ## Scripts
 
@@ -56,44 +80,62 @@ npm run dev          # development server
 npm run build        # production build
 npm run start        # serve production build
 npm run lint         # ESLint
-npm run verify       # Run all tsx verification scripts (npx tsx if needed)
+npm run verify       # All tsx verification scripts (use npx tsx if needed)
+npm test             # Jest (includes capital pressure fixtures)
 ```
 
 ## Project layout
 
 ```
 app/
-  scan/[ticker]/          # Pump Scorecard page
-  short-check/[ticker]/   # Short Check page
-  api/scan/[ticker]/      # Scan API
+  short-check/           # Short Check page
+  fast-scan/             # Fast Scan
+  watchlist/             # Multi-ticker parallel scanner
+  pump-scorecard/        # Full scan UI
+  api/scan/[ticker]/     # Scan API
+  api/fast/[ticker]/     # Fast Verdict API
+  api/ai-thesis/         # Groq thesis synthesis
 components/
   CapitalPressureCard.tsx
-  FilingsCard.tsx
-  ...
+  short-check/
+    FastVerdictCard.tsx      # Fast verdict + optional fundamental context
+    ShortCheckResults.tsx
 lib/
-  capitalPressure/         # types, EDGAR, parse, run, scoring bridge
-  capitalPressureScoring.ts
-  config/features.ts       # INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE
-  filings/                 # existing filings pipeline
+  shortCheckScoring.ts       # Short Check % rating
+  fast/                      # Fast Verdict pipeline
+  capitalPressure/           # SEC evidence module
+  scan/legacyWeightedRiskScore.ts  # deprecated pump heuristic
+  config/features.ts
+  config/thresholds.ts       # Framework 3.0 numbers
 docs/
-  CAPITAL_PRESSURE.md      # full Capital Pressure documentation
-__tests__/
-  capitalPressure.test.ts
-  fixtures/capitalPressure/
+  CAPITAL_PRESSURE.md
+  AI_THESIS.md
+  framework/                 # Framework 3.0, Task A/B handoff, fast verdict specs
+scripts/
+  verify-*.ts                # Regression scripts (run via npm run verify)
 ```
 
-## Scoring notes
+## Scoring (two systems — do not conflate)
 
-- Live Pump Scorecard / Short Check scoring is computed in the scan route and client layers (not a single `utils/scoring.ts` monolith).
-- Capital Pressure has its own 0–100 score plus 0–10 `dilutionLikelihood` and `shortExecutionRisk`.
-- Failed SEC fetch → neutral unavailable object (never high-risk by default).
-- Capacity (S-3/ATM shelf) is distinct from issuance (SPA/ELOC draw, warrant exercise, etc.).
+| System | Output | Use |
+|--------|--------|-----|
+| **Fast Verdict** | `NO_TRADE` / `WATCH` / `REVIEW` | Framework 3.0 fast screen; binding walk-aways W3–W10 |
+| **Short Check rating** | 0–100% + category | DT/OCR fundamentals; walk-aways from `lib/shortCheckScoring.ts` |
+| **Capital Pressure** | 0–100 + status | SEC evidence only; research signal |
+| **Droppiness** | 0–100 | Spike fade vs hold behavior |
+| ~~Pump `weightedRiskScore`~~ | deprecated | Ignore |
 
 ## Related docs
 
-- [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md) — Capital Pressure module
-- [`SHORT_CHECK_INTRO.md`](SHORT_CHECK_INTRO.md) — Short Check overview
-- [`SHORT_CHECK_COMPLETE_DOCUMENTATION.md`](SHORT_CHECK_COMPLETE_DOCUMENTATION.md) — Full Short Check reference
+| Doc | Purpose |
+|-----|---------|
+| [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md) | Capital Pressure module |
+| [`docs/AI_THESIS.md`](docs/AI_THESIS.md) | AI Thesis — prompt, API, cache, tuning |
+| [`docs/framework/Short-Selling-Framework-3.0.md`](docs/framework/Short-Selling-Framework-3.0.md) | Governing trading framework |
+| [`docs/framework/START-HERE.md`](docs/framework/START-HERE.md) | Stack orientation |
+| [`docs/framework/TASK-A-B-HANDOFF.md`](docs/framework/TASK-A-B-HANDOFF.md) | Scorer + fast endpoint build history |
+| [`SHORT_CHECK_INTRO.md`](SHORT_CHECK_INTRO.md) | Short Check user guide |
+| [`SHORT_CHECK_COMPLETE_DOCUMENTATION.md`](SHORT_CHECK_COMPLETE_DOCUMENTATION.md) | Long reference (may lag — trust code + Framework doc) |
 
 ## License
 

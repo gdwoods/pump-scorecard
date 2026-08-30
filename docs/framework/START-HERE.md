@@ -48,59 +48,48 @@ date · ticker · droppiness score · float · catalyst category · outcome
 Prefix "I'm short" or "I'm flat" when you invoke it — the verdict's action line
 changes depending on which.
 
-### 3. Write the config file
+### ~~3–5. Short Check P1 patches + fast endpoint~~ ✅ Shipped (Aug 2026)
 
-Twenty lines, unblocks everything downstream. Both Short Check and the future
-endpoint read from it, and it's what makes 3.0 internally coherent. Draft is in
-`fast-verdict-endpoint-spec.md` §2.
+- Task A scorer fixes, `lib/config/thresholds.ts`, droppiness veto, borrow walk-away — **on `main`**
+- `/api/fast/[ticker]` + Fast Scan + Watchlist — **on `main`**
+- Verdict stack on Short Check (Fast Verdict + fundamental context + walk-aways) — **on `main`**
+- Capital Pressure enhancements, AI thesis cache, deprecated `weightedRiskScore` — **on `main`**
 
-### 4. Patch Short Check — the P1 fixes
+See [`TASK-A-B-HANDOFF.md`](TASK-A-B-HANDOFF.md) and [`README.md`](../../README.md).
 
-Small changes to code that already exists. Highest safety return per hour of work
-in the whole stack.
+### Next optional work
 
-1. **Droppiness veto.** Score below the config floor with ≥3 spikes forces
-   No-Trade. This closes the hole where a stock whose spikes *hold* rates 88%.
-2. **Spike count surfaced.** Fewer than 3 spikes ⇒ `UNVERIFIED`, never `neutral`.
-   Zero spikes currently scores 50 and reads as a coin flip.
-3. **Data-completeness multiplier.** A failed news fetch currently earns +15 — the
-   maximum. Print `n/12 components populated`; below 70% force WATCH.
-4. **Borrow scored.** You already fetch iBorrowDesk and discard it. Availability
-   should be a walk-away.
-5. **Float penalty extended.** The Green-Offering adjustment stops at the 1M band;
-   run it through 5M.
-
-### 5. Then the builds
-
-Wire RSS poller → fast endpoint. Both specced, neither started. Build order is in
-the addendum.
+- Entry-log calibration (#5 in improvement list) — tooling exists; log still empty
+- PDF/copy alignment with verdict stack section names
+- Remove `weightedRiskScore` from API entirely
+- Watchlist v2 (persist, sort)
 
 ---
 
 ## What a trade looks like right now
 
-Degraded, but workable:
-
 ```
 Telegram alert → ticker
       ↓
-Short Check (screenshot)         ~10-20s, and it can still say yes to a
-      ↓                           low-droppiness name until you patch it
-Framework 3.0 §2 vetoes          run these MANUALLY — the app doesn't
-      ↓                           enforce V2, V5, V6, or V7 yet
+Fast Scan or /api/fast           <2s Framework 3.0 verdict + flags
+      ↓
+Short Check (screenshot)         ~10-20s Short Rating % + verdict stack
+      ↓
+Framework 3.0 §2 vetoes          run MANUALLY for V2, V5, V6, V7 — app enforces
+      ↓                           fast walk-aways W3–W10 + Short Check walk-aways
 Catalyst Reader (Chrome)         if there's news. Live and working.
       ↓
 Entry log → trade
 ```
 
-**The manual veto pass is doing real work in this configuration.** Until the
-endpoint exists, you are the walk-away logic. Keep §2 open in a tab.
+**The manual §2 veto pass still does real work** for rules not yet encoded in the app.
+Keep §2 open in a tab.
 
-And what it looks like once built:
+Ideal path once entry log has data:
 
 ```
-ticker → /api/fast → REVIEW → Catalyst Reader → Gem → log → trade
-          <1.5s              only if news       only if needed
+ticker → /api/fast → REVIEW → Short Check (if DT) → Catalyst Reader → log → trade
+          <1.5s              only if needed
 ```
 
 ---
