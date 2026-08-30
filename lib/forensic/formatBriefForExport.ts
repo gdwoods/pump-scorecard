@@ -8,6 +8,7 @@ import type { AiThesisResult } from '@/lib/ai/types';
 import type { ForensicFactPack } from './types';
 
 export type BriefSectionKind =
+  | 'scorecard'
   | 'snapshot'
   | 'alerts'
   | 'conflicts'
@@ -52,6 +53,24 @@ export function buildBriefSections(
 ): BriefSection[] {
   const sections: BriefSection[] = [];
   const s = factPack.snapshot;
+
+  if (factPack.quickScorecard) {
+    const q = factPack.quickScorecard;
+    const fmt = (v: number | null) => (v != null ? `${v}/10` : 'UNKNOWN');
+    sections.push({
+      title: '0. Quick Scorecard',
+      kind: 'scorecard',
+      lines: [
+        `Combined Runner Risk: ${fmt(q.combined.value)}`,
+        `Offering / Dilution: ${fmt(q.offering.value)}`,
+        `Cash Need: ${fmt(q.cashNeed.value)}`,
+        `Delisting: ${fmt(q.delisting.value)}`,
+        `Survival-Pump: ${fmt(q.survivalPump.value)}`,
+        `Squeeze / Low-Float: ${fmt(q.squeeze.value)}`,
+        ...(q.offeringTrap ? [`OFFERING TRAP: ${q.offeringTrapSummary ?? 'yes'}`] : []),
+      ],
+    });
+  }
 
   const snapshotLines: string[] = [];
   if (s.price != null) snapshotLines.push(`Price: $${s.price}`);

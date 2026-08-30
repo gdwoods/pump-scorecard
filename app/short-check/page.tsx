@@ -16,6 +16,7 @@ import DroppinessScatter from "@/components/DroppinessChart";
 import Fundamentals from "@/components/Fundamentals";
 import SecFilings from "@/components/SecFilings";
 import CapitalPressureCard from "@/components/CapitalPressureCard";
+import QuickScorecardCard from "@/components/forensic/QuickScorecardCard";
 import AiThesisCard from "@/components/AiThesisCard";
 import NewsSection from "@/components/NewsSection";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
@@ -30,6 +31,7 @@ import { saveScanToHistory } from "@/lib/history";
 import type { FastVerdict } from "@/lib/fast/types";
 import { enrichFastVerdictFromShortCheck } from "@/lib/fast/enrichFromShortCheck";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
+import { buildQuickScorecard, toQuickScorecardInputFromScan } from "@/lib/forensic/quickScorecard";
 import { SHOW_FAST_VERDICT_ON_SHORT_CHECK, SHOW_AI_THESIS } from "@/lib/config/features";
 import { PAGE_CONTENT_CLASS } from "@/lib/ui/pageLayout";
 import { PairGrid } from "@/components/layout/PairGrid";
@@ -313,6 +315,22 @@ export default function ShortCheckPage() {
       />
     ) : null;
 
+  const quickScorecard = useMemo(() => {
+    if (!ticker || !pumpScorecardData) return null;
+    const input = toQuickScorecardInputFromScan(ticker, enrichedFastVerdict, pumpScorecardData);
+    if (result?.scoreBreakdown?.cashNeed != null) {
+      input.shortCheck = {
+        rating: result.rating,
+        cashNeedPoints: result.scoreBreakdown.cashNeed,
+      };
+    }
+    return buildQuickScorecard(input);
+  }, [ticker, enrichedFastVerdict, pumpScorecardData, result]);
+
+  const quickScorecardBlock = quickScorecard ? (
+    <QuickScorecardCard scorecard={quickScorecard} />
+  ) : null;
+
   const aiThesisBlock =
     SHOW_AI_THESIS &&
     ticker &&
@@ -591,6 +609,8 @@ export default function ShortCheckPage() {
             <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
 
             {capitalPressureBlock}
+
+            {quickScorecardBlock}
 
             {aiThesisBlock}
 

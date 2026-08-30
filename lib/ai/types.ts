@@ -79,6 +79,8 @@ export interface ThesisPromptInput {
     walkAwayFlags: string[];
     alertLabels: Array<{ label: string; color: string }>;
     actualValues?: Record<string, string | undefined>;
+    /** Short Check cash-need component (0–25) for Quick Scorecard. */
+    cashNeedPoints?: number;
     /** 0–1 populated-component fraction from Short Check scorer. */
     dataCompleteness?: number;
   };
@@ -98,11 +100,28 @@ export interface ThesisPromptInput {
     droppinessScore?: number;
     droppinessDetail?: ThesisDroppinessSpike[];
     capitalPressure?: {
+      available?: boolean;
       score: number;
       status: string;
       summary: string;
+      dilutionLikelihood?: number;
+      shortExecutionRisk?: number;
+      recentIssuance?: {
+        shares30d?: number;
+        shares90d?: number;
+        status?: string;
+      };
+      upcomingReverseSplit?: {
+        effectiveDate?: string;
+        ratio?: string;
+        summary?: string;
+      } | null;
       reasons?: ThesisCapitalPressureReason[];
-      events?: ThesisCapitalPressureEvent[];
+      events?: Array<
+        ThesisCapitalPressureEvent & {
+          isRetrospective?: boolean;
+        }
+      >;
     };
     news?: Array<{
       title?: string;
@@ -141,6 +160,8 @@ export interface FastVerdictPromptSlice {
   babyShelfCapacity: number | null;
   capacityQuarters: number | null;
   derivedOfferingAbility: string;
+  atmDetected?: boolean | null;
+  runwayMonths?: number | null;
   borrowAvailable: boolean | null;
   borrowFeePct: number | null;
   /** 0–1 source availability fraction from fast evaluator. */

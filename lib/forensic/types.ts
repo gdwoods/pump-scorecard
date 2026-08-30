@@ -1,4 +1,5 @@
 import type { TaggedClaim } from '@/lib/claims';
+import type { QuickScorecard } from './quickScorecard/types';
 
 export const FORENSIC_FACT_PACK_VERSION = 'forensic-fact-pack-v1';
 
@@ -34,4 +35,6 @@ export interface ForensicFactPack {
   dataGaps: TaggedClaim[];
   /** JSON-safe summary for prompt injection. */
   notes: string[];
+  /** Orthogonal 0–10 runner risk scores (filing-first derivatives). */
+  quickScorecard?: QuickScorecard;
 }

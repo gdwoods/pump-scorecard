@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
@@ -16,11 +16,13 @@ import BorrowDeskCard from "@/components/BorrowDeskCard";
 import SentimentCard from "@/components/SentimentCard";
 import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import CapitalPressureCard from "@/components/CapitalPressureCard";
+import QuickScorecardCard from "@/components/forensic/QuickScorecardCard";
 import AiThesisCard from "@/components/AiThesisCard";
 import { PairGrid } from "@/components/layout/PairGrid";
 import type { FastVerdict } from "@/lib/fast/types";
 import { SHOW_FAST_VERDICT_UI, SHOW_AI_THESIS } from "@/lib/config/features";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
+import { buildQuickScorecard, toQuickScorecardInputFromScan } from "@/lib/forensic/quickScorecard";
 import { PAGE_CONTENT_CLASS } from "@/lib/ui/pageLayout";
 
 function FastScanInner() {
@@ -100,6 +102,15 @@ function FastScanInner() {
     pumpData?.capitalPressure ? (
       <CapitalPressureCard ticker={ticker.toUpperCase()} data={pumpData.capitalPressure} />
     ) : null;
+
+  const quickScorecard = useMemo(() => {
+    if (!ticker || !pumpData) return null;
+    return buildQuickScorecard(toQuickScorecardInputFromScan(ticker, fastVerdict, pumpData));
+  }, [ticker, fastVerdict, pumpData]);
+
+  const quickScorecardBlock = quickScorecard ? (
+    <QuickScorecardCard scorecard={quickScorecard} />
+  ) : null;
 
   const aiThesisBlock =
     SHOW_AI_THESIS && ticker && pumpData ? (
@@ -218,6 +229,8 @@ function FastScanInner() {
             <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
 
             {capitalPressureBlock}
+
+            {quickScorecardBlock}
 
             {aiThesisBlock}
 

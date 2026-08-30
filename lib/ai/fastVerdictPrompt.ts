@@ -20,6 +20,8 @@ export function fastVerdictToPromptSlice(verdict: FastVerdict): FastVerdictPromp
     babyShelfCapacity: verdict.dilution.babyShelfCapacity,
     capacityQuarters: verdict.dilution.capacityQuarters,
     derivedOfferingAbility: verdict.dilution.derivedOfferingAbility,
+    atmDetected: verdict.dilution.atmDetected,
+    runwayMonths: verdict.fundamentals.runwayMonths,
     borrowAvailable: verdict.borrow.available,
     borrowFeePct: verdict.borrow.feePct,
     dataCompleteness: verdict.dataCompleteness,

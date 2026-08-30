@@ -60,9 +60,13 @@ const input: ThesisPromptInput = {
   scan: {
     droppinessScore: 72,
     capitalPressure: {
+      available: true,
       score: 77,
       status: 'high',
       summary: 'High capital pressure',
+      dilutionLikelihood: 8,
+      shortExecutionRisk: 3,
+      recentIssuance: { shares30d: 500_000, status: 'reported' },
       reasons: [
         {
           label: 'Active ATM/ELOC',
@@ -111,6 +115,11 @@ const thesis: AiThesisResult = {
 const factPack = buildForensicFactPack(input);
 assert(factPack.ticker === 'DFNS', 'fact pack normalizes ticker');
 assert(factPack.alerts.length >= 2, 'fact pack includes walk-away alerts');
+assert(factPack.quickScorecard != null, 'fact pack includes quick scorecard');
+assert(
+  factPack.quickScorecard?.offering.value === 8,
+  'fact pack quick scorecard maps CP dilution likelihood'
+);
 
 assert(
   formatProseForExport('VERIFY: Missing data.') === '[VERIFY] Missing data.',
@@ -118,12 +127,14 @@ assert(
 );
 
 const sections = buildBriefSections(factPack, thesis);
+assert(sections.some((s) => s.title.includes('Quick Scorecard')), 'brief includes quick scorecard section');
 assert(sections.some((s) => s.title.includes('Snapshot')), 'brief includes snapshot section');
 assert(sections.some((s) => s.title.includes('Thesis')), 'brief includes thesis section');
 assert(sections.some((s) => s.title.includes('Forward dates')), 'brief includes forward dates');
 
 const plain = formatBriefPlainText(factPack, thesis);
 assert(plain.includes('FORENSIC BRIEF — DFNS'), 'plain text header');
+assert(plain.includes('Quick Scorecard'), 'plain text includes quick scorecard');
 assert(plain.includes('DISCLAIMER'), 'plain text disclaimer');
 assert(plain.includes('[OPINION]'), 'plain text preserves opinion tag');
 

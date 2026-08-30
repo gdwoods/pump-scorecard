@@ -389,9 +389,77 @@ class BriefPdfLayout {
     this.y -= boxH + 8;
   }
 
+  drawScorecardGrid(lines: string[]) {
+    const rowH = 20;
+    const barMaxW = CONTENT_W * 0.35;
+    const tableH = lines.length * rowH + 10;
+    this.ensureSpace(tableH + 4);
+
+    this.page.drawRectangle({
+      x: MARGIN,
+      y: this.y - tableH,
+      width: CONTENT_W,
+      height: tableH,
+      color: COLORS.brandLight,
+      borderColor: COLORS.rule,
+      borderWidth: 0.75,
+    });
+
+    let rowY = this.y - 14;
+    for (const raw of lines) {
+      const idx = raw.indexOf(':');
+      const label = idx >= 0 ? raw.slice(0, idx).trim() : raw;
+      const value = idx >= 0 ? raw.slice(idx + 1).trim() : '';
+      const scoreMatch = value.match(/^(\d+)\/10/);
+      const score = scoreMatch ? Number(scoreMatch[1]) : null;
+
+      this.page.drawText(sanitizePdfText(label), {
+        x: MARGIN + 10,
+        y: rowY,
+        size: 8.5,
+        font: this.font,
+        color: COLORS.muted,
+      });
+
+      const valueX = MARGIN + CONTENT_W * 0.48;
+      this.page.drawText(sanitizePdfText(value), {
+        x: valueX,
+        y: rowY,
+        size: 8.5,
+        font: this.bold,
+        color: COLORS.text,
+      });
+
+      if (score != null) {
+        const barW = (score / 10) * barMaxW;
+        const barColor =
+          score >= 8 ? COLORS.high : score >= 6 ? COLORS.moderate : COLORS.low;
+        this.page.drawRectangle({
+          x: valueX,
+          y: rowY - 8,
+          width: barMaxW,
+          height: 4,
+          color: COLORS.rule,
+        });
+        this.page.drawRectangle({
+          x: valueX,
+          y: rowY - 8,
+          width: barW,
+          height: 4,
+          color: barColor,
+        });
+      }
+      rowY -= rowH;
+    }
+    this.y -= tableH + 6;
+  }
+
   drawSection(kind: BriefSectionKind | undefined, lines: string[]) {
     if (!lines.length) return;
     switch (kind) {
+      case 'scorecard':
+        this.drawScorecardGrid(lines);
+        break;
       case 'snapshot':
         this.drawSnapshotTable(lines);
         break;

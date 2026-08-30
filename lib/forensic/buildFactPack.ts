@@ -1,5 +1,7 @@
 import type { TaggedClaim } from '@/lib/claims';
 import type { ThesisPromptInput } from '@/lib/ai/types';
+import { buildQuickScorecard, formatQuickScorecardForPrompt } from './quickScorecard/buildQuickScorecard';
+import { toQuickScorecardInputFromThesis } from './quickScorecard';
 import type { ForensicFactPack, ForensicRubricRow, ForensicSnapshot } from './types';
 import { FORENSIC_FACT_PACK_VERSION } from './types';
 
@@ -152,6 +154,9 @@ export function buildForensicFactPack(input: ThesisPromptInput): ForensicFactPac
     rubric: buildRubric(input),
     dataGaps,
     notes,
+    quickScorecard: buildQuickScorecard(
+      toQuickScorecardInputFromThesis(input, input.shortCheck?.cashNeedPoints)
+    ),
   };
 }
 
@@ -167,6 +172,10 @@ export function formatFactPackForPrompt(pack: ForensicFactPack): string {
   const lines: string[] = [];
   lines.push(`packVersion: ${pack.version}`);
   lines.push(`asOf: ${pack.asOf}`);
+
+  if (pack.quickScorecard) {
+    lines.push('\n' + formatQuickScorecardForPrompt(pack.quickScorecard));
+  }
 
   if (pack.alerts.length) {
     lines.push('\nAlerts (binding / high-signal):');

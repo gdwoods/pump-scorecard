@@ -91,6 +91,7 @@ function buildThesisPayload(
           walkAwayFlags: result.walkAwayFlags,
           alertLabels: result.alertLabels,
           actualValues: result.scoreBreakdown?.actualValues,
+          cashNeedPoints: result.scoreBreakdown?.cashNeed,
           dataCompleteness: result.dataCompleteness,
         }
       : undefined,
