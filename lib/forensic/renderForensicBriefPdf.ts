@@ -3,6 +3,7 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import type { AiThesisResult } from '@/lib/ai/types';
 import { buildBriefSections, formatBriefPlainText } from './formatBriefForExport';
+import { sanitizePdfText } from './sanitizePdfText';
 import type { ForensicFactPack } from './types';
 
 const PAGE_SIZE: [number, number] = [612, 792];
@@ -30,9 +31,10 @@ export async function renderForensicBriefPdf(
   };
 
   const drawLine = (text: string, size: number, isBold = false, indent = 0) => {
-    if (!text) return;
+    const safe = sanitizePdfText(text);
+    if (!safe) return;
     const currentFont = isBold ? boldFont : font;
-    const words = text.split(' ');
+    const words = safe.split(' ');
     let line = '';
     const x = MARGIN + indent;
 
@@ -62,7 +64,7 @@ export async function renderForensicBriefPdf(
   };
 
   // Title block
-  drawLine(`Forensic Brief — ${factPack.ticker}`, 16, true);
+  drawLine(`Forensic Brief - ${factPack.ticker}`, 16, true);
   drawLine(`As of: ${new Date(factPack.asOf).toLocaleString()}`, 9);
   drawLine(`Fact pack: ${factPack.version}`, 9);
   if (thesis?.reportVersion) drawLine(`Report: ${thesis.reportVersion}`, 9);
@@ -82,7 +84,9 @@ export async function renderForensicBriefPdf(
   ensureSpace(LINE_HEIGHT * 3);
   y -= SECTION_GAP;
   page.drawText(
-    'DISCLAIMER: Research synthesis only — not trade authorization. Framework 3.0 walk-away flags bind.',
+    sanitizePdfText(
+      'DISCLAIMER: Research synthesis only - not trade authorization. Framework 3.0 walk-away flags bind.'
+    ),
     {
       x: MARGIN,
       y,

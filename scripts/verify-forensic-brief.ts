@@ -9,6 +9,7 @@ import {
   formatProseForExport,
 } from '../lib/forensic/formatBriefForExport';
 import { renderForensicBriefPdf } from '../lib/forensic/renderForensicBriefPdf';
+import { sanitizePdfText } from '../lib/forensic/sanitizePdfText';
 import type { AiThesisResult, ThesisPromptInput } from '../lib/ai/types';
 
 let failures = 0;
@@ -126,8 +127,21 @@ assert(plain.includes('FORENSIC BRIEF — DFNS'), 'plain text header');
 assert(plain.includes('DISCLAIMER'), 'plain text disclaimer');
 assert(plain.includes('[OPINION]'), 'plain text preserves opinion tag');
 
+assert(
+  sanitizePdfText('Baby\u2011shelf critical') === 'Baby-shelf critical',
+  'sanitizePdfText maps non-breaking hyphen'
+);
+assert(
+  sanitizePdfText('walk\u2014away') === 'walk-away',
+  'sanitizePdfText maps em dash'
+);
+
 async function testPdf() {
-  const bytes = await renderForensicBriefPdf(factPack, thesis);
+  const thesisWithUnicode: AiThesisResult = {
+    ...thesis,
+    thesis: 'OPINION: Non\u2011breaking hyphen and em\u2014dash test.',
+  };
+  const bytes = await renderForensicBriefPdf(factPack, thesisWithUnicode);
   const header = Buffer.from(bytes.slice(0, 5)).toString('ascii');
   assert(header === '%PDF-', 'renderForensicBriefPdf returns valid PDF header');
   assert(bytes.length > 500, 'PDF has reasonable size');
