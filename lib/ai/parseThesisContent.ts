@@ -37,7 +37,10 @@ function isValidForwardDate(value: unknown): value is AiThesisForwardDate {
   if (typeof f.significance !== 'string' || !VALID_SIGNIFICANCE.has(f.significance as CatalystSignificance)) {
     return false;
   }
-  if (f.tag != null && (typeof f.tag !== 'string' || !VALID_FORWARD_TAGS.has(f.tag))) return false;
+  if (f.tag != null && typeof f.tag === 'string') {
+    if (f.tag === 'none') return true;
+    if (!VALID_FORWARD_TAGS.has(f.tag)) return false;
+  }
   return true;
 }
 
@@ -51,11 +54,12 @@ function normalizeCatalyst(c: AiThesisCatalyst): AiThesisCatalyst {
 }
 
 function normalizeForwardDate(f: AiThesisForwardDate): AiThesisForwardDate {
+  const tag = f.tag === 'none' ? undefined : f.tag;
   return {
     date: f.date.trim(),
     event: f.event.trim(),
     significance: f.significance,
-    ...(f.tag ? { tag: f.tag } : {}),
+    ...(tag ? { tag } : {}),
   };
 }
 

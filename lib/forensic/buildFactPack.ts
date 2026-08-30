@@ -17,6 +17,20 @@ function conflict(text: string, conflictNote: string): TaggedClaim {
   return { text, tag: 'conflict', conflictNote };
 }
 
+function formatTaggedForPrompt(claim: TaggedClaim): string {
+  const tag = claim.tag ?? 'verified';
+  if (tag === 'verified') {
+    return claim.conflictNote ? `${claim.text} [CONFLICT: ${claim.conflictNote}]` : claim.text;
+  }
+  return `[${tag.toUpperCase()}] ${claim.text}`;
+}
+
+function truncateExcerpt(text: string, max = 120): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max)}…`;
+}
+
 function rubricFromDt(
   extracted: NonNullable<ThesisPromptInput['extractedData']>
 ): ForensicRubricRow[] {
@@ -140,7 +154,11 @@ export function buildForensicFactPack(input: ThesisPromptInput): ForensicFactPac
       const src = reason.evidence?.accessionNumber
         ? [{ kind: 'edgar' as const, accessionNumber: reason.evidence.accessionNumber, label: reason.evidence.form }]
         : undefined;
-      notes.push(formatTaggedForPrompt(verified(`${reason.label} (${reason.points > 0 ? '+' : ''}${reason.points})`, src)));
+      const points = `${reason.points > 0 ? '+' : ''}${reason.points}`;
+      const excerpt = reason.evidence?.excerpt
+        ? ` Excerpt: "${truncateExcerpt(reason.evidence.excerpt)}"`
+        : '';
+      notes.push(formatTaggedForPrompt(verified(`${reason.label} (${points})${excerpt}`, src)));
     }
   }
 
@@ -158,14 +176,6 @@ export function buildForensicFactPack(input: ThesisPromptInput): ForensicFactPac
       toQuickScorecardInputFromThesis(input, input.shortCheck?.cashNeedPoints)
     ),
   };
-}
-
-function formatTaggedForPrompt(claim: TaggedClaim): string {
-  const tag = claim.tag ?? 'verified';
-  if (tag === 'verified') {
-    return claim.conflictNote ? `${claim.text} [CONFLICT: ${claim.conflictNote}]` : claim.text;
-  }
-  return `[${tag.toUpperCase()}] ${claim.text}`;
 }
 
 export function formatFactPackForPrompt(pack: ForensicFactPack): string {

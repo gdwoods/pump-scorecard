@@ -34,7 +34,7 @@ Claim tagging (codebase convention — use inline prefixes in prose fields):
 - Prefix source disagreements with "CONFLICT: " — EDGAR/scan governs over DilutionTracker/vendor.
 - Prefix synthesis judgments with "OPINION: " (CEO/trader lens, level calls, financing predictions). Never use OPINION on walk-away flags.
 
-Respond with ONLY a single JSON object, no markdown fencing, matching exactly this shape:
+Respond with ONLY a single JSON object, no markdown fencing. Use empty strings for optional sections you omit (regulatoryAlert, rubricNarrative, ceoLens, traderLens). Use tag "none" on forwardDates when no epistemic tag applies. Keep catalysts to at most 5 items and prose concise so the JSON completes.
 {
   "summary": "2-3 sentence at-a-glance summary of the setup",
   "thesis": "one or two paragraphs synthesizing salient factors",
@@ -46,7 +46,7 @@ Respond with ONLY a single JSON object, no markdown fencing, matching exactly th
     { "description": "string", "date": "string or empty", "significance": "high|moderate|low|stale", "rationale": "why this significance rating" }
   ],
   "forwardDates": [
-    { "date": "string", "event": "string", "significance": "high|moderate|low|stale", "tag": "verify|conflict|opinion or omit when verified" }
+    { "date": "string", "event": "string", "significance": "high|moderate|low|stale", "tag": "verify|conflict|opinion|none" }
   ],
   "dataGaps": ["VERIFY-prefixed strings for material missing data"],
   "keyRisks": ["what could invalidate this thesis, or what you're least confident about"]
@@ -279,8 +279,7 @@ export function buildThesisMessages(input: ThesisPromptInput): GroqChatMessage[]
       parts.push(
         `Capital Pressure (SEC-evidence based): ${cp.score}/100 (${cp.status}) — ${cp.summary}`
       );
-      parts.push('Capital Pressure SEC filing evidence (top weighted):');
-      parts.push(formatCapitalPressureEvidence(cp.reasons, cp.events));
+      parts.push('(Filing excerpts and Quick Scorecard are in the Forensic Fact Pack above.)');
     }
     if (s.insiderTransactionsCount !== undefined) {
       parts.push(

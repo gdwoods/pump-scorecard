@@ -124,7 +124,8 @@ assert(userContent.includes('BINDING'), 'user message marks walk-away flags as b
 assert(userContent.includes('2026-08-15'), 'user message includes catalyst date');
 assert(userContent.includes('Deprecated legacy scan score'), 'user message marks legacy pump score deprecated');
 assert(userContent.includes('77/100'), 'user message includes Capital Pressure score');
-assert(userContent.includes('Excerpt:'), 'user message includes SEC filing excerpt');
+assert(userContent.includes('Quick Scorecard'), 'user message includes quick scorecard');
+assert(userContent.includes('Excerpt:'), 'user message includes SEC filing excerpt via fact pack');
 assert(userContent.includes('ELOC'), 'user message includes filing excerpt text');
 assert(userContent.includes('2026-06-12'), 'user message includes droppiness spike date');
 assert(userContent.includes('retraced'), 'user message includes droppiness spike outcome');

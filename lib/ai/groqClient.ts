@@ -1,4 +1,4 @@
-// lib/ai/groqClient.ts
+import type { GroqResponseFormat } from './thesisJsonSchema';
 //
 // Thin wrapper over Groq's OpenAI-compatible chat completions endpoint
 // (https://api.groq.com/openai/v1/chat/completions), used for the free-tier
@@ -23,6 +23,8 @@ export interface GroqCallResult {
   success: boolean;
   content?: string;
   error?: string;
+  /** Groq error code when present (e.g. json_validate_failed). */
+  errorCode?: string;
 }
 
 /** Injectable so route/prompt logic can be verified without a live network call or API key. */
@@ -60,7 +62,12 @@ const defaultFetcher: GroqFetcher = (apiKey, body) => {
  */
 export async function callGroq(
   messages: GroqChatMessage[],
-  opts: { fetcher?: GroqFetcher; temperature?: number; maxTokens?: number } = {}
+  opts: {
+    fetcher?: GroqFetcher;
+    temperature?: number;
+    maxTokens?: number;
+    responseFormat?: GroqResponseFormat;
+  } = {}
 ): Promise<GroqCallResult> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
@@ -75,7 +82,7 @@ export async function callGroq(
       messages,
       temperature: opts.temperature ?? 0.3,
       max_completion_tokens: opts.maxTokens ?? 900,
-      response_format: { type: 'json_object' },
+      response_format: opts.responseFormat ?? { type: 'json_object' },
     });
 
     if (!response.ok) {
@@ -86,9 +93,21 @@ export async function callGroq(
         };
       }
       const bodyText = await response.text().catch(() => '');
+      let errorCode: string | undefined;
+      try {
+        const parsed = JSON.parse(bodyText) as { error?: { code?: string; message?: string } };
+        errorCode = parsed.error?.code;
+      } catch {
+        // ignore parse failure
+      }
+      const message =
+        errorCode === 'json_validate_failed'
+          ? 'Groq could not produce valid thesis JSON — retrying usually works.'
+          : `Groq API error ${response.status}: ${bodyText.slice(0, 200)}`;
       return {
         success: false,
-        error: `Groq API error ${response.status}: ${bodyText.slice(0, 200)}`,
+        error: message,
+        errorCode,
       };
     }
 

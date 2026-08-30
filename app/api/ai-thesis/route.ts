@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { callGroq, getGroqModel } from '@/lib/ai/groqClient';
 import { buildThesisMessages } from '@/lib/ai/buildThesisPrompt';
 import { parseThesisContent } from '@/lib/ai/parseThesisContent';
+import { requestThesisGroq } from '@/lib/ai/requestThesisGroq';
 import { checkAiThesisRateLimit, getClientIpFromHeaders } from '@/lib/ai/rateLimit';
 import { readCachedThesis, writeCachedThesis } from '@/lib/ai/thesisCache';
 import { SHOW_AI_THESIS } from '@/lib/config/features';
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
     }
 
     const messages = buildThesisMessages(body);
-    const groqResult = await callGroq(messages, { maxTokens: 1200 });
+    const groqResult = await requestThesisGroq(messages);
 
     if (!groqResult.success || !groqResult.content) {
       return NextResponse.json({ success: false, error: groqResult.error ?? 'AI thesis unavailable' });
