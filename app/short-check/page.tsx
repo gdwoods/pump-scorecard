@@ -588,9 +588,11 @@ export default function ShortCheckPage() {
         {/* Unified scan enrichment — same layout for DT screenshot and Quick Ticker paths */}
         {showMarketData && (
           <>
-            <PairGrid first={capitalPressureBlock} second={aiThesisBlock} breakpoint="xl" />
-
             <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
+
+            {capitalPressureBlock}
+
+            {aiThesisBlock}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <Fundamentals result={pumpScorecardData} />
@@ -615,18 +617,14 @@ export default function ShortCheckPage() {
                 />
               )}
 
-            <PairGrid
-              breakpoint="lg"
-              first={<NewsSection ticker={ticker} items={pumpScorecardData.news || []} />}
-              second={
-                pumpScorecardData.borrowData ? (
-                  <BorrowDeskCard
-                    ticker={ticker.toUpperCase()}
-                    borrowData={pumpScorecardData.borrowData}
-                  />
-                ) : null
-              }
-            />
+            <NewsSection ticker={ticker} items={pumpScorecardData.news || []} />
+
+            {pumpScorecardData.borrowData && (
+              <BorrowDeskCard
+                ticker={ticker.toUpperCase()}
+                borrowData={pumpScorecardData.borrowData}
+              />
+            )}
           </>
         )}
 

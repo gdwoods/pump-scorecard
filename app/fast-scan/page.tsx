@@ -215,9 +215,11 @@ function FastScanInner() {
 
         {ticker && pumpData && !loading && (
           <>
-            <PairGrid first={capitalPressureBlock} second={aiThesisBlock} breakpoint="xl" />
-
             <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
+
+            {capitalPressureBlock}
+
+            {aiThesisBlock}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <Fundamentals result={pumpData} />
