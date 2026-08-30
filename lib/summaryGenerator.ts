@@ -366,22 +366,6 @@ function generateFullSummary(
       lines.push('');
     }
 
-    // Fraud Evidence
-    const fraudItems = Array.isArray(pumpScorecardData.fraudImages)
-      ? pumpScorecardData.fraudImages.filter(
-        (item: any) => (item?.caption || '').toLowerCase() !== 'manual check'
-      )
-      : [];
-
-    if (fraudItems.length > 0) {
-      lines.push('FRAUD EVIDENCE:');
-      lines.push(`Found ${fraudItems.length} fraud evidence image(s)`);
-      fraudItems.slice(0, 5).forEach((item: any) => {
-        lines.push(`• ${item.caption || 'Fraud evidence'}`);
-      });
-      lines.push('');
-    }
-
     // News
     if (pumpScorecardData.news && Array.isArray(pumpScorecardData.news) && pumpScorecardData.news.length > 0) {
       lines.push('RECENT NEWS:');

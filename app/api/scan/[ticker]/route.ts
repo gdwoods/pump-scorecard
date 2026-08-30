@@ -32,13 +32,6 @@ type Filing = {
   mailingAddress?: any;
 };
 type Promotion = { type: string; date: string; url: string };
-type FraudImage = {
-  full: string | null;
-  thumb: string | null;
-  date: string | null; // normalized ISO
-  caption: string;
-  sourceUrl: string | null;
-};
 type CompanyProfile = {
   sector?: string;
   industry?: string;
@@ -62,22 +55,6 @@ type CikEntry = {
 type PromotionResult = {
   type?: string;
   promotion_date?: string;
-};
-
-type FraudResult = {
-  caption?: string;
-  text?: string;
-  title?: string;
-  postTitle?: string;
-  symbols?: string[];
-  tickers?: string[];
-  imagePath?: string;
-  thumbnailPath?: string;
-  approvedAt?: string;
-  uploadedAt?: string;
-  link?: string;
-  url?: string;
-  postUrl?: string;
 };
 
 interface YahooQuote {
@@ -417,78 +394,6 @@ try {
       return [];
     })();
 
-    const fraudTask = (async () => {
-    try {
-      const fraudRes = await fetch(
-        `https://www.stopnasdaqchinafraud.com/api/stop-nasdaq-fraud?page=0&searchText=${upperTicker}`,
-        { headers: { "User-Agent": "pump-scorecard" } }
-      );
-        if (!fraudRes.ok) {
-          console.warn(`[${upperTicker}] Fraud API returned non-OK status: ${fraudRes.status}`);
-          return { images: [], blocked: true };
-        }
-
-        // Check if response is HTML (Vercel security checkpoint) instead of JSON
-        const contentType = fraudRes.headers.get("content-type") || "";
-        if (!contentType.includes("application/json")) {
-          const text = await fraudRes.text();
-          if (text.includes("Vercel Security Checkpoint") || text.includes("<!DOCTYPE html>")) {
-            console.warn(`[${upperTicker}] Fraud API blocked by Vercel security checkpoint`);
-            return { images: [], blocked: true };
-          }
-          console.warn(`[${upperTicker}] Fraud API returned unexpected content type: ${contentType}`);
-          return { images: [], blocked: false };
-        }
-
-        const fraudJson = await fraudRes.json();
-        const rawResults = Array.isArray(fraudJson?.results) ? fraudJson.results : [];
-        
-        if (rawResults.length === 0) {
-          console.log(`[${upperTicker}] Fraud API returned no results for ticker`);
-        }
-        const U = upperTicker.toUpperCase();
-
-        const normalize = (s: unknown) =>
-          String(s ?? "").toUpperCase().replace(/[$#@()[\]{}.,;:!?'"\-]/g, " ").replace(/\s+/g, " ").trim();
-
-        const hasTickerToken = (s: string) => {
-          const re = new RegExp(`(^|[^A-Z0-9])${U}([^A-Z0-9]|$)`);
-          return re.test(s);
-        };
-
-        const strongMatches = rawResults.filter((r: FraudResult) => {
-          const fields: string[] = [
-            r.caption, r.text, r.title, r.postTitle,
-            Array.isArray(r.symbols) ? r.symbols.join(" ") : "",
-            Array.isArray(r.tickers) ? r.tickers.join(" ") : "",
-            r.imagePath, r.thumbnailPath,
-          ].map(normalize);
-          return hasTickerToken(fields.join(" | "));
-        });
-
-        const images = strongMatches
-          .map((img: FraudResult) => ({
-            full: img.imagePath ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.imagePath}` : null,
-            thumb: img.thumbnailPath ? `https://eagyqnmtlkoahfqqhgwc.supabase.co/storage/v1/object/public/${img.thumbnailPath}` : null,
-            date: img.approvedAt ? new Date(img.approvedAt).toISOString() : img.uploadedAt ? new Date(img.uploadedAt).toISOString() : null,
-            caption: img.caption ?? img.text ?? img.title ?? img.postTitle ?? "Evidence",
-            sourceUrl: img.link ?? img.url ?? img.postUrl ?? null,
-          }))
-          .filter((img: FraudImage) => img.full && img.thumb)
-          .sort((a: FraudImage, b: FraudImage) => {
-          if (!a.date && !b.date) return 0;
-          if (!a.date) return 1;
-          if (!b.date) return -1;
-          return new Date(b.date).getTime() - new Date(a.date).getTime();
-        });
-        
-        return { images, blocked: false };
-      } catch (err) {
-        console.error("Fraud task failed:", err);
-        return { images: [], blocked: false };
-      }
-    })();
-
     const droppinessTask = (async () => {
       try {
         const result = await computeDroppiness(upperTicker);
@@ -536,7 +441,6 @@ try {
       polyMetaRes,
       secRes,
       promotionsRes,
-      fraudRes,
       droppinessRes,
       borrowRes,
       newsRes,
@@ -548,7 +452,6 @@ try {
       polygonMetaTask,
       secTask,
       promotionsTask,
-      fraudTask,
       droppinessTask,
       borrowTask,
       newsTask,
@@ -562,9 +465,6 @@ try {
     const polyMeta = polyMetaRes.status === 'fulfilled' ? polyMetaRes.value : { meta: null, hasOptions: false };
     const secData = secRes.status === 'fulfilled' ? secRes.value : { filings: [], secCountry: null, cik: null, submissions: null };
     let promotions = promotionsRes.status === 'fulfilled' ? promotionsRes.value : [];
-    const fraudResult = fraudRes.status === 'fulfilled' ? fraudRes.value : { images: [], blocked: false };
-    let fraudImages = Array.isArray(fraudResult) ? fraudResult : fraudResult.images || [];
-    const fraudApiBlocked = Array.isArray(fraudResult) ? false : (fraudResult.blocked || false);
     const droppinessData = droppinessRes.status === 'fulfilled' ? droppinessRes.value : { score: 0, detail: [], intraday: [] };
     const borrowData = borrowRes.status === 'fulfilled' ? borrowRes.value : null;
     const sentimentData = sentimentRes.status === 'fulfilled' ? sentimentRes.value : null;
@@ -716,15 +616,9 @@ try {
     // Options
     let hasOptions = yahooData?.hasOptions || polyMeta.hasOptions;
 
-    // Fallback for promotions/fraud
+    // Fallback for promotions
     if (!promotions.length) {
       promotions = [{ type: "Manual Check", date: "", url: "https://www.stockpromotiontracker.com/" }];
-    }
-    if (!fraudImages.length) {
-      fraudImages = [{
-        full: null, thumb: null, date: null, caption: fraudApiBlocked ? "API Blocked" : "Manual Check",
-        sourceUrl: `https://www.stopnasdaqchinafraud.com/?q=${encodeURIComponent(upperTicker)}`,
-      }];
     }
 
     // Country Logic
@@ -842,7 +736,6 @@ try {
       intraday: droppinessData.intraday,
       filings: secData.filings,
       promotions,
-      fraudImages,
       droppinessScore,
       droppinessSpikeCount: Array.isArray(droppinessData.detail)
         ? droppinessData.detail.length
@@ -858,8 +751,6 @@ try {
       sudden_price_spike,
       dilution_offering,
       promoted_stock: promotions.length > 0 && promotions[0].type !== "Manual Check",
-      fraud_evidence: fraudImages.length > 0 && !fraudImages[0].caption?.includes("Manual") && !fraudImages[0].caption?.includes("Blocked"),
-      fraud_api_blocked: fraudApiBlocked,
       risky_country,
       hasOptions,
       news,

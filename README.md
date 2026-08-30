@@ -6,7 +6,7 @@ Evidence-based risk analysis for microcap and OTC equities. Surfaces structural,
 
 | Surface | Description |
 |---------|-------------|
-| **Pump Scorecard** | Full multi-factor scan (`/scan/[ticker]`) with Filings, Capital Pressure, volume, float, and more |
+| **Pump Scorecard** | Full multi-factor scan (`/scan/[ticker]`) — Droppiness, Capital Pressure, fundamentals, filings |
 | **Short Check** | Focused short-setup analysis (`/short-check/[ticker]`) with Risk Synopsis, Dilution Timeline, Capital Pressure, and Social Sentiment |
 | **API** | `GET /api/scan/[ticker]` returns structured JSON including optional `capitalPressure` |
 
