@@ -9,7 +9,7 @@ It is **not** a trade recommendation and does **not** label a ticker a short. Di
 ## Where it appears
 
 - Pump Scorecard: full-width card after Filings
-- Short Check: after Fundamentals / Filings; soft note under Risk Synopsis when scan data is present
+- Short Check: soft note in the **verdict stack** (Fundamental context) when scan data is present
 - Short Check PDF + Copy Summary (when `pumpScorecardData` includes the module)
 
 Optional field on `GET /api/scan/[ticker]`: `capitalPressure`. Existing clients ignore unknown keys.

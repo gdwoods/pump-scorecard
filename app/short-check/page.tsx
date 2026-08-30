@@ -5,6 +5,11 @@ import { Card } from "@/components/ui/card";
 import ShortCheckUpload from "@/components/short-check/ShortCheckUpload";
 import ShortCheckResults from "@/components/short-check/ShortCheckResults";
 import FastVerdictCard from "@/components/short-check/FastVerdictCard";
+import { generateRiskSynopsis } from "@/lib/shortCheckHelpers";
+import {
+  capitalPressureShortCheckNote,
+  detectOfferingDisagreement,
+} from "@/lib/capitalPressure/shortCheckBridge";
 import DroppinessCard from "@/components/DroppinessCard";
 import Chart from "@/components/Chart";
 import DroppinessScatter from "@/components/DroppinessChart";
@@ -272,11 +277,26 @@ export default function ShortCheckPage() {
     [fastVerdict, pumpScorecardData, extractedData]
   );
 
+  const verdictStackActive = Boolean(showFastVerdictCard && result && extractedData);
+
+  const fundamentalContext = useMemo(() => {
+    if (!verdictStackActive || !result || !extractedData) return undefined;
+    const cp = pumpScorecardData?.capitalPressure;
+    return {
+      synopsis: generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData),
+      secNote: capitalPressureShortCheckNote(cp),
+      secFilingUrl: cp?.reasons?.[0]?.evidence?.documentUrl ?? null,
+      disagreement: detectOfferingDisagreement(extractedData, cp),
+    };
+  }, [verdictStackActive, result, extractedData, pumpScorecardData, ticker]);
+
   const fastVerdictCard = showFastVerdictCard ? (
     <FastVerdictCard
       verdict={enrichedFastVerdict}
       loading={loadingFastVerdict}
       error={fastVerdictError}
+      fundamentalContext={fundamentalContext}
+      walkAwayFlags={verdictStackActive ? result?.walkAwayFlags : undefined}
     />
   ) : null;
 
@@ -510,6 +530,7 @@ export default function ShortCheckPage() {
             pumpScorecardData={pumpScorecardData}
             afterQuickActions={fastVerdictCard}
             afterFastVerdict={<>{capitalPressureBlock}{aiThesisBlock}</>}
+            synopsisInVerdictStack={verdictStackActive}
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
               setHasAnalyzedTicker(true);
