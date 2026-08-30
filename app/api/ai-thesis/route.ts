@@ -8,11 +8,12 @@
 // this app's fetch-fallback conventions.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { callGroq, getGroqModel } from '@/lib/ai/groqClient';
+import { getGroqModel } from '@/lib/ai/groqClient';
 import { buildThesisMessages } from '@/lib/ai/buildThesisPrompt';
 import { parseThesisContent } from '@/lib/ai/parseThesisContent';
 import { requestThesisGroq } from '@/lib/ai/requestThesisGroq';
 import { checkAiThesisRateLimit, getClientIpFromHeaders } from '@/lib/ai/rateLimit';
+import { checkGroqDailyBudget, formatGroqBudgetError } from '@/lib/ai/groqBudget';
 import { readCachedThesis, writeCachedThesis } from '@/lib/ai/thesisCache';
 import { SHOW_AI_THESIS } from '@/lib/config/features';
 import type { ThesisPromptInput } from '@/lib/ai/types';
@@ -74,7 +75,20 @@ export async function POST(req: NextRequest) {
 
     const cached = await readCachedThesis(body);
     if (cached) {
-      return NextResponse.json({ success: true, thesis: cached, cached: true });
+      return NextResponse.json({
+        success: true,
+        thesis: cached.thesis,
+        cached: true,
+        sharedCache: cached.source === 'ticker',
+      });
+    }
+
+    const groqBudget = await checkGroqDailyBudget();
+    if (!groqBudget.allowed) {
+      return NextResponse.json({
+        success: false,
+        error: formatGroqBudgetError(groqBudget.retryAfterSec, groqBudget.limit),
+      });
     }
 
     const messages = buildThesisMessages(body);

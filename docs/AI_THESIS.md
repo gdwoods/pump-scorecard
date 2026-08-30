@@ -200,12 +200,14 @@ Invalid catalysts are **dropped** (not a hard fail). Missing `summary` or `thesi
 
 | Item | Value |
 |------|-------|
-| Key prefix | `ai-thesis:` |
-| Key format | `ai-thesis:{TICKER}:{sha256(payload).slice(0,32)}` |
-| Payload hashed | `{ ticker, shortCheck, extractedData, scan, fastVerdict }` |
+| Exact key | `ai-thesis:{TICKER}:{sha256(payload).slice(0,32)}` |
+| Shared ticker key | `ai-thesis:latest:{TICKER}` — same thesis for all users on that symbol |
+| Payload hashed (exact key) | `{ ticker, shortCheck, extractedData, scan, fastVerdict }` |
 | TTL | 24 hours |
 
-Same ticker with **different** scan/Short Check data gets a different cache key. Changing the system prompt does **not** invalidate cache — wait for TTL or clear KV keys manually when testing prompt changes.
+Lookup order: exact payload match → ticker latest. API returns `sharedCache: true` when serving the ticker-level entry.
+
+Same ticker with **different** scan data may still get the shared ticker cache (by design for group use). Changing the system prompt does **not** invalidate cache — wait for TTL or clear KV keys manually when testing prompt changes.
 
 Requires KV env vars (`KV_REST_API_*`). Without KV, cache reads return null and every request hits Groq.
 
@@ -213,15 +215,42 @@ Requires KV env vars (`KV_REST_API_*`). Without KV, cache reads return null and 
 
 ## Rate limiting
 
-`lib/ai/rateLimit.ts`: **10 requests per IP per hour** (rolling window via KV `INCR` + `EXPIRE`).
+`lib/ai/rateLimit.ts`: **10 requests per IP per hour** by default (rolling window via KV `INCR` + `EXPIRE`).
 
 | Env | Purpose |
 |-----|---------|
 | `AI_THESIS_RATE_LIMIT_WHITELIST` | Comma-separated IPs that bypass the cap |
+| `AI_THESIS_RATE_LIMIT_PER_HOUR` | Per-IP cap (default `10`; use `3`–`5` for a shared trading group) |
 
 When KV is unavailable (local dev), an in-memory fallback bucket is used.
 
-Groq itself also rate-limits (~30 RPM / ~1k RPD on free tier as of writing). The client surfaces Groq 429s as a friendly error.
+### Shared Groq budget (all users)
+
+Per-IP limits do **not** protect Groq quota — every user shares one `GROQ_API_KEY` and one Groq org limit (~1k RPD / 200k TPD on free tier; **8k TPM** is often the first bottleneck).
+
+| Env | Purpose |
+|-----|---------|
+| `AI_THESIS_DAILY_GROQ_BUDGET` | Max Groq API calls per UTC day for the whole app (default `50`) |
+
+When the budget is exhausted, the API returns a clear message before calling Groq. Cached theses (exact or per-ticker) still work with **zero** Groq calls.
+
+Groq itself also rate-limits. The client surfaces Groq 429s as a friendly error.
+
+---
+
+## Group / trading-desk usage
+
+Realistic free-tier capacity (with defaults):
+
+| Layer | What it protects |
+|-------|------------------|
+| Per-IP limit | One member spamming Generate |
+| Ticker cache (`ai-thesis:latest:{TICKER}`) | Second member on same symbol gets instant cached thesis |
+| Daily Groq budget | Whole group from silently burning org quota |
+
+**Example:** 8 traders × 5 tickers/day = 40 unique symbols → ~40–80 Groq calls if everyone hits fresh tickers. Same symbols shared via ticker cache → ~5–10 Groq calls.
+
+For heavier use, upgrade Groq to the **Developer plan** (pay-as-you-go, higher TPM/RPM) and raise `AI_THESIS_DAILY_GROQ_BUDGET` accordingly.
 
 ---
 
@@ -233,7 +262,8 @@ Groq itself also rate-limits (~30 RPM / ~1k RPD on free tier as of writing). The
 | `lib/ai/fastVerdictPrompt.ts` | Fast Verdict → prompt slice |
 | `lib/ai/groqClient.ts` | Groq HTTP client |
 | `lib/ai/parseThesisContent.ts` | JSON validation / normalization |
-| `lib/ai/thesisCache.ts` | KV read/write |
+| `lib/ai/thesisCache.ts` | KV read/write (exact + per-ticker shared) |
+| `lib/ai/groqBudget.ts` | Shared daily Groq call cap |
 | `lib/ai/rateLimit.ts` | Per-IP limit |
 | `lib/ai/types.ts` | TypeScript types |
 | `app/api/ai-thesis/route.ts` | API route |

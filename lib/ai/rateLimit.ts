@@ -6,10 +6,17 @@
 import { edgeKvExpire, edgeKvIncr } from '@/lib/kv/edgeRead';
 
 const KEY_PREFIX = 'ai-thesis:rl:';
-/** Requests allowed per IP per rolling window. */
-const LIMIT_PER_WINDOW = 10;
 /** Window length in seconds (1 hour). */
 const WINDOW_SECONDS = 60 * 60;
+
+/** Requests allowed per IP per rolling window. Override via AI_THESIS_RATE_LIMIT_PER_HOUR. */
+export function getAiThesisRateLimitPerHour(): number {
+  const raw = process.env.AI_THESIS_RATE_LIMIT_PER_HOUR?.trim();
+  if (!raw) return 10;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return 10;
+  return parsed;
+}
 
 const localBuckets = new Map<string, { count: number; resetAt: number }>();
 
@@ -40,7 +47,8 @@ function checkLocalRateLimit(clientIp: string): RateLimitResult {
     localBuckets.set(clientIp, { count: 1, resetAt: now + WINDOW_SECONDS * 1000 });
     return { allowed: true };
   }
-  if (bucket.count >= LIMIT_PER_WINDOW) {
+  const limit = getAiThesisRateLimitPerHour();
+  if (bucket.count >= limit) {
     return { allowed: false, retryAfterSec: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)) };
   }
   bucket.count += 1;
@@ -63,7 +71,8 @@ export async function checkAiThesisRateLimit(clientIp: string): Promise<RateLimi
     await edgeKvExpire(key, WINDOW_SECONDS);
   }
 
-  if (count > LIMIT_PER_WINDOW) {
+  const limit = getAiThesisRateLimitPerHour();
+  if (count > limit) {
     return { allowed: false, retryAfterSec: WINDOW_SECONDS };
   }
 

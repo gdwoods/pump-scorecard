@@ -6,8 +6,15 @@
 import { buildThesisMessages } from '../lib/ai/buildThesisPrompt';
 import { fastVerdictToPromptSlice } from '../lib/ai/fastVerdictPrompt';
 import { callGroq, type GroqFetcher } from '../lib/ai/groqClient';
+import {
+  checkGroqDailyBudget,
+  formatGroqBudgetError,
+  getGroqDailyBudgetLimit,
+  recordGroqApiCall,
+} from '../lib/ai/groqBudget';
 import { parseThesisContent } from '../lib/ai/parseThesisContent';
 import { checkAiThesisRateLimit, isAiThesisRateLimitWhitelisted } from '../lib/ai/rateLimit';
+import { thesisCacheKey, thesisTickerCacheKey } from '../lib/ai/thesisCache';
 import type { FastVerdict } from '../lib/fast/types';
 import type { ThesisPromptInput } from '../lib/ai/types';
 
@@ -249,8 +256,45 @@ function testWhitelist() {
   process.env.AI_THESIS_RATE_LIMIT_WHITELIST = original;
 }
 
+function testThesisCacheKeys() {
+  const body = {
+    ticker: 'dfns',
+    scan: { droppinessScore: 42 },
+  };
+  assert(
+    thesisCacheKey(body).startsWith('ai-thesis:DFNS:'),
+    'exact cache key is uppercased ticker + hash'
+  );
+  assert(
+    thesisTickerCacheKey('dfns') === 'ai-thesis:latest:DFNS',
+    'ticker cache key shares latest thesis across users'
+  );
+}
+
+async function testGroqDailyBudget() {
+  const original = process.env.AI_THESIS_DAILY_GROQ_BUDGET;
+  process.env.AI_THESIS_DAILY_GROQ_BUDGET = '2';
+  assert(getGroqDailyBudgetLimit() === 2, 'daily Groq budget reads env override');
+
+  const first = await checkGroqDailyBudget();
+  assert(first.allowed === true, 'fresh daily budget allows calls');
+
+  await recordGroqApiCall();
+  await recordGroqApiCall();
+  const blocked = await checkGroqDailyBudget();
+  assert(blocked.allowed === false, 'daily Groq budget blocks after limit');
+  assert(
+    formatGroqBudgetError(3600, 2).includes('Shared AI thesis capacity'),
+    'budget error explains shared capacity'
+  );
+
+  process.env.AI_THESIS_DAILY_GROQ_BUDGET = original;
+}
+
 async function main() {
   testWhitelist();
+  testThesisCacheKeys();
+  await testGroqDailyBudget();
   await testCallGroqSuccess();
   await testCallGroqRateLimit();
   await testCallGroqNoKey();

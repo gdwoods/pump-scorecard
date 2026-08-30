@@ -66,6 +66,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | `POLYGON_API_KEY` | Market data / fundamentals |
 | `GROQ_API_KEY` | AI thesis synthesis (server-side) |
 | `AI_THESIS_RATE_LIMIT_WHITELIST` | Comma-separated IPs bypassing thesis rate limit |
+| `AI_THESIS_RATE_LIMIT_PER_HOUR` | Per-IP thesis cap (default 10; lower for groups) |
+| `AI_THESIS_DAILY_GROQ_BUDGET` | Shared daily Groq API call cap (default 50) |
 | `DROPPINESS_WATCHLIST` | Tickers for nightly droppiness cron seeding |
 | `CRON_SECRET` | Auth for `/api/cron/droppiness` |
 | `SEC_USER_AGENT` | EDGAR identification (email in user-agent string) |
