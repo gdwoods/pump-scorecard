@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import TaggedText from "@/components/claims/TaggedText";
 import { SHOW_AI_THESIS } from "@/lib/config/features";
 import { fastVerdictToPromptSlice } from "@/lib/ai/fastVerdictPrompt";
 import type { ShortCheckResult } from "@/lib/shortCheckScoring";
@@ -33,6 +34,12 @@ interface ScanDataForThesis {
   capitalPressure?: CapitalPressureSummary;
   news?: Array<{ title?: string; headline?: string; date?: string; published?: string | number | null }>;
   insiderTransactions?: unknown[];
+  lastPrice?: number;
+  marketCap?: number;
+  floatShares?: number;
+  sharesOutstanding?: number;
+  institutionalOwnership?: number;
+  shortFloat?: number;
 }
 
 interface AiThesisCardProps {
@@ -49,6 +56,21 @@ const significanceStyles: Record<string, string> = {
   low: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
   stale: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500",
 };
+
+const forwardTagStyles: Record<string, string> = {
+  verify: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+  conflict: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200",
+  opinion: "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200",
+};
+
+function ThesisSection({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{title}</p>
+      <TaggedText text={text} />
+    </div>
+  );
+}
 
 export default function AiThesisCard({
   ticker,
@@ -123,6 +145,7 @@ export default function AiThesisCard({
             priceSpikePct: extractedData.priceSpikePct,
             currentPrice: extractedData.currentPrice,
             atmShelfStatus: extractedData.atmShelfStatus,
+            float: extractedData.float,
           }
         : undefined,
       scan: scanData
@@ -137,6 +160,14 @@ export default function AiThesisCard({
             insiderTransactionsCount: Array.isArray(scanData.insiderTransactions)
               ? scanData.insiderTransactions.length
               : undefined,
+            fundamentals: {
+              price: scanData.lastPrice,
+              marketCap: scanData.marketCap,
+              floatShares: scanData.floatShares,
+              sharesOutstanding: scanData.sharesOutstanding,
+              institutionalOwnership: scanData.institutionalOwnership,
+              shortFloat: scanData.shortFloat,
+            },
           }
         : undefined,
     };
@@ -205,8 +236,18 @@ export default function AiThesisCard({
 
         {status === "success" && thesis && (
           <div className="space-y-3">
-            <p className="text-sm text-gray-800 dark:text-gray-200">{thesis.summary}</p>
-            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{thesis.thesis}</p>
+            {thesis.regulatoryAlert && (
+              <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-3 py-2">
+                <TaggedText text={thesis.regulatoryAlert} />
+              </div>
+            )}
+
+            <TaggedText text={thesis.summary} />
+            <TaggedText text={thesis.thesis} />
+
+            {thesis.rubricNarrative && <ThesisSection title="Rubric narrative" text={thesis.rubricNarrative} />}
+            {thesis.ceoLens && <ThesisSection title="CEO lens" text={thesis.ceoLens} />}
+            {thesis.traderLens && <ThesisSection title="Trader lens" text={thesis.traderLens} />}
 
             {thesis.catalysts.length > 0 && (
               <div className="space-y-1.5">
@@ -232,6 +273,46 @@ export default function AiThesisCard({
               </div>
             )}
 
+            {thesis.forwardDates && thesis.forwardDates.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  Forward dates
+                </p>
+                {thesis.forwardDates.map((f, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm">
+                    {f.tag && (
+                      <span
+                        className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                          forwardTagStyles[f.tag] ?? ""
+                        }`}
+                      >
+                        {f.tag}
+                      </span>
+                    )}
+                    <span className="text-gray-700 dark:text-gray-300">
+                      <span className="text-gray-500 dark:text-gray-400">{f.date}</span> — {f.event}
+                      <span className="block text-xs text-gray-500 dark:text-gray-400">{f.significance}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {thesis.dataGaps && thesis.dataGaps.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  Data gaps
+                </p>
+                <ul className="text-sm text-gray-700 dark:text-gray-300 list-disc list-inside space-y-0.5">
+                  {thesis.dataGaps.map((gap, i) => (
+                    <li key={i}>
+                      <TaggedText text={gap} inline />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {thesis.keyRisks.length > 0 && (
               <div className="space-y-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
@@ -239,15 +320,20 @@ export default function AiThesisCard({
                 </p>
                 <ul className="text-sm text-gray-700 dark:text-gray-300 list-disc list-inside space-y-0.5">
                   {thesis.keyRisks.map((risk, i) => (
-                    <li key={i}>{risk}</li>
+                    <li key={i}>
+                      <TaggedText text={risk} inline />
+                    </li>
                   ))}
                 </ul>
               </div>
             )}
 
             <p className="text-[11px] text-gray-400 dark:text-gray-500 border-t border-gray-200 dark:border-gray-700 pt-2">
-              AI synthesis (Framework 3.0 lowest-precedence input) — informational only. Never overrides a walk-away
-              flag or veto above. Not trade authorization.
+              AI synthesis (Framework 3.0 lowest-precedence input) — informational only. VERIFY / CONFLICT / OPINION
+              tags mark epistemic status. Never overrides a walk-away flag or veto above. Not trade authorization.
+              {thesis.reportVersion && (
+                <span className="block mt-1">Report schema: {thesis.reportVersion}</span>
+              )}
             </p>
           </div>
         )}

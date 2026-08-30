@@ -110,7 +110,12 @@ assert(messages[0].role === 'system', 'first message is system role');
 assert(messages[0].content.includes('LOWEST-precedence'), 'system prompt encodes Framework 3.0 precedence order');
 assert(messages[0].content.includes('Respond with ONLY a single JSON object'), 'system prompt demands strict JSON');
 
+assert(messages[0].content.includes('VERIFY:'), 'system prompt documents VERIFY tagging');
+assert(messages[0].content.includes('Forensic Fact Pack'), 'system prompt references fact pack');
+
 const userContent = messages[1].content;
+assert(userContent.includes('Forensic Fact Pack'), 'user message includes forensic fact pack');
+assert(userContent.includes('forensic-fact-pack-v1'), 'user message includes fact pack version');
 assert(userContent.includes('DFNS'), 'user message includes ticker');
 assert(userContent.includes('Fast Verdict'), 'user message includes Fast Verdict section');
 assert(userContent.includes('NO_TRADE'), 'user message includes fast verdict kind');
@@ -137,7 +142,11 @@ assert(minimalMessages[1].content.includes('NO_TRADE'), 'fast-verdict-only promp
 
 const validJson = JSON.stringify({
   summary: 'Short setup looks weak.',
-  thesis: 'Multiple binding flags align.',
+  thesis: 'OPINION: Multiple binding flags align.',
+  regulatoryAlert: 'Baby shelf critical — binding walk-away.',
+  rubricNarrative: 'DT offering badge matches CP ATM evidence.',
+  ceoLens: 'OPINION: Issuer likely needs another shelf refresh.',
+  traderLens: 'VERIFY: Borrow not confirmed in fact pack.',
   catalysts: [
     {
       description: 'Reverse split announced',
@@ -146,12 +155,23 @@ const validJson = JSON.stringify({
       rationale: 'Dated, material corporate action.',
     },
   ],
+  forwardDates: [
+    { date: '2026-09-15', event: 'Compliance deadline', significance: 'high', tag: 'verify' },
+  ],
+  dataGaps: ['VERIFY: Warrant overhang table not in fact pack'],
   keyRisks: ['Borrow unavailable'],
 });
 const parsed = parseThesisContent(validJson, 'test-model');
 assert(parsed !== null, 'parseThesisContent accepts valid JSON');
 assert(parsed?.catalysts.length === 1, 'parseThesisContent keeps valid catalysts');
 assert(parsed?.keyRisks.length === 1, 'parseThesisContent keeps key risks');
+assert(parsed?.regulatoryAlert?.includes('Baby shelf'), 'parseThesisContent keeps regulatoryAlert');
+assert(parsed?.rubricNarrative?.includes('DT offering'), 'parseThesisContent keeps rubricNarrative');
+assert(parsed?.ceoLens?.includes('OPINION:'), 'parseThesisContent keeps ceoLens');
+assert(parsed?.traderLens?.includes('VERIFY:'), 'parseThesisContent keeps traderLens');
+assert(parsed?.forwardDates?.length === 1, 'parseThesisContent keeps forwardDates');
+assert(parsed?.dataGaps?.length === 1, 'parseThesisContent keeps dataGaps');
+assert(parsed?.reportVersion === 'forensic-brief-v1', 'parseThesisContent sets reportVersion');
 
 const invalidCatalyst = parseThesisContent(
   JSON.stringify({

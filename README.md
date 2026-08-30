@@ -37,7 +37,7 @@ It is a **research signal**, not a short label and not proof of dilution.
 |------|--------|
 | Lookback | **12 months** for events; **24 months** only for S-1/S-3/F-1/F-3 registration capacity |
 | Pump headline | **Not** folded into deprecated `weightedRiskScore` — shown on its own card |
-| Docs | [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md), [`docs/AI_THESIS.md`](docs/AI_THESIS.md) |
+| Docs | [`docs/CAPITAL_PRESSURE.md`](docs/CAPITAL_PRESSURE.md), [`docs/AI_THESIS.md`](docs/AI_THESIS.md), [`docs/CLAIM_TAGGING.md`](docs/CLAIM_TAGGING.md), [`docs/FORENSIC_REPORT_ROADMAP.md`](docs/FORENSIC_REPORT_ROADMAP.md) |
 | Code | `lib/capitalPressure/`, `components/CapitalPressureCard.tsx` |
 
 ## Deprecated / removed (Aug 2026)

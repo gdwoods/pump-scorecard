@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     }
 
     const messages = buildThesisMessages(body);
-    const groqResult = await callGroq(messages);
+    const groqResult = await callGroq(messages, { maxTokens: 1200 });
 
     if (!groqResult.success || !groqResult.content) {
       return NextResponse.json({ success: false, error: groqResult.error ?? 'AI thesis unavailable' });

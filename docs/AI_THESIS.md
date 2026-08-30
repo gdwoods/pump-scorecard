@@ -53,7 +53,19 @@ Current rules encoded in the prompt:
 - Judge catalyst **significance** and **recency** (high / moderate / low / stale)
 - Respond with **strict JSON** (no markdown fences)
 
-The constant is exported as `SYSTEM_PROMPT` for tests.
+The constant is exported as `SYSTEM_PROMPT` for tests. Claim tagging rules (`VERIFY:`, `CONFLICT:`, `OPINION:`) are documented in [`CLAIM_TAGGING.md`](CLAIM_TAGGING.md).
+
+### Forensic Fact Pack (Layer B)
+
+Before the scan sections, `buildThesisMessages()` assembles a deterministic **Forensic Fact Pack** via `lib/forensic/buildFactPack.ts`:
+
+- Binding alerts from walk-aways, high CP, baby-shelf flags
+- Auto-detected **CONFLICT** when DT float vs scan float diverge ≥15%
+- **Data gaps** when completeness is low, insider direction is unparsed, or CP is missing
+- Snapshot (price, cap, float, droppiness, CP score, verdicts)
+- Rubric rows from DT badges and Short Check `actualValues`
+
+The pack is injected at the top of the user message. The model must not invent beyond it. Full forensic report program: [`FORENSIC_REPORT_ROADMAP.md`](FORENSIC_REPORT_ROADMAP.md).
 
 ### User message (data assembly)
 
@@ -64,7 +76,7 @@ The constant is exported as `SYSTEM_PROMPT` for tests.
 | Fast Verdict | `input.fastVerdict` | Verdict, binding flags, runner class, droppiness, news class, **borrow availability/fee**, **data completeness**, baby-shelf, offering ability |
 | Short Check | `input.shortCheck` | Rating %, category, **data completeness**, walk-aways, alert labels, `actualValues` from score breakdown |
 | DT / manual | `input.extractedData` | Offering badge, price, spike %, news catalyst |
-| Scan | `input.scan` | **Droppiness spike history** (top 3 by magnitude), Capital Pressure score + **SEC filing excerpts** (top 3 weighted reasons), news (up to 8), insider filing count (direction not parsed); legacy `weightedRiskScore` labeled deprecated |
+| Scan | `input.scan` | **Droppiness spike history** (top 3 by magnitude), Capital Pressure score + **SEC filing excerpts** (top 3 weighted reasons), news (up to 8), insider filing count (direction not parsed), **fundamentals** (price, cap, float); legacy `weightedRiskScore` labeled deprecated |
 
 To change **what data** the model sees, edit `buildThesisMessages()` and/or `fastVerdictToPromptSlice()` in `lib/ai/fastVerdictPrompt.ts`.
 
@@ -76,7 +88,7 @@ To change **how** sections are formatted, edit the `format*` helpers in `buildTh
 |------|----------|---------|
 | Model | `GROQ_MODEL` env | `openai/gpt-oss-120b` |
 | Temperature | `callGroq()` in `lib/ai/groqClient.ts` | `0.3` |
-| Max tokens | `callGroq()` | `900` |
+| Max tokens | `callGroq()` in route | `1200` (extended forensic brief) |
 | JSON mode | `response_format: { type: 'json_object' }` | always on |
 
 Get a Groq key at https://console.groq.com/keys. Set `GROQ_API_KEY` server-side only (see `VERCEL_ENV_SETUP.md`).
@@ -102,22 +114,10 @@ Defined in `lib/ai/types.ts`. Minimum: `{ "ticker": "ABCD" }` plus at least one 
     actualValues?: Record<string, string | undefined>;
     dataCompleteness?: number;     // 0–1
   };
-  extractedData?: { ... };
+  extractedData?: { ...; float?: number };
   scan?: {
-    weightedRiskScore?: number;
-    summaryVerdict?: string;
-    droppinessVerdict?: string;
-    droppinessScore?: number;
-    droppinessDetail?: Array<{ date: string; spikePct: number; retraced: boolean }>;
-    capitalPressure?: {
-      score: number;
-      status: string;
-      summary: string;
-      reasons?: Array<{ label: string; points: number; evidence?: { form, filingDate, excerpt, ... } }>;
-      events?: Array<{ eventDate, type, title, evidence? }>;
-    };
-    news?: Array<{ title?, headline?, date?, published? }>;
-    insiderTransactionsCount?: number;
+    ...
+    fundamentals?: { price?, marketCap?, floatShares?, sharesOutstanding?, institutionalOwnership?, shortFloat? };
   };
   fastVerdict?: {
     ...
@@ -134,7 +134,11 @@ The model must return JSON matching this shape (enforced by prompt + `parseThesi
 ```json
 {
   "summary": "2-3 sentence at-a-glance",
-  "thesis": "one or two paragraphs",
+  "thesis": "one or two paragraphs (prefix uncertain lines VERIFY:/CONFLICT:/OPINION:)",
+  "regulatoryAlert": "optional one-line alert or empty string",
+  "rubricNarrative": "optional DT/score ↔ SEC tie-in or empty string",
+  "ceoLens": "optional issuer financing/compliance paragraph",
+  "traderLens": "optional setup mechanics paragraph",
   "catalysts": [
     {
       "description": "string",
@@ -143,11 +147,17 @@ The model must return JSON matching this shape (enforced by prompt + `parseThesi
       "rationale": "why this significance"
     }
   ],
+  "forwardDates": [
+    { "date": "string", "event": "string", "significance": "high|moderate|low|stale", "tag": "verify|conflict|opinion" }
+  ],
+  "dataGaps": ["VERIFY-prefixed missing data items"],
   "keyRisks": ["what could invalidate the thesis"]
 }
 ```
 
-After parsing, the API adds `model` and `generatedAt` → `AiThesisResult`.
+After parsing, the API adds `model`, `generatedAt`, and `reportVersion` (`forensic-brief-v1`) → `AiThesisResult`.
+
+UI renders inline tags via `components/claims/TaggedText.tsx`. See [`CLAIM_TAGGING.md`](CLAIM_TAGGING.md).
 
 Invalid catalysts are **dropped** (not a hard fail). Missing `summary` or `thesis` → entire response rejected.
 

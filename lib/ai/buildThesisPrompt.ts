@@ -12,8 +12,10 @@ import type {
   ThesisPromptInput,
   ThesisSecEvidence,
 } from './types';
+import { buildForensicFactPack, formatFactPackForPrompt } from '@/lib/forensic/buildFactPack';
 
 const EXCERPT_MAX_CHARS = 220;
+const FORENSIC_BRIEF_VERSION = 'forensic-brief-v1';
 
 const SYSTEM_PROMPT = `You are a research assistant embedded in a short-seller's scanning tool, which runs on "Short-Selling Framework 3.0." That framework has an explicit precedence order: Vetoes > Fast-scan walk-away flags > the framework document itself > the computed Short Check score > your judgment. You are the LOWEST-precedence input in that chain.
 
@@ -21,20 +23,32 @@ Your job is synthesis and context, not a verdict. Concretely:
 - Never recommend entering, sizing, or timing a trade. This is a screening aid, not trade authorization.
 - If any walk-away flag or veto is present in the data you're given, treat it as binding. Explain why it matters; do not soften it, argue around it, or suggest it might not apply.
 - Write the thesis as "what the data shows and why it's arranged this way," not "you should short this."
-- For every catalyst you're given (news, filings, capital-raise events), assess how meaningful it actually is — distinguish a material, dated, verifiable event (a confirmed ATM draw, a going-concern note, a Nasdaq deficiency notice) from routine PR fluff, stale news, or a headline with no real economic content. Use the date supplied to judge recency; a "meaningful" catalyst from four months ago is stale, say so.
+- For every catalyst you're given (news, filings, capital-raise events), assess how meaningful it actually is — distinguish a material, dated, verifiable event from routine PR fluff, stale news, or a headline with no real economic content. Use the date supplied to judge recency.
 - When SEC filing excerpts are provided, ground catalyst descriptions in that language — do not paraphrase into generic labels.
 - When droppiness spike history is provided, compare the current setup to those concrete past spikes (did they retrace or hold).
 - When data completeness is below 70%, write more provisionally and explicitly name what is missing.
-- Ground every claim in the specific data supplied. Do not invent figures, filings, or news not present in the input.
-- If the input is thin (few real signals), say so plainly rather than padding the thesis.
+- Ground every claim in the Forensic Fact Pack and other supplied data. Do not invent figures, filings, warrant books, or compliance deadlines not present in the input.
+
+Claim tagging (codebase convention — use inline prefixes in prose fields):
+- Prefix unconfirmed facts with "VERIFY: " (not in the fact pack, or listed under Data gaps).
+- Prefix source disagreements with "CONFLICT: " — EDGAR/scan governs over DilutionTracker/vendor.
+- Prefix synthesis judgments with "OPINION: " (CEO/trader lens, level calls, financing predictions). Never use OPINION on walk-away flags.
 
 Respond with ONLY a single JSON object, no markdown fencing, matching exactly this shape:
 {
   "summary": "2-3 sentence at-a-glance summary of the setup",
-  "thesis": "one or two paragraphs synthesizing the salient factors into a coherent narrative of why this is (or isn't) an attractive short setup",
+  "thesis": "one or two paragraphs synthesizing salient factors",
+  "regulatoryAlert": "optional one-line alert when binding flags or high capital pressure warrant it; empty string if none",
+  "rubricNarrative": "optional paragraph tying DT/score rubric to SEC evidence; empty string if thin",
+  "ceoLens": "optional paragraph on issuer financing/compliance constraints — not trade advice; prefix judgments OPINION:",
+  "traderLens": "optional paragraph on setup mechanics, levels, invalidation — not trade advice; prefix judgments OPINION:",
   "catalysts": [
     { "description": "string", "date": "string or empty", "significance": "high|moderate|low|stale", "rationale": "why this significance rating" }
   ],
+  "forwardDates": [
+    { "date": "string", "event": "string", "significance": "high|moderate|low|stale", "tag": "verify|conflict|opinion or omit when verified" }
+  ],
+  "dataGaps": ["VERIFY-prefixed strings for material missing data"],
   "keyRisks": ["what could invalidate this thesis, or what you're least confident about"]
 }`;
 
@@ -205,6 +219,11 @@ export function buildThesisMessages(input: ThesisPromptInput): GroqChatMessage[]
 
   parts.push(`Ticker: ${input.ticker}`);
   parts.push(`Current time (for recency judgments): ${now}`);
+  parts.push(`Forensic brief version: ${FORENSIC_BRIEF_VERSION}`);
+
+  const factPack = buildForensicFactPack(input);
+  parts.push('\n--- Forensic Fact Pack (deterministic — cite these; do not invent beyond this) ---');
+  parts.push(formatFactPackForPrompt(factPack));
 
   if (input.fastVerdict) {
     parts.push('\n--- Fast Verdict (Framework 3.0 — binding walk-away flags) ---');
@@ -280,4 +299,4 @@ export function buildThesisMessages(input: ThesisPromptInput): GroqChatMessage[]
   ];
 }
 
-export { SYSTEM_PROMPT };
+export { SYSTEM_PROMPT, FORENSIC_BRIEF_VERSION };

@@ -243,15 +243,11 @@ function FastScanInner() {
               />
             )}
 
-            <PairGrid
-              breakpoint="lg"
-              first={<NewsSection ticker={ticker} items={pumpData.news || []} />}
-              second={
-                pumpData.borrowData ? (
-                  <BorrowDeskCard ticker={ticker} borrowData={pumpData.borrowData} />
-                ) : null
-              }
-            />
+            <NewsSection ticker={ticker} items={pumpData.news || []} />
+
+            {pumpData.borrowData && (
+              <BorrowDeskCard ticker={ticker} borrowData={pumpData.borrowData} />
+            )}
           </>
         )}
       </div>

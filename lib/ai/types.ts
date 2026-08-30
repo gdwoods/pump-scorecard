@@ -11,6 +11,14 @@ export interface AiThesisCatalyst {
   rationale: string;
 }
 
+export interface AiThesisForwardDate {
+  date: string;
+  event: string;
+  significance: CatalystSignificance;
+  /** Epistemic tag when date/event is inferred not filed. */
+  tag?: 'verify' | 'conflict' | 'opinion';
+}
+
 export interface AiThesisResult {
   /** 2-3 sentence at-a-glance summary. */
   summary: string;
@@ -19,8 +27,20 @@ export interface AiThesisResult {
   catalysts: AiThesisCatalyst[];
   /** What would invalidate this thesis / what the model is least confident about. */
   keyRisks: string[];
+  /** One-line regulatory / solvency alert when binding flags or high CP warrant it. */
+  regulatoryAlert?: string;
+  /** Ties DT rubric badges to SEC/scan evidence. */
+  rubricNarrative?: string;
+  /** Issuer financing / compliance constraints — not trade advice. Prefix uncertain lines with OPINION: or VERIFY:. */
+  ceoLens?: string;
+  /** Setup levels, supply zones, invalidation — not trade advice. Use OPINION: for judgments. */
+  traderLens?: string;
+  forwardDates?: AiThesisForwardDate[];
+  /** Explicit VERIFY items the model could not ground. */
+  dataGaps?: string[];
   model: string;
   generatedAt: string;
+  reportVersion?: string;
 }
 
 export interface ThesisSecEvidence {
@@ -69,6 +89,7 @@ export interface ThesisPromptInput {
     priceSpikePct?: number;
     currentPrice?: number;
     atmShelfStatus?: string;
+    float?: number;
   };
   scan?: {
     weightedRiskScore?: number;
@@ -90,6 +111,14 @@ export interface ThesisPromptInput {
       published?: string | number | null;
     }>;
     insiderTransactionsCount?: number;
+    fundamentals?: {
+      price?: number;
+      marketCap?: number;
+      floatShares?: number;
+      sharesOutstanding?: number;
+      institutionalOwnership?: number;
+      shortFloat?: number;
+    };
   };
   /** ISO timestamp used as "now" for recency framing — inject a fixed value in tests. */
   now?: string;
