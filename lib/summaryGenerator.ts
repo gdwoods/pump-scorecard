@@ -121,11 +121,6 @@ function generateQuickSummary(
     lines.push('');
   }
 
-  // Pump Risk (if available)
-  if (pumpScorecardData?.weightedRiskScore !== undefined) {
-    lines.push(`Pump Risk: ${pumpScorecardData.weightedRiskScore.toFixed(1)} - ${pumpScorecardData.summaryVerdict || 'N/A'}`);
-  }
-
   return lines.join('\n');
 }
 
@@ -251,19 +246,6 @@ function generateFullSummary(
       lines.push('');
     }
 
-    // Pump Risk Scorecard
-    if (pumpScorecardData.weightedRiskScore !== undefined) {
-      lines.push('PUMP RISK SCORECARD:');
-      lines.push(`Weighted Risk Score: ${pumpScorecardData.weightedRiskScore.toFixed(1)}`);
-      if (pumpScorecardData.summaryVerdict) {
-        lines.push(`Verdict: ${pumpScorecardData.summaryVerdict}`);
-      }
-      if (pumpScorecardData.summaryText) {
-        lines.push(pumpScorecardData.summaryText);
-      }
-      lines.push('');
-    }
-
     // Fundamentals
     if (pumpScorecardData.marketCap || pumpScorecardData.floatShares) {
       lines.push('FUNDAMENTALS:');
@@ -363,22 +345,6 @@ function generateFullSummary(
           lines.push(`  • ${promo.type || 'Promotion'} - ${promo.date || 'Unknown'}`);
         });
       }
-      lines.push('');
-    }
-
-    // Fraud Evidence
-    const fraudItems = Array.isArray(pumpScorecardData.fraudImages)
-      ? pumpScorecardData.fraudImages.filter(
-        (item: any) => (item?.caption || '').toLowerCase() !== 'manual check'
-      )
-      : [];
-
-    if (fraudItems.length > 0) {
-      lines.push('FRAUD EVIDENCE:');
-      lines.push(`Found ${fraudItems.length} fraud evidence image(s)`);
-      fraudItems.slice(0, 5).forEach((item: any) => {
-        lines.push(`• ${item.caption || 'Fraud evidence'}`);
-      });
       lines.push('');
     }
 

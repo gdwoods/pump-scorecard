@@ -538,13 +538,13 @@ export default function ShortCheckResults({
           </div>
         </div>
 
-        {/* Risk Synopsis - Combined into top card */}
+        {/* Risk Synopsis — compact, aligned with Fast Verdict typography */}
         {extractedData && (
-          <div className="mt-6 p-4 bg-white/50 dark:bg-black/20 border border-current/20 rounded-lg">
-            <h3 className="text-base font-semibold opacity-90 mb-2">
-              📋 Risk Synopsis
-            </h3>
-            <p className="text-sm leading-relaxed opacity-80">
+          <div className="mt-4 pt-4 border-t border-current/15 space-y-2 text-left">
+            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Risk synopsis
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
               {generateRiskSynopsis(effectiveTicker || ticker, result.scoreBreakdown, extractedData)}
             </p>
             {(() => {
@@ -553,10 +553,10 @@ export default function ShortCheckResults({
               const disagreement = detectOfferingDisagreement(extractedData, cp);
               if (!secNote && !disagreement) return null;
               return (
-                <div className="mt-3 pt-3 border-t border-current/10 space-y-2">
+                <div className="pt-2 space-y-1.5 border-t border-current/10">
                   {secNote && (
-                    <p className="text-xs leading-relaxed opacity-80">
-                      <span className="font-semibold">SEC evidence also shows: </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      <span className="font-medium text-gray-600 dark:text-gray-300">SEC evidence: </span>
                       {secNote}
                       {cp?.reasons?.[0]?.evidence?.documentUrl && (
                         <>
@@ -565,7 +565,7 @@ export default function ShortCheckResults({
                             href={cp.reasons[0].evidence.documentUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="underline opacity-90"
+                            className="underline hover:text-blue-600 dark:hover:text-blue-400"
                           >
                             Open filing
                           </a>
@@ -574,7 +574,7 @@ export default function ShortCheckResults({
                     </p>
                   )}
                   {disagreement && (
-                    <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-200 bg-amber-50/80 dark:bg-amber-950/30 rounded px-2 py-1.5">
+                    <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-300 bg-amber-50/60 dark:bg-amber-950/25 rounded px-2 py-1">
                       {disagreement}
                     </p>
                   )}
@@ -585,11 +585,11 @@ export default function ShortCheckResults({
         )}
 
         {result.walkAwayFlags.length > 0 && (
-          <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <h3 className="font-semibold text-red-800 dark:text-red-300 mb-2">
-              ⚠️ Walk-Away Flags
-            </h3>
-            <ul className="list-disc list-inside space-y-1 text-sm text-red-700 dark:text-red-400">
+          <div className="mt-4 pt-4 border-t border-current/15 space-y-1.5 text-left">
+            <p className="text-xs uppercase tracking-wide text-red-600 dark:text-red-400">
+              Walk-away flags
+            </p>
+            <ul className="space-y-0.5 text-sm text-red-700 dark:text-red-300">
               {result.walkAwayFlags.map((flag, i) => (
                 <li key={i}>{flag}</li>
               ))}

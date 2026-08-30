@@ -318,42 +318,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Pump Risk Scorecard
-      if (pumpScorecardData.weightedRiskScore !== undefined) {
-        yPosition = addSectionHeader('Pump Risk Scorecard', yPosition);
-        yPosition -= 10;
-
-        const riskColor = pumpScorecardData.weightedRiskScore >= 70
-          ? rgb(0.8, 0, 0)
-          : pumpScorecardData.weightedRiskScore >= 40
-            ? rgb(0.8, 0.6, 0)
-            : rgb(0, 0.6, 0);
-
-        currentPage.drawText(`Weighted Risk Score: ${pumpScorecardData.weightedRiskScore.toFixed(1)}`, {
-          x: margin,
-          y: yPosition,
-          size: 14,
-          font: boldFont,
-          color: riskColor,
-        });
-        yPosition -= lineHeight;
-
-        if (pumpScorecardData.summaryVerdict) {
-          currentPage.drawText(`Verdict: ${pumpScorecardData.summaryVerdict}`, {
-            x: margin,
-            y: yPosition,
-            size: 12,
-            font: font,
-          });
-          yPosition -= lineHeight;
-        }
-
-        if (pumpScorecardData.summaryText) {
-          yPosition = addText(pumpScorecardData.summaryText, margin, yPosition, 10, false);
-          yPosition -= sectionSpacing;
-        }
-      }
-
       // Fundamentals
       if (pumpScorecardData.marketCap || pumpScorecardData.floatShares) {
         yPosition = addSectionHeader('Fundamentals', yPosition);
@@ -516,39 +480,6 @@ export async function POST(req: NextRequest) {
                 yPosition = 750;
               }
             }
-          }
-        }
-        yPosition -= sectionSpacing;
-      }
-
-      // Fraud Evidence
-      // Filter out "manual check" placeholders (same logic as FraudEvidence component)
-      const fraudItems = Array.isArray(pumpScorecardData.fraudImages)
-        ? pumpScorecardData.fraudImages.filter(
-          (item: any) => (item?.caption || '').toLowerCase() !== 'manual check'
-        )
-        : [];
-
-      if (fraudItems.length > 0) {
-        yPosition = addSectionHeader('Fraud Evidence', yPosition);
-        yPosition -= 10;
-        currentPage.drawText(`Found ${fraudItems.length} fraud evidence image(s)`, {
-          x: margin,
-          y: yPosition,
-          size: 10,
-          font: font,
-          color: rgb(0.8, 0, 0),
-        });
-        yPosition -= lineHeight;
-
-        // List fraud evidence items
-        for (const item of fraudItems.slice(0, 5)) {
-          const caption = item.caption || 'Fraud evidence';
-          yPosition = addText(`• ${caption}`, margin + 10, yPosition, 9, false);
-          yPosition -= 5;
-          if (yPosition < margin + 50) {
-            currentPage = pdfDoc.addPage([612, 792]);
-            yPosition = 750;
           }
         }
         yPosition -= sectionSpacing;

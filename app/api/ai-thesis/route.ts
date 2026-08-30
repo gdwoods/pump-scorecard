@@ -12,6 +12,7 @@ import { callGroq, getGroqModel } from '@/lib/ai/groqClient';
 import { buildThesisMessages } from '@/lib/ai/buildThesisPrompt';
 import { parseThesisContent } from '@/lib/ai/parseThesisContent';
 import { checkAiThesisRateLimit, getClientIpFromHeaders } from '@/lib/ai/rateLimit';
+import { readCachedThesis, writeCachedThesis } from '@/lib/ai/thesisCache';
 import { SHOW_AI_THESIS } from '@/lib/config/features';
 import type { ThesisPromptInput } from '@/lib/ai/types';
 
@@ -70,6 +71,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const cached = await readCachedThesis(body);
+    if (cached) {
+      return NextResponse.json({ success: true, thesis: cached, cached: true });
+    }
+
     const messages = buildThesisMessages(body);
     const groqResult = await callGroq(messages);
 
@@ -84,6 +90,8 @@ export async function POST(req: NextRequest) {
         error: 'AI response was not in the expected format — try again.',
       });
     }
+
+    await writeCachedThesis(body, thesis);
 
     return NextResponse.json({ success: true, thesis });
   } catch (error) {

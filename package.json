@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "jest",
-    "test:capital-pressure": "jest __tests__/capitalPressure.test.ts"
+    "test:capital-pressure": "jest __tests__/capitalPressure.test.ts",
+    "verify": "tsx scripts/verify-task-a.ts && tsx scripts/verify-task-b.ts && tsx scripts/verify-enrich-short-check.ts && tsx scripts/verify-current-price-fallback.ts && tsx scripts/verify-fast-scan-enrichment.ts && tsx scripts/verify-ai-thesis.ts && tsx scripts/verify-legacy-risk-score.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.4",

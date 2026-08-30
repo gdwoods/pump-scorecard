@@ -81,7 +81,7 @@ export function getTickerHistory(ticker: string): TickerHistory | null {
 
   if (tickerScans.length === 0) return null;
 
-  const scores = tickerScans.map(scan => scan.adjustedScore);
+  const scores = tickerScans.map((scan) => scan.score);
   const averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
   
   // Determine if this is Short Check data (higher = better) or Pump Scorecard (lower = better)
@@ -101,15 +101,13 @@ export function getTickerHistory(ticker: string): TickerHistory | null {
     if (secondHalfAvg > firstHalfAvg + 5) scoreTrend = 'improving';
     else if (secondHalfAvg < firstHalfAvg - 5) scoreTrend = 'declining';
   } else {
-    // For Pump Scorecard: improving = scores decreasing (lower is better)
-    if (secondHalfAvg < firstHalfAvg - 5) scoreTrend = 'improving';
-    else if (secondHalfAvg > firstHalfAvg + 5) scoreTrend = 'declining';
+    // Pump Scorecard droppiness: higher = spikes fade more often
+    if (secondHalfAvg > firstHalfAvg + 5) scoreTrend = 'improving';
+    else if (secondHalfAvg < firstHalfAvg - 5) scoreTrend = 'declining';
   }
 
-  // For Short Check: best = highest, worst = lowest
-  // For Pump Scorecard: best = lowest, worst = highest
-  const bestScore = isShortCheck ? Math.max(...scores) : Math.min(...scores);
-  const worstScore = isShortCheck ? Math.min(...scores) : Math.max(...scores);
+  const bestScore = Math.max(...scores);
+  const worstScore = Math.min(...scores);
 
   return {
     ticker: ticker.toUpperCase(),

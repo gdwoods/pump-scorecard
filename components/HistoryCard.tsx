@@ -78,16 +78,16 @@ export default function HistoryCard({ ticker, refreshTrigger }: HistoryCardProps
             <div className="text-xs text-gray-600 dark:text-gray-400">Total Scans</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-gray-800 dark:text-gray-200">{averageScore}%</div>
-            <div className="text-xs text-gray-600 dark:text-gray-400">Avg Score</div>
+            <div className="text-2xl font-bold text-gray-800 dark:text-gray-200">{averageScore.toFixed(0)}</div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">Avg Droppiness</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{bestScore}%</div>
-            <div className="text-xs text-gray-600 dark:text-gray-400">Best Score</div>
+            <div className="text-2xl font-bold text-green-600">{bestScore.toFixed(0)}</div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">Best (fade)</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-red-600">{worstScore}%</div>
-            <div className="text-xs text-gray-600 dark:text-gray-400">Worst Score</div>
+            <div className="text-2xl font-bold text-red-600">{worstScore.toFixed(0)}</div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">Worst (hold)</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-purple-600">
@@ -101,7 +101,7 @@ export default function HistoryCard({ ticker, refreshTrigger }: HistoryCardProps
         <div className="flex items-center justify-center space-x-2">
           <span className="text-lg">{getTrendIcon(scoreTrend)}</span>
           <span className={`text-sm font-medium ${getTrendColor(scoreTrend)}`}>
-            Score trend: {scoreTrend}
+            Droppiness trend: {scoreTrend}
           </span>
         </div>
 
@@ -121,23 +121,18 @@ export default function HistoryCard({ ticker, refreshTrigger }: HistoryCardProps
                     <div className="flex flex-col">
                       <span className="text-gray-500 text-xs">{scan.date}</span>
                       <span className="text-gray-400 text-xs">
-                        {scan.timestamp ? new Date(scan.timestamp).toLocaleTimeString() : 'Unknown time'}
+                        {scan.timestamp ? new Date(scan.timestamp).toLocaleTimeString() : "Unknown time"}
                       </span>
                     </div>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      scan.verdict === 'High risk' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                      scan.verdict === 'Moderate risk' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                      'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                    }`}>
-                      {scan.verdict}
-                    </span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-medium">{scan.adjustedScore}%</span>
+                  <div className="flex items-center space-x-3 text-xs">
                     {scan.droppinessScore !== undefined && (
-                      <span className="text-purple-600 font-medium">{scan.droppinessScore}%</span>
+                      <span className="text-purple-600 font-medium">Drop {scan.droppinessScore}</span>
                     )}
-                    {scan.price && (
+                    {scan.adjustedScore !== undefined && scan.adjustedScore !== scan.droppinessScore && (
+                      <span className="text-amber-600 font-medium">CP {scan.adjustedScore}</span>
+                    )}
+                    {scan.price != null && (
                       <span className="text-gray-500">${scan.price.toFixed(2)}</span>
                     )}
                   </div>

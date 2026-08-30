@@ -15,8 +15,10 @@ import NewsSection from "@/components/NewsSection";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import SentimentCard from "@/components/SentimentCard";
 import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
+import CapitalPressureCard from "@/components/CapitalPressureCard";
+import AiThesisCard from "@/components/AiThesisCard";
 import type { FastVerdict } from "@/lib/fast/types";
-import { SHOW_FAST_VERDICT_UI } from "@/lib/config/features";
+import { SHOW_FAST_VERDICT_UI, SHOW_AI_THESIS } from "@/lib/config/features";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
 
 function FastScanInner() {
@@ -178,6 +180,10 @@ function FastScanInner() {
           <FastVerdictCard verdict={fastVerdict} loading={loading && !fastVerdict} />
         )}
 
+        {SHOW_AI_THESIS && ticker && pumpData && !loading && (
+          <AiThesisCard ticker={ticker} scanData={pumpData} fastVerdict={fastVerdict} />
+        )}
+
         {loading && !pumpData && (
           <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 rounded-xl">
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
@@ -198,6 +204,10 @@ function FastScanInner() {
             )}
 
             <DroppinessScatter detail={pumpData.droppinessDetail || []} ticker={ticker} />
+
+            {pumpData.capitalPressure && (
+              <CapitalPressureCard ticker={ticker.toUpperCase()} data={pumpData.capitalPressure} />
+            )}
 
             {pumpData.sentiment && (
               <SentimentCard ticker={ticker} sentiment={pumpData.sentiment} />

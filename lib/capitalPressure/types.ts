@@ -45,6 +45,8 @@ export type CapitalEvent = {
   isSellingShareholder?: boolean;
   /** Retrospective accounting footnote rather than an effected split in-window. */
   isRetrospective?: boolean;
+  /** Approved or scheduled but not yet effective. */
+  isUpcoming?: boolean;
   grossProceedsUsd?: number;
   sharesIssued?: number;
   potentialShares?: number;
@@ -109,6 +111,16 @@ export type CapitalPressureResult = {
   edgarSearchUrl?: string;
   /** Count of primary documents fetched/parsed in this run. */
   filingsScanned?: number;
+  /** Fetched filings with no capital-pressure event extracted (parser gap candidates). */
+  unscoredFilings?: Array<{ form: string; filingDate: string; documentUrl: string }>;
+  /** Approved or future-dated reverse split if detected. */
+  upcomingReverseSplit?: {
+    effectiveDate: string;
+    ratio?: string;
+    source: 'edgar' | 'polygon';
+    summary: string;
+    documentUrl?: string;
+  } | null;
   /** How many of the fixed score criteria had verified evidence (0–criteriaTotal). */
   criteriaVerified?: number;
   criteriaTotal?: number;

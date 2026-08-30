@@ -204,7 +204,7 @@ export default function ShortCheckPage() {
         price: undefined, // Price not available from DT screenshot extraction
         volume: undefined,
         droppinessScore: pumpScorecardData?.droppinessScore,
-        fraudEvidence: pumpScorecardData?.fraudImages?.length > 0,
+        fraudEvidence: false,
         promotions: (pumpScorecardData?.recentPromotions?.length || 0) > 0 || (pumpScorecardData?.olderPromotions?.length || 0) > 0,
         riskyCountry: undefined,
       });

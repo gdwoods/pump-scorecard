@@ -99,6 +99,7 @@ assert(userContent.includes('NO_TRADE'), 'user message includes fast verdict kin
 assert(userContent.includes('Baby Shelf Critical'), 'user message surfaces walk-away flags');
 assert(userContent.includes('BINDING'), 'user message marks walk-away flags as binding');
 assert(userContent.includes('2026-08-15'), 'user message includes catalyst date');
+assert(userContent.includes('Deprecated legacy scan score'), 'user message marks legacy pump score deprecated');
 assert(userContent.includes('77/100'), 'user message includes Capital Pressure score');
 
 const minimalMessages = buildThesisMessages({

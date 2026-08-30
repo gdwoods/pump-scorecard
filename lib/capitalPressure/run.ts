@@ -14,6 +14,7 @@ import {
   toFilingDocumentInput,
   type IndexedFiling,
 } from './edgar';
+import { mergeUpcomingReverseSplit } from './upcomingReverseSplit';
 import { parseCapitalPressureDocuments } from './parse';
 import { scoreCapitalPressure } from '../capitalPressureScoring';
 import type {
@@ -42,6 +43,8 @@ export type RunCapitalPressureArgs = {
   cik?: string | null;
   /** Optional pre-fetched submissions JSON to avoid a second network call. */
   submissions?: SubmissionsJson | null;
+  /** Polygon split history for upcoming reverse-split detection. */
+  polygonSplits?: Array<{ date: string; ratio: string }>;
   context?: CapitalPressureScanContext;
   fetchBudgetMs?: number;
 };
@@ -153,12 +156,35 @@ export async function runCapitalPressure(
       context: { ...args.context, asOf },
     });
 
+    const fetchedAccessions = new Set(
+      docs.map((d) => d.accessionNumber).filter((x): x is string => Boolean(x))
+    );
+    const unscoredFilings = toFetch
+      .filter((f) => fetchedAccessions.has(f.accessionNumber))
+      .filter(
+        (f) =>
+          !parsed.events.some((e) => e.evidence.accessionNumber === f.accessionNumber)
+      )
+      .map((f) => ({
+        form: f.form,
+        filingDate: f.filingDate,
+        documentUrl: f.documentUrl,
+      }));
+
+    const upcomingReverseSplit = mergeUpcomingReverseSplit(
+      parsed.events,
+      args.polygonSplits,
+      asOf
+    );
+
     return {
       ...result,
       cik,
       edgarSearchUrl: `https://www.sec.gov/edgar/browse/?CIK=${cik.replace(/^0+/, '')}`,
       filingsScanned: docs.length,
       registrationWindowStart,
+      unscoredFilings: unscoredFilings.length ? unscoredFilings : undefined,
+      upcomingReverseSplit,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
