@@ -22,6 +22,8 @@ interface ShortCheckResultsProps {
   onTickerChange?: (newTicker: string) => void; // Callback when ticker is overridden
   afterQuickActions?: ReactNode;
   afterFastVerdict?: ReactNode;
+  /** When true, risk synopsis + walk-aways render in the verdict stack instead. */
+  synopsisInVerdictStack?: boolean;
 }
 
 export default function ShortCheckResults({
@@ -32,6 +34,7 @@ export default function ShortCheckResults({
   onTickerChange,
   afterQuickActions,
   afterFastVerdict,
+  synopsisInVerdictStack = false,
 }: ShortCheckResultsProps) {
   const [showScoringGuide, setShowScoringGuide] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -538,8 +541,8 @@ export default function ShortCheckResults({
           </div>
         </div>
 
-        {/* Risk Synopsis — compact, aligned with Fast Verdict typography */}
-        {extractedData && (
+        {/* Risk synopsis — fallback when not merged into verdict stack */}
+        {extractedData && !synopsisInVerdictStack && (
           <div className="mt-4 pt-4 border-t border-current/15 space-y-2 text-left">
             <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Risk synopsis
@@ -584,7 +587,7 @@ export default function ShortCheckResults({
           </div>
         )}
 
-        {result.walkAwayFlags.length > 0 && (
+        {result.walkAwayFlags.length > 0 && !synopsisInVerdictStack && (
           <div className="mt-4 pt-4 border-t border-current/15 space-y-1.5 text-left">
             <p className="text-xs uppercase tracking-wide text-red-600 dark:text-red-400">
               Walk-away flags

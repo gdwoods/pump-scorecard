@@ -9,6 +9,14 @@ import {
 } from "@/lib/fast/walkAwayReasons";
 import type { FastVerdict, FastVerdictKind } from "@/lib/fast/types";
 import { T } from "@/lib/config/thresholds";
+import RiskSynopsisSection from "./RiskSynopsisSection";
+
+export type FastVerdictFundamentalContext = {
+  synopsis: string;
+  secNote?: string | null;
+  secFilingUrl?: string | null;
+  disagreement?: string | null;
+};
 
 function pct(n: number | null, digits = 0): string {
   if (n == null || Number.isNaN(n)) return "n/a";
@@ -69,10 +77,16 @@ export default function FastVerdictCard({
   verdict,
   loading,
   error,
+  fundamentalContext,
+  walkAwayFlags,
 }: {
   verdict: FastVerdict | null;
   loading?: boolean;
   error?: string | null;
+  /** Short Check DT synopsis — rendered below fast metrics in the same card. */
+  fundamentalContext?: FastVerdictFundamentalContext;
+  /** Short Check scoring walk-aways (distinct from fast `verdict.flags`). */
+  walkAwayFlags?: string[];
 }) {
   if (loading) {
     return (
@@ -207,7 +221,7 @@ export default function FastVerdictCard({
           <div className="pt-2 border-t border-black/5 dark:border-white/10 text-xs space-y-1">
             {verdict.flags.length > 0 && (
               <div>
-                <span className="font-semibold">Flags:</span>{" "}
+                <span className="font-semibold">Fast flags:</span>{" "}
                 <ul className="mt-1 space-y-1 list-none">
                   {verdict.flags.map((flag, i) => {
                     const tip = describeFastWalkAwayFlag(flag);
@@ -232,6 +246,30 @@ export default function FastVerdictCard({
                 {verdict.unavailable.join(", ")}
               </p>
             )}
+          </div>
+        )}
+
+        {fundamentalContext && (
+          <div className="pt-4 border-t border-black/10 dark:border-white/10">
+            <RiskSynopsisSection
+              synopsis={fundamentalContext.synopsis}
+              secNote={fundamentalContext.secNote}
+              secFilingUrl={fundamentalContext.secFilingUrl}
+              disagreement={fundamentalContext.disagreement}
+            />
+          </div>
+        )}
+
+        {walkAwayFlags && walkAwayFlags.length > 0 && (
+          <div className="pt-4 border-t border-black/10 dark:border-white/10 space-y-1.5">
+            <p className="text-xs uppercase tracking-wide text-red-600 dark:text-red-400">
+              Short Check walk-aways
+            </p>
+            <ul className="space-y-0.5 text-sm text-red-700 dark:text-red-300">
+              {walkAwayFlags.map((flag, i) => (
+                <li key={i}>{flag}</li>
+              ))}
+            </ul>
           </div>
         )}
       </CardContent>
