@@ -4,6 +4,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import ShortCheckScoreBreakdown from "./ShortCheckScoreBreakdown";
+import DtBadgeGrid from "./DtBadgeGrid";
 import ScoringGuideModal from "./ScoringGuideModal";
 import { ShortCheckResult } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
@@ -61,69 +62,6 @@ export default function ShortCheckResults({
     "Moderate Short Candidate": "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
     "Speculative Short Candidate": "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
     "No-Trade": "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800",
-  };
-
-
-  const getQuickStats = () => {
-    if (!extractedData) return null;
-    const stats = [];
-    
-    // Match DT's order: Overall Risk, Offering Ability, Overhead Supply, Historical, Cash Need
-    // 1. Overall Risk
-    if (extractedData.overallRiskStatus) {
-      const status = extractedData.overallRiskStatus.replace('DT:', '').toLowerCase();
-      const label = status === 'red' || status === 'high' ? 'High' : status === 'yellow' || status === 'medium' ? 'Medium' : 'Low';
-      const color = status === 'red' || status === 'high' ? 'text-red-600 dark:text-red-400' : status === 'yellow' || status === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
-      stats.push({ label: "Overall Risk", value: label, color });
-    }
-    
-    // 2. Offering Ability
-    if (extractedData.atmShelfStatus) {
-      const status = extractedData.atmShelfStatus.replace('DT:', '').toLowerCase();
-      let label = status;
-      if (status.includes('red') || status.includes('high') || status.includes('active')) {
-        label = 'High';
-      } else if (status.includes('yellow') || status.includes('medium')) {
-        label = 'Medium';
-      } else if (status.includes('green') || status.includes('low')) {
-        label = 'Low';
-      } else {
-        // Fallback: check if it contains active dilution indicators
-        if (status.includes('atm') || status.includes('s-1') || status.includes('equity line') || status.includes('convertible')) {
-          label = 'High';
-        } else {
-          label = 'Low';
-        }
-      }
-      const color = label === 'High' ? 'text-red-600 dark:text-red-400' : label === 'Medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
-      stats.push({ label: "Offering Ability", value: label, color });
-    }
-    
-    // 3. Overhead Supply
-    if (extractedData.overheadSupplyStatus) {
-      const status = extractedData.overheadSupplyStatus.replace('DT:', '').toLowerCase();
-      const label = status === 'red' || status === 'high' ? 'High' : status === 'yellow' || status === 'medium' ? 'Medium' : 'Low';
-      const color = status === 'red' || status === 'high' ? 'text-red-600 dark:text-red-400' : status === 'yellow' || status === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
-      stats.push({ label: "Overhead Supply", value: label, color });
-    }
-    
-    // 4. Historical (Dilution)
-    if (extractedData.historicalDilutionStatus) {
-      const status = extractedData.historicalDilutionStatus.replace('DT:', '').toLowerCase();
-      const label = status === 'red' || status === 'high' ? 'High' : status === 'yellow' || status === 'medium' ? 'Medium' : 'Low';
-      const color = status === 'red' || status === 'high' ? 'text-red-600 dark:text-red-400' : status === 'yellow' || status === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
-      stats.push({ label: "Historical", value: label, color });
-    }
-    
-    // 5. Cash Need
-    if (extractedData.cashNeedStatus) {
-      const status = extractedData.cashNeedStatus.replace('DT:', '').toLowerCase();
-      const label = status === 'red' || status === 'high' ? 'High' : status === 'yellow' || status === 'medium' ? 'Medium' : 'Low';
-      const color = status === 'red' || status === 'high' ? 'text-red-600 dark:text-red-400' : status === 'yellow' || status === 'medium' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400';
-      stats.push({ label: "Cash Need", value: label, color });
-    }
-    
-    return stats.length > 0 ? stats : null;
   };
 
   const getQuickActionLinks = () => {
@@ -491,21 +429,8 @@ export default function ShortCheckResults({
         </Card>
       )}
 
-      {/* Quick Stats - DT badge colors (above Fast Verdict) */}
-      {extractedData && getQuickStats() && (
-        <Card className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {getQuickStats()?.map((stat, i) => (
-              <div key={i} className="text-center">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{stat.label}</div>
-                <div className={`text-lg font-semibold ${stat.color || 'text-gray-900 dark:text-gray-100'}`}>
-                  {stat.value}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+      {/* DilutionTracker badge grid (above Fast Verdict) */}
+      {extractedData && <DtBadgeGrid extractedData={extractedData} />}
 
       {afterQuickActions}
 

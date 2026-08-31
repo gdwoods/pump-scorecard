@@ -350,3 +350,99 @@ export function getTopScoreDrivers(items: ScoreBreakdownItem[], limit = 3): Scor
     .slice(0, limit);
 }
 
+/** DilutionTracker badge band (High / Medium / Low). */
+export type DtRiskBand = 'high' | 'medium' | 'low';
+
+export interface DtBadgeStat {
+  label: string;
+  band: DtRiskBand;
+  rawStatus?: string;
+}
+
+export const DT_RISK_BAND_LABEL: Record<DtRiskBand, string> = {
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+};
+
+export const DT_RISK_PILL_CLASS: Record<DtRiskBand, string> = {
+  high: 'bg-red-600 text-white',
+  medium: 'bg-amber-500 text-white',
+  low: 'bg-emerald-700 text-white',
+};
+
+export const DT_RISK_TILE_CLASS: Record<DtRiskBand, string> = {
+  high: 'border-red-200 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20',
+  medium: 'border-amber-200 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/15',
+  low: 'border-emerald-300 dark:border-emerald-800/50 bg-emerald-50/60 dark:bg-emerald-950/25',
+};
+
+export function parseDtBandFromStatus(
+  rawStatus: string | undefined,
+  mode: 'simple' | 'offering' = 'simple'
+): DtRiskBand | null {
+  if (!rawStatus) return null;
+  const status = rawStatus.replace(/^DT:/i, '').trim().toLowerCase();
+
+  if (mode === 'offering') {
+    if (status.includes('red') || status.includes('high') || status.includes('active')) return 'high';
+    if (status.includes('yellow') || status.includes('medium')) return 'medium';
+    if (status.includes('green') || status.includes('low')) return 'low';
+    if (
+      status.includes('atm') ||
+      status.includes('s-1') ||
+      status.includes('equity line') ||
+      status.includes('convertible')
+    ) {
+      return 'high';
+    }
+    return 'low';
+  }
+
+  const head = status.split(/[\s—\-|(/]/)[0]?.trim();
+  if (head === 'red' || head === 'high') return 'high';
+  if (head === 'yellow' || head === 'medium') return 'medium';
+  if (head === 'green' || head === 'low') return 'low';
+  return null;
+}
+
+/** DT badge row in DilutionTracker order (5 metrics). */
+export function buildDtBadgeStats(data: ExtractedData): DtBadgeStat[] {
+  const stats: DtBadgeStat[] = [];
+
+  if (data.overallRiskStatus) {
+    const band = parseDtBandFromStatus(data.overallRiskStatus);
+    if (band) stats.push({ label: 'Overall Risk', band, rawStatus: data.overallRiskStatus });
+  }
+  if (data.atmShelfStatus) {
+    const band = parseDtBandFromStatus(data.atmShelfStatus, 'offering');
+    if (band) stats.push({ label: 'Offering Ability', band, rawStatus: data.atmShelfStatus });
+  }
+  if (data.overheadSupplyStatus) {
+    const band = parseDtBandFromStatus(data.overheadSupplyStatus);
+    if (band) stats.push({ label: 'Overhead Supply', band, rawStatus: data.overheadSupplyStatus });
+  }
+  if (data.historicalDilutionStatus) {
+    const band = parseDtBandFromStatus(data.historicalDilutionStatus);
+    if (band) stats.push({ label: 'Historical', band, rawStatus: data.historicalDilutionStatus });
+  }
+  if (data.cashNeedStatus) {
+    const band = parseDtBandFromStatus(data.cashNeedStatus);
+    if (band) stats.push({ label: 'Cash Need', band, rawStatus: data.cashNeedStatus });
+  }
+
+  return stats;
+}
+
+const DT_BADGE_EXTRA_TOOLTIPS: Record<string, string> = {
+  'Overhead Supply':
+    'Warrants, convertibles, and other shares hanging over the float — high overhead increases dilution pressure.',
+};
+
+export function getDtBadgeTooltip(label: string): string {
+  if (DT_BADGE_EXTRA_TOOLTIPS[label]) return DT_BADGE_EXTRA_TOOLTIPS[label];
+  const mapped =
+    label === 'Historical' ? 'Historical Dilution' : label === 'Cash Need' ? 'Cash Need' : label;
+  return getCategoryExplanation(mapped).explanation;
+}
+
