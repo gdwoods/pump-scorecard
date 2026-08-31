@@ -1,6 +1,6 @@
 // lib/ai/requestThesisLlm.ts
 //
-// Thesis LLM chain: one Groq call, then OpenRouter fallback on rate limit or JSON failure.
+// Thesis LLM chain: Groq first (or OpenRouter first when configured), with cross-fallback.
 
 import { callGroq, getGroqModel, type GroqCallResult, type GroqChatMessage } from './groqClient';
 import { recordGroqApiCall } from './groqBudget';
@@ -30,6 +30,11 @@ function withMeta(
   return { ...result, provider, model };
 }
 
+function shouldUseOpenRouterFirst(): boolean {
+  if (!isOpenRouterConfigured()) return false;
+  return process.env.AI_THESIS_OPENROUTER_FIRST !== 'false';
+}
+
 async function callGroqOnce(
   messages: GroqChatMessage[],
   strict: boolean
@@ -49,73 +54,83 @@ async function callOpenRouterOnce(messages: GroqChatMessage[]): Promise<GroqCall
   return callOpenRouter(messages, {
     maxTokens: THESIS_MAX_TOKENS,
     temperature: 0.2,
-    // OpenRouter models expect json_object; Groq json_schema strict mode is Groq-only.
     responseFormat: { type: 'json_object' },
   });
 }
 
-async function tryOpenRouterFallback(messages: GroqChatMessage[]): Promise<ThesisLlmResult | null> {
+/** Returns OpenRouter result when configured; null when OpenRouter is not set up. */
+async function tryOpenRouter(messages: GroqChatMessage[]): Promise<ThesisLlmResult | null> {
   if (!isOpenRouterConfigured()) return null;
   const fallback = await callOpenRouterOnce(messages);
   if (fallback.success && fallback.content) {
     return withMeta(fallback, 'openrouter', getOpenRouterModel());
   }
-  return null;
+  return withMeta(
+    {
+      success: false,
+      error: fallback.error ?? 'OpenRouter fallback failed',
+      errorCode: fallback.errorCode,
+      retryAfterSec: fallback.retryAfterSec,
+    },
+    'openrouter',
+    getOpenRouterModel()
+  );
+}
+
+function groqRateLimitMessage(groqStrict: GroqCallResult): string {
+  if (groqStrict.retryAfterSec != null && groqStrict.retryAfterSec < 60) {
+    return `Groq tokens-per-minute limit — wait ${groqStrict.retryAfterSec}s. Add OPENROUTER_API_KEY on the server for automatic fallback.`;
+  }
+  return groqStrict.error ?? 'Groq rate limit reached';
 }
 
 /**
- * Request an AI thesis with at most one Groq call, then optional OpenRouter fallback.
+ * Request an AI thesis with Groq/OpenRouter cross-fallback.
  */
 export async function requestThesisLlm(messages: GroqChatMessage[]): Promise<ThesisLlmResult> {
+  if (shouldUseOpenRouterFirst()) {
+    const orFirst = await tryOpenRouter(messages);
+    if (orFirst?.success) return orFirst;
+    // Fall through to Groq when OpenRouter fails (e.g. no credits).
+  }
+
   const groqStrict = await callGroqOnce(messages, true);
   if (groqStrict.success && groqStrict.content) {
     return withMeta(groqStrict, 'groq', getGroqModel());
   }
 
   if (isRateLimited(groqStrict)) {
-    if (isOpenRouterConfigured()) {
-      const fallback = await callOpenRouterOnce(messages);
-      if (fallback.success && fallback.content) {
-        return withMeta(fallback, 'openrouter', getOpenRouterModel());
-      }
-      return withMeta(
-        {
-          success: false,
-          error:
-            fallback.error ??
-            'Groq tokens-per-minute limit hit and OpenRouter fallback failed — try again shortly.',
-          errorCode: fallback.errorCode ?? groqStrict.errorCode,
-          retryAfterSec: fallback.retryAfterSec ?? groqStrict.retryAfterSec,
-        },
-        'openrouter',
-        getOpenRouterModel()
-      );
-    }
+    const or = await tryOpenRouter(messages);
+    if (or?.success) return or;
+    if (or) return or;
     return withMeta(
-      {
-        ...groqStrict,
-        error:
-          groqStrict.retryAfterSec != null && groqStrict.retryAfterSec < 60
-            ? `Groq tokens-per-minute limit — wait ${groqStrict.retryAfterSec}s. Add OPENROUTER_API_KEY on the server for automatic fallback.`
-            : groqStrict.error,
-      },
+      { ...groqStrict, error: groqRateLimitMessage(groqStrict) },
       'groq',
       getGroqModel()
     );
   }
 
   if (isJsonValidateFailure(groqStrict)) {
-    const fallback = await tryOpenRouterFallback(messages);
-    if (fallback) return fallback;
+    const or = await tryOpenRouter(messages);
+    if (or?.success) return or;
 
     const groqRelaxed = await callGroqOnce(messages, false);
     if (groqRelaxed.success && groqRelaxed.content) {
       return withMeta(groqRelaxed, 'groq', getGroqModel());
     }
+
     if (isRateLimited(groqRelaxed)) {
-      const orFallback = await tryOpenRouterFallback(messages);
-      if (orFallback) return orFallback;
+      const orAfterRateLimit = await tryOpenRouter(messages);
+      if (orAfterRateLimit?.success) return orAfterRateLimit;
+      if (orAfterRateLimit) return orAfterRateLimit;
+      return withMeta(
+        { ...groqRelaxed, error: groqRateLimitMessage(groqRelaxed) },
+        'groq',
+        getGroqModel()
+      );
     }
+
+    if (or && !or.success) return or;
     return withMeta(groqRelaxed, 'groq', getGroqModel());
   }
 

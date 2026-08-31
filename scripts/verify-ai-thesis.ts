@@ -281,6 +281,42 @@ async function testCallOpenRouterSuccess() {
   assert(result.success === true, 'callOpenRouter returns success on 200');
 }
 
+async function testCallOpenRouterModelFallback() {
+  let call = 0;
+  const mockFetcher: GroqFetcher = async (_key, body) => {
+    call++;
+    const model = body.model as string;
+    if (model === 'google/gemini-flash-latest') {
+      return new Response(
+        JSON.stringify({ error: { message: 'No endpoints found for google/gemini-flash-latest.' } }),
+        { status: 404 }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        choices: [{ message: { content: '{"summary":"ok","thesis":"ok"}' } }],
+      }),
+      { status: 200 }
+    );
+  };
+  const originalKey = process.env.OPENROUTER_API_KEY;
+  const originalModel = process.env.OPENROUTER_MODEL;
+  process.env.OPENROUTER_API_KEY = 'test-or-key';
+  delete process.env.OPENROUTER_MODEL;
+  const { resolveOpenRouterModels } = await import('../lib/ai/openRouterClient');
+  process.env.OPENROUTER_MODEL = 'google/gemini-2.0-flash-001';
+  assert(
+    !resolveOpenRouterModels().includes('google/gemini-2.0-flash-001'),
+    'deprecated OpenRouter model env override is ignored'
+  );
+  delete process.env.OPENROUTER_MODEL;
+  const result = await callOpenRouter([{ role: 'user', content: 'hi' }], { fetcher: mockFetcher });
+  process.env.OPENROUTER_API_KEY = originalKey;
+  process.env.OPENROUTER_MODEL = originalModel;
+  assert(result.success === true, 'callOpenRouter falls back after retired model 404');
+  assert(call >= 2, 'callOpenRouter tries fallback model after 404');
+}
+
 async function testCallGroqNoKey() {
   const originalKey = process.env.GROQ_API_KEY;
   delete process.env.GROQ_API_KEY;
@@ -361,6 +397,7 @@ async function main() {
   await testCallGroqSuccess();
   await testCallGroqRateLimit();
   await testCallOpenRouterSuccess();
+  await testCallOpenRouterModelFallback();
   await testCallGroqNoKey();
   await testCallGroqNetworkError();
   await testLocalRateLimit();

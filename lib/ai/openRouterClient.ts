@@ -5,9 +5,33 @@ const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_OPENROUTER_MODEL = 'google/gemini-flash-latest';
 const REQUEST_TIMEOUT_MS = 25_000;
 
+/** Retired slugs that OpenRouter no longer routes — ignore env override. */
+const DEPRECATED_OPENROUTER_MODELS = new Set(['google/gemini-2.0-flash-001']);
+
+const OPENROUTER_MODEL_FALLBACKS = [
+  DEFAULT_OPENROUTER_MODEL,
+  'google/gemini-3.5-flash',
+] as const;
+
 export function getOpenRouterModel(): string {
-  const fromEnv = process.env.OPENROUTER_MODEL?.trim();
-  return fromEnv || DEFAULT_OPENROUTER_MODEL;
+  return resolveOpenRouterModels()[0];
+}
+
+/** Preferred model first, then known-good fallbacks (deduped). */
+export function resolveOpenRouterModels(): string[] {
+  const preferred = process.env.OPENROUTER_MODEL?.trim();
+  const models: string[] = [];
+  if (preferred && !DEPRECATED_OPENROUTER_MODELS.has(preferred)) {
+    models.push(preferred);
+  }
+  for (const model of OPENROUTER_MODEL_FALLBACKS) {
+    if (!models.includes(model)) models.push(model);
+  }
+  return models;
+}
+
+function isMissingOpenRouterEndpoint(status: number, bodyText: string): boolean {
+  return status === 404 && bodyText.includes('No endpoints found');
 }
 
 export function isOpenRouterConfigured(): boolean {
@@ -52,21 +76,36 @@ export async function callOpenRouter(
   }
 
   const fetcher = opts.fetcher ?? defaultFetcher;
+  const models = resolveOpenRouterModels();
+  let lastResult: GroqCallResult = {
+    success: false,
+    error: 'OpenRouter request failed — no models to try',
+  };
 
   try {
-    const body: Record<string, unknown> = {
-      model: getOpenRouterModel(),
-      messages,
-      temperature: opts.temperature ?? 0.2,
-      max_tokens: opts.maxTokens ?? 1200,
-    };
-    if (opts.responseFormat) {
-      body.response_format = opts.responseFormat;
-    }
+    for (const model of models) {
+      const body: Record<string, unknown> = {
+        model,
+        messages,
+        temperature: opts.temperature ?? 0.2,
+        max_tokens: opts.maxTokens ?? 1200,
+      };
+      if (opts.responseFormat) {
+        body.response_format = opts.responseFormat;
+      }
 
-    const response = await fetcher(apiKey, body);
+      const response = await fetcher(apiKey, body);
 
-    if (!response.ok) {
+      if (response.ok) {
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (typeof content !== 'string' || !content.trim()) {
+          lastResult = { success: false, error: 'OpenRouter returned an empty response' };
+          continue;
+        }
+        return { success: true, content };
+      }
+
       if (response.status === 429) {
         const retryAfterHeader = response.headers.get('retry-after');
         const retryAfterSec = retryAfterHeader
@@ -82,20 +121,19 @@ export async function callOpenRouter(
               : `OpenRouter rate limit — try again in ${retryAfterSec} seconds.`,
         };
       }
+
       const bodyText = await response.text().catch(() => '');
-      return {
+      lastResult = {
         success: false,
-        error: `OpenRouter API error ${response.status}: ${bodyText.slice(0, 200)}`,
+        error: `OpenRouter API error ${response.status} (${model}): ${bodyText.slice(0, 200)}`,
       };
+      if (isMissingOpenRouterEndpoint(response.status, bodyText)) {
+        continue;
+      }
+      break;
     }
 
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) {
-      return { success: false, error: 'OpenRouter returned an empty response' };
-    }
-
-    return { success: true, content };
+    return lastResult;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return { success: false, error: `OpenRouter request failed: ${message}` };
