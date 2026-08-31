@@ -7,6 +7,7 @@ import type {
   CatalystSignificance,
 } from './types';
 import { FORENSIC_BRIEF_VERSION } from './buildThesisPrompt';
+import { sanitizeThesisTextFields } from './correctThesisMislabels';
 
 const VALID_SIGNIFICANCE = new Set<CatalystSignificance>(['high', 'moderate', 'low', 'stale']);
 const VALID_FORWARD_TAGS = new Set(['verify', 'conflict', 'opinion']);
@@ -90,7 +91,7 @@ export function parseThesisContent(content: string, model: string): AiThesisResu
     ? r.dataGaps.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
     : [];
 
-  return {
+  return sanitizeThesisTextFields({
     summary: r.summary.trim(),
     thesis: r.thesis.trim(),
     regulatoryAlert: optionalString(r.regulatoryAlert),
@@ -104,5 +105,5 @@ export function parseThesisContent(content: string, model: string): AiThesisResu
     model,
     generatedAt: new Date().toISOString(),
     reportVersion: FORENSIC_BRIEF_VERSION,
-  };
+  });
 }

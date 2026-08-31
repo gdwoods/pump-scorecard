@@ -263,3 +263,83 @@ export function getCategoryExplanation(category: string): CategoryExplanation {
   };
 }
 
+/** Short-side contribution band for at-a-glance score breakdown tiles. */
+export type ScoreContributionLevel = 'high' | 'medium' | 'low' | 'favorable';
+
+export function getScoreContributionLevel(
+  value: number,
+  max: number,
+  min = 0
+): ScoreContributionLevel {
+  if (value < 0) return 'favorable';
+  const range = max - min;
+  if (range <= 0) return value > 0 ? 'medium' : 'low';
+  const pct = ((value - min) / range) * 100;
+  if (pct >= 75) return 'high';
+  if (pct >= 40) return 'medium';
+  return 'low';
+}
+
+export const SCORE_LEVEL_LABEL: Record<ScoreContributionLevel, string> = {
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+  favorable: 'Favorable',
+};
+
+export const SCORE_LEVEL_PILL_CLASS: Record<ScoreContributionLevel, string> = {
+  high: 'bg-red-600 text-white',
+  medium: 'bg-amber-500 text-white',
+  low: 'bg-emerald-600 text-white',
+  favorable: 'bg-emerald-700 text-white',
+};
+
+export const SCORE_LEVEL_TILE_CLASS: Record<ScoreContributionLevel, string> = {
+  high: 'border-red-200 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20',
+  medium: 'border-amber-200 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/15',
+  low: 'border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/10',
+  favorable: 'border-emerald-300 dark:border-emerald-800/50 bg-emerald-50/60 dark:bg-emerald-950/25',
+};
+
+export interface ScoreBreakdownItem {
+  label: string;
+  value: number;
+  max: number;
+  min?: number;
+  actualValue?: string;
+  group: 'capital' | 'structure' | 'catalyst';
+}
+
+export function getScoreBreakdownItems(breakdown: ScoreBreakdown): ScoreBreakdownItem[] {
+  return [
+    { label: 'Droppiness', value: breakdown.droppiness, max: 12, min: -8, actualValue: breakdown.actualValues?.droppiness, group: 'structure' },
+    { label: 'Overall Risk', value: breakdown.overallRisk, max: 10, actualValue: breakdown.actualValues?.overallRisk, group: 'catalyst' },
+    { label: 'Cash Need', value: breakdown.cashNeed, max: 25, actualValue: breakdown.actualValues?.cashNeed, group: 'capital' },
+    { label: 'Cash Runway', value: breakdown.cashRunway, max: 15, min: -10, actualValue: breakdown.actualValues?.cashRunway, group: 'capital' },
+    { label: 'Offering Ability', value: breakdown.offeringAbility, max: 25, min: -30, actualValue: breakdown.actualValues?.offeringAbility, group: 'capital' },
+    { label: 'Institutional Ownership', value: breakdown.institutionalOwnership, max: 5, min: -5, actualValue: breakdown.actualValues?.institutionalOwnership, group: 'structure' },
+    { label: 'Float', value: breakdown.float, max: 10, min: -10, actualValue: breakdown.actualValues?.float, group: 'structure' },
+    { label: 'Short Interest', value: breakdown.shortInterest, max: 15, min: -5, actualValue: breakdown.actualValues?.shortInterest, group: 'structure' },
+    { label: 'Historical Dilution', value: breakdown.historicalDilution, max: 10, actualValue: breakdown.actualValues?.historicalDilution, group: 'capital' },
+    { label: 'Debt/Cash Ratio', value: breakdown.debtToCash, max: 10, actualValue: breakdown.actualValues?.debtToCash, group: 'capital' },
+    { label: 'Price Spike', value: breakdown.priceSpike, max: 10, actualValue: breakdown.actualValues?.priceSpike, group: 'catalyst' },
+    { label: 'News Catalyst', value: breakdown.newsCatalyst, max: 15, min: -10, actualValue: breakdown.actualValues?.newsCatalyst, group: 'catalyst' },
+  ];
+}
+
+/** Six tiles shown collapsed — mirrors AskEdgar risk grid scan pattern. */
+export const SCORE_SUMMARY_LABELS = [
+  'Overall Risk',
+  'Offering Ability',
+  'Cash Need',
+  'Historical Dilution',
+  'Float',
+  'Droppiness',
+] as const;
+
+export function getTopScoreDrivers(items: ScoreBreakdownItem[], limit = 3): ScoreBreakdownItem[] {
+  return [...items]
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+    .slice(0, limit);
+}
+

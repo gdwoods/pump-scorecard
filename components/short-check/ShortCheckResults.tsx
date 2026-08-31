@@ -632,6 +632,8 @@ export default function ShortCheckResults({
         breakdown={result.scoreBreakdown}
         total={result.rating}
         data={extractedData || { confidence: 0 }}
+        category={result.category}
+        walkAwayFlags={result.walkAwayFlags}
       />
 
       {/* Scoring Guide Modal */}

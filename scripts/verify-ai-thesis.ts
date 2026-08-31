@@ -211,6 +211,24 @@ assert(parsed?.forwardDates?.length === 1, 'parseThesisContent keeps forwardDate
 assert(parsed?.dataGaps?.length === 1, 'parseThesisContent keeps dataGaps');
 assert(parsed?.reportVersion === 'forensic-brief-v1', 'parseThesisContent sets reportVersion');
 
+const w2MislabelJson = JSON.stringify({
+  summary: 'WETO screen.',
+  thesis: 'Binding walk-away flag W2:todayMove exceeds threshold.',
+  regulatoryAlert:
+    'Binding walk‑away flag W2:todayMove – 24% price move exceeds discretionary pump‑day threshold, indicating potential manipulation risk.',
+  catalysts: [],
+  keyRisks: ['Binding W2:todayMove veto'],
+});
+const w2Fixed = parseThesisContent(w2MislabelJson, 'test-model');
+assert(
+  w2Fixed?.regulatoryAlert?.includes('not a binding walk-away'),
+  'parseThesisContent corrects W2 binding mislabel in regulatoryAlert'
+);
+assert(
+  !w2Fixed?.thesis?.includes('Binding walk-away flag W2'),
+  'parseThesisContent corrects W2 binding mislabel in thesis'
+);
+
 const invalidCatalyst = parseThesisContent(
   JSON.stringify({
     summary: 'ok',
