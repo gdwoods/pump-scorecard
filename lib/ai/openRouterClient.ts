@@ -54,14 +54,17 @@ export async function callOpenRouter(
   const fetcher = opts.fetcher ?? defaultFetcher;
 
   try {
-    const response = await fetcher(apiKey, {
+    const body: Record<string, unknown> = {
       model: getOpenRouterModel(),
       messages,
       temperature: opts.temperature ?? 0.2,
       max_tokens: opts.maxTokens ?? 1200,
-      response_format: opts.responseFormat ?? { type: 'json_object' },
-      provider: { require_parameters: true },
-    });
+    };
+    if (opts.responseFormat) {
+      body.response_format = opts.responseFormat;
+    }
+
+    const response = await fetcher(apiKey, body);
 
     if (!response.ok) {
       if (response.status === 429) {

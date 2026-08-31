@@ -49,7 +49,8 @@ async function callOpenRouterOnce(messages: GroqChatMessage[]): Promise<GroqCall
   return callOpenRouter(messages, {
     maxTokens: THESIS_MAX_TOKENS,
     temperature: 0.2,
-    responseFormat: getThesisResponseFormat(true),
+    // OpenRouter models expect json_object; Groq json_schema strict mode is Groq-only.
+    responseFormat: { type: 'json_object' },
   });
 }
 
@@ -72,8 +73,24 @@ export async function requestThesisLlm(messages: GroqChatMessage[]): Promise<The
   }
 
   if (isRateLimited(groqStrict)) {
-    const fallback = await tryOpenRouterFallback(messages);
-    if (fallback) return fallback;
+    if (isOpenRouterConfigured()) {
+      const fallback = await callOpenRouterOnce(messages);
+      if (fallback.success && fallback.content) {
+        return withMeta(fallback, 'openrouter', getOpenRouterModel());
+      }
+      return withMeta(
+        {
+          success: false,
+          error:
+            fallback.error ??
+            'Groq tokens-per-minute limit hit and OpenRouter fallback failed — try again shortly.',
+          errorCode: fallback.errorCode ?? groqStrict.errorCode,
+          retryAfterSec: fallback.retryAfterSec ?? groqStrict.retryAfterSec,
+        },
+        'openrouter',
+        getOpenRouterModel()
+      );
+    }
     return withMeta(
       {
         ...groqStrict,
