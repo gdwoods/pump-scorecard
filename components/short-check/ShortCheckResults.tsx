@@ -10,6 +10,7 @@ import { ShortCheckResult } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
 import { generateRiskSynopsis } from "@/lib/shortCheckHelpers";
 import { generateFormattedSummary } from "@/lib/summaryGenerator";
+import { countryInfo } from "@/utils/countryToFlag";
 import {
   capitalPressureShortCheckNote,
   detectOfferingDisagreement,
@@ -76,6 +77,10 @@ export default function ShortCheckResults({
   };
 
   const quickLinks = getQuickActionLinks();
+  const scanCountry = pumpScorecardData?.country;
+  const { flag: countryFlag, isRisky: isRiskyCountry } = countryInfo(scanCountry);
+  const countryLabel =
+    scanCountry && scanCountry !== "Unknown" ? scanCountry : null;
   
   // Handle ticker override - fetch pump data when override is applied
   useEffect(() => {
@@ -382,7 +387,19 @@ export default function ShortCheckResults({
         <Card className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Detected ticker:</span>
-            <span className="font-semibold">{ticker}</span>
+            <span className="font-semibold">{effectiveTicker || ticker}</span>
+            {countryLabel && (
+              <span
+                className={`inline-flex items-center gap-1 text-sm ${
+                  isRiskyCountry
+                    ? "text-red-600 dark:text-red-400 font-medium"
+                    : "text-gray-600 dark:text-gray-400"
+                }`}
+              >
+                {countryFlag && <span aria-hidden>{countryFlag}</span>}
+                <span>{countryLabel}</span>
+              </span>
+            )}
             {!showTickerOverride ? (
               <button
                 onClick={() => setShowTickerOverride(true)}
