@@ -32,7 +32,7 @@ function assert(condition: boolean, message: string) {
 const mockFastVerdict: FastVerdict = {
   ticker: 'DFNS',
   verdict: 'NO_TRADE',
-  reason: 'Baby shelf critical',
+  reason: 'W10:squeezeGeometry',
   elapsedMs: 100,
   dataCompleteness: 0.9,
   session: 'closed',
@@ -127,8 +127,37 @@ assert(userContent.includes('forensic-fact-pack-v1'), 'user message includes fac
 assert(userContent.includes('DFNS'), 'user message includes ticker');
 assert(userContent.includes('Fast Verdict'), 'user message includes Fast Verdict section');
 assert(userContent.includes('NO_TRADE'), 'user message includes fast verdict kind');
-assert(userContent.includes('Baby Shelf Critical'), 'user message surfaces walk-away flags');
-assert(userContent.includes('BINDING'), 'user message marks walk-away flags as binding');
+assert(userContent.includes('Baby Shelf Critical'), 'user message surfaces short check walk-away flags');
+assert(userContent.includes('Hard walk-away (BINDING'), 'user message marks hard fast walk-away');
+assert(userContent.includes('Walk-away flags (BINDING'), 'user message marks short check walk-aways binding');
+
+const w2Input: ThesisPromptInput = {
+  ticker: 'WETO',
+  fastVerdict: {
+    verdict: 'NO_TRADE',
+    reason: 'W10:squeezeGeometry',
+    flags: ['W2:todayMove — 24% today (discretionary 30%+ pump-day threshold)'],
+    runnerClass: 'CLEAN',
+    priorDayPct: null,
+    threeDayRunPct: null,
+    droppinessStatus: 'OK',
+    droppinessScore: 50,
+    newsClass: 'NEUTRAL',
+    newsHeadline: null,
+    babyShelfCapacity: null,
+    capacityQuarters: null,
+    derivedOfferingAbility: 'MEDIUM',
+    borrowAvailable: true,
+    borrowFeePct: 2,
+    dataCompleteness: 0.9,
+    unavailable: [],
+  },
+};
+const w2Messages = buildThesisMessages(w2Input);
+const w2User = w2Messages[1].content;
+assert(w2User.includes('NOT binding'), 'W2 soft flag labeled not binding in prompt');
+assert(w2User.includes('W10:squeezeGeometry'), 'hard walk-away reason still binding');
+assert(!w2User.includes('Walk-away / binding flags'), 'removed all-flags-binding label');
 assert(userContent.includes('2026-08-15'), 'user message includes catalyst date');
 assert(userContent.includes('Deprecated legacy scan score'), 'user message marks legacy pump score deprecated');
 assert(userContent.includes('77/100'), 'user message includes Capital Pressure score');

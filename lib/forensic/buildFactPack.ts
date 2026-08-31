@@ -1,5 +1,7 @@
 import type { TaggedClaim } from '@/lib/claims';
 import type { ThesisPromptInput } from '@/lib/ai/types';
+import { isSoftFastFlag, isHardFastWalkAwayReason } from '@/lib/fast/classifyFlags';
+import { describeFastWalkAwayReason } from '@/lib/fast/walkAwayReasons';
 import { buildQuickScorecard, formatQuickScorecardForPrompt } from './quickScorecard/buildQuickScorecard';
 import { toQuickScorecardInputFromThesis } from './quickScorecard';
 import type { ForensicFactPack, ForensicRubricRow, ForensicSnapshot } from './types';
@@ -78,9 +80,22 @@ export function buildForensicFactPack(input: ThesisPromptInput): ForensicFactPac
   const dataGaps: TaggedClaim[] = [];
   const notes: string[] = [];
 
+  if (input.fastVerdict?.reason && isHardFastWalkAwayReason(input.fastVerdict.reason)) {
+    const detail = describeFastWalkAwayReason(input.fastVerdict.reason);
+    alerts.push(
+      verified(
+        `Fast verdict hard walk-away: ${input.fastVerdict.reason}${detail ? ` — ${detail}` : ''}`,
+        [{ kind: 'fast_verdict', label: 'hard walk-away' }]
+      )
+    );
+  }
   if (input.fastVerdict?.flags?.length) {
     for (const flag of input.fastVerdict.flags) {
-      alerts.push(verified(flag, [{ kind: 'fast_verdict', label: 'walk-away' }]));
+      if (isSoftFastFlag(flag)) {
+        notes.push(`Soft fast flag (not binding): ${flag}`);
+      } else {
+        alerts.push(verified(flag, [{ kind: 'fast_verdict', label: 'flag' }]));
+      }
     }
   }
   if (input.shortCheck?.walkAwayFlags?.length) {

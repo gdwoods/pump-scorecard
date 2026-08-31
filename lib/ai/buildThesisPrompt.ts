@@ -13,6 +13,11 @@ import type {
   ThesisSecEvidence,
 } from './types';
 import { buildForensicFactPack, formatFactPackForPrompt } from '@/lib/forensic/buildFactPack';
+import {
+  formatBindingFastWalkAway,
+  formatOtherFastFlags,
+  formatSoftFastFlags,
+} from '@/lib/fast/classifyFlags';
 
 const EXCERPT_MAX_CHARS = 220;
 const FORENSIC_BRIEF_VERSION = 'forensic-brief-v1';
@@ -21,7 +26,7 @@ const SYSTEM_PROMPT = `You are a research assistant embedded in a short-seller's
 
 Your job is synthesis and context, not a verdict. Concretely:
 - Never recommend entering, sizing, or timing a trade. This is a screening aid, not trade authorization.
-- If any walk-away flag or veto is present in the data you're given, treat it as binding. Explain why it matters; do not soften it, argue around it, or suggest it might not apply.
+- Binding inputs you must not soften or argue around: (1) Short Check walkAwayFlags, (2) Fast Verdict hard walk-away on verdict.reason when verdict is NO_TRADE (W3–W10) or WATCH (W1). Soft fast flags (e.g. W2:todayMove below the discretionary pump-day threshold) are context only — never call them binding walk-aways, vetoes, or manipulation risk unless the fact pack states that explicitly.
 - Write the thesis as "what the data shows and why it's arranged this way," not "you should short this."
 - For every catalyst you're given (news, filings, capital-raise events), assess how meaningful it actually is — distinguish a material, dated, verifiable event from routine PR fluff, stale news, or a headline with no real economic content. Use the date supplied to judge recency.
 - When SEC filing excerpts are provided, ground catalyst descriptions in that language — do not paraphrase into generic labels.
@@ -185,11 +190,15 @@ function formatFastVerdict(fv: FastVerdictPromptSlice): string {
   lines.push(`Verdict: ${fv.verdict}${fv.reason ? ` — ${fv.reason}` : ''}`);
   const completeness = formatDataCompleteness('Fast Verdict data completeness', fv.dataCompleteness);
   if (completeness) lines.push(completeness);
-  if (fv.flags.length) {
-    lines.push(
-      `Walk-away / binding flags (BINDING — do not argue around): ${fv.flags.join(' | ')}`
-    );
-  }
+
+  const binding = formatBindingFastWalkAway(fv.verdict, fv.reason);
+  if (binding) lines.push(binding);
+
+  const soft = formatSoftFastFlags(fv.flags);
+  if (soft) lines.push(soft);
+
+  const otherFlags = formatOtherFastFlags(fv.flags);
+  if (otherFlags) lines.push(otherFlags);
   lines.push(`Runner class: ${fv.runnerClass}`);
   if (fv.priorDayPct != null) lines.push(`Prior-day move: ${fv.priorDayPct.toFixed(1)}%`);
   if (fv.threeDayRunPct != null) lines.push(`3-day run: ${fv.threeDayRunPct.toFixed(1)}%`);
@@ -226,7 +235,7 @@ export function buildThesisMessages(input: ThesisPromptInput): GroqChatMessage[]
   parts.push(formatFactPackForPrompt(factPack));
 
   if (input.fastVerdict) {
-    parts.push('\n--- Fast Verdict (Framework 3.0 — binding walk-away flags) ---');
+    parts.push('\n--- Fast Verdict (Framework 3.0 — hard walk-aways on verdict.reason only) ---');
     parts.push(formatFastVerdict(input.fastVerdict));
   }
 
