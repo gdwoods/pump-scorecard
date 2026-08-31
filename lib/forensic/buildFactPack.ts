@@ -216,13 +216,15 @@ export function formatFactPackForPrompt(pack: ForensicFactPack): string {
 
   if (pack.rubric.length) {
     lines.push('\nRubric (DT / score components):');
-    for (const row of pack.rubric) {
+    for (const row of pack.rubric.slice(0, 8)) {
       lines.push(`  - ${row.label}: ${row.value}`);
     }
   }
   if (pack.notes.length) {
     lines.push('\nSEC evidence notes:');
-    for (const n of pack.notes) lines.push(`  - ${n}`);
+    for (const n of pack.notes.slice(0, 5)) {
+      lines.push(`  - ${n.length > 160 ? `${n.slice(0, 160)}…` : n}`);
+    }
   }
 
   return lines.join('\n');

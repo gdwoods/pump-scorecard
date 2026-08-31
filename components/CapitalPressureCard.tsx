@@ -8,6 +8,9 @@ import {
   buildCapitalPressureHeadline,
   buildCardCopySummary,
   buildFrameworkNote,
+  CP_HEADER_TOOLTIP,
+  CP_SCORE_TOOLTIP,
+  CP_STATUS_TOOLTIPS,
   evidenceAvailabilityText,
   findPinnedEvent,
   formatSharesShort,
@@ -355,9 +358,11 @@ export default function CapitalPressureCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {ticker} Capital Pressure
-              </h2>
+              <Tooltip content={CP_HEADER_TOOLTIP} side="bottom">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 underline decoration-dotted decoration-gray-400 dark:decoration-gray-500 cursor-help">
+                  {ticker} Capital Pressure
+                </h2>
+              </Tooltip>
               <button
                 type="button"
                 onClick={copySummary}
@@ -378,14 +383,18 @@ export default function CapitalPressureCard({
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {data.score}
-              </span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(data.status)}`}
-              >
-                {statusHeadlineLabel(data.status)}
-              </span>
+              <Tooltip content={CP_SCORE_TOOLTIP} side="left">
+                <span className="text-2xl font-bold text-gray-900 dark:text-gray-100 cursor-help underline decoration-dotted decoration-gray-400 dark:decoration-gray-500">
+                  {data.score}
+                </span>
+              </Tooltip>
+              <Tooltip content={CP_STATUS_TOOLTIPS[data.status]} side="left">
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-medium cursor-help ${statusBadgeClass(data.status)}`}
+                >
+                  {statusHeadlineLabel(data.status)}
+                </span>
+              </Tooltip>
             </div>
             <Tooltip content="How many of the 10 score criteria had verified SEC evidence. Low coverage = treat the score as less certain.">
               <div className="flex items-center gap-2 cursor-help">

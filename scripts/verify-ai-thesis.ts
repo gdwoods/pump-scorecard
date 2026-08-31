@@ -6,6 +6,7 @@
 import { buildThesisMessages } from '../lib/ai/buildThesisPrompt';
 import { fastVerdictToPromptSlice } from '../lib/ai/fastVerdictPrompt';
 import { callGroq, type GroqFetcher } from '../lib/ai/groqClient';
+import { callOpenRouter } from '../lib/ai/openRouterClient';
 import {
   checkGroqDailyBudget,
   formatGroqBudgetError,
@@ -218,6 +219,21 @@ async function testCallGroqRateLimit() {
   assert(!!result.error?.includes('minute'), 'callGroq surfaces retry timing in message');
 }
 
+async function testCallOpenRouterSuccess() {
+  const mockFetcher: GroqFetcher = async () =>
+    new Response(
+      JSON.stringify({
+        choices: [{ message: { content: '{"summary":"ok","thesis":"ok"}' } }],
+      }),
+      { status: 200 }
+    );
+  const originalKey = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = 'test-or-key';
+  const result = await callOpenRouter([{ role: 'user', content: 'hi' }], { fetcher: mockFetcher });
+  process.env.OPENROUTER_API_KEY = originalKey;
+  assert(result.success === true, 'callOpenRouter returns success on 200');
+}
+
 async function testCallGroqNoKey() {
   const originalKey = process.env.GROQ_API_KEY;
   delete process.env.GROQ_API_KEY;
@@ -297,6 +313,7 @@ async function main() {
   await testGroqDailyBudget();
   await testCallGroqSuccess();
   await testCallGroqRateLimit();
+  await testCallOpenRouterSuccess();
   await testCallGroqNoKey();
   await testCallGroqNetworkError();
   await testLocalRateLimit();

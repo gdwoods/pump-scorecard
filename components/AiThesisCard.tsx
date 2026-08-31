@@ -143,6 +143,8 @@ export default function AiThesisCard({
   const [lastPayload, setLastPayload] = useState<ThesisPromptInput | null>(null);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryAfterSec, setRetryAfterSec] = useState(0);
+  const [openRouterFallback, setOpenRouterFallback] = useState(false);
   const [serviceState, setServiceState] = useState<"checking" | "ready" | "unconfigured" | "disabled">(
     "checking"
   );
@@ -163,6 +165,7 @@ export default function AiThesisCard({
           setServiceState("unconfigured");
         } else {
           setServiceState("ready");
+          setOpenRouterFallback(Boolean(data.openRouterFallback));
         }
       })
       .catch(() => {
@@ -172,6 +175,14 @@ export default function AiThesisCard({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (retryAfterSec <= 0) return;
+    const timer = window.setInterval(() => {
+      setRetryAfterSec((sec) => (sec <= 1 ? 0 : sec - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryAfterSec]);
 
   if (!SHOW_AI_THESIS || serviceState === "disabled") {
     return null;
@@ -198,9 +209,13 @@ export default function AiThesisCard({
         setThesis(data.thesis);
         setLastPayload(payload);
         setStatus("success");
+        setRetryAfterSec(0);
       } else {
         setError(data.error || "AI thesis unavailable right now.");
         setStatus("error");
+        if (typeof data.retryAfterSec === "number" && data.retryAfterSec > 0) {
+          setRetryAfterSec(data.retryAfterSec);
+        }
       }
     } catch {
       setError("Could not reach the AI thesis service.");
@@ -293,7 +308,8 @@ export default function AiThesisCard({
 
         {serviceState === "unconfigured" && (
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            AI thesis is not configured on this deployment (missing <code>GROQ_API_KEY</code>).
+            AI thesis is not configured on this deployment (missing{" "}
+            <code>GROQ_API_KEY</code> or <code>OPENROUTER_API_KEY</code>).
           </p>
         )}
 
@@ -304,12 +320,22 @@ export default function AiThesisCard({
         )}
 
         {status === "error" && (
-          <p className="text-sm text-amber-700 dark:text-amber-400">
-            {error}{" "}
-            <button className="underline" onClick={handleGenerate} disabled={!canGenerate}>
-              Retry
+          <div className="text-sm text-amber-700 dark:text-amber-400 space-y-1">
+            <p>{error}</p>
+            {!openRouterFallback && error?.toLowerCase().includes("groq") && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Tip: add <code>OPENROUTER_API_KEY</code> in Vercel for automatic fallback when Groq is
+                throttled (~$0.01/day at current usage).
+              </p>
+            )}
+            <button
+              className="underline disabled:no-underline disabled:opacity-50"
+              onClick={handleGenerate}
+              disabled={!canGenerate || retryAfterSec > 0}
+            >
+              {retryAfterSec > 0 ? `Retry in ${retryAfterSec}s` : "Retry"}
             </button>
-          </p>
+          </div>
         )}
 
         {status === "success" && thesis && (

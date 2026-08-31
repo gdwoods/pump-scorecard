@@ -8,10 +8,10 @@
 // this app's fetch-fallback conventions.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getGroqModel } from '@/lib/ai/groqClient';
 import { buildThesisMessages } from '@/lib/ai/buildThesisPrompt';
 import { parseThesisContent } from '@/lib/ai/parseThesisContent';
-import { requestThesisGroq } from '@/lib/ai/requestThesisGroq';
+import { requestThesisLlm } from '@/lib/ai/requestThesisLlm';
+import { isOpenRouterConfigured } from '@/lib/ai/openRouterClient';
 import { checkAiThesisRateLimit, getClientIpFromHeaders } from '@/lib/ai/rateLimit';
 import { checkGroqDailyBudget, formatGroqBudgetError } from '@/lib/ai/groqBudget';
 import { readCachedThesis, writeCachedThesis } from '@/lib/ai/thesisCache';
@@ -26,9 +26,13 @@ function hasPromptData(body: ThesisPromptInput): boolean {
 }
 
 export async function GET() {
+  const groq = Boolean(process.env.GROQ_API_KEY);
+  const openRouter = isOpenRouterConfigured();
   return NextResponse.json({
     enabled: SHOW_AI_THESIS,
-    configured: Boolean(process.env.GROQ_API_KEY),
+    configured: groq || openRouter,
+    groq,
+    openRouterFallback: openRouter,
   });
 }
 
@@ -38,10 +42,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'AI thesis is disabled' });
     }
 
-    if (!process.env.GROQ_API_KEY) {
+    if (!process.env.GROQ_API_KEY && !isOpenRouterConfigured()) {
       return NextResponse.json({
         success: false,
-        error: 'GROQ_API_KEY not configured on the server',
+        error: 'AI thesis not configured — set GROQ_API_KEY and/or OPENROUTER_API_KEY on the server',
       });
     }
 
@@ -84,7 +88,7 @@ export async function POST(req: NextRequest) {
     }
 
     const groqBudget = await checkGroqDailyBudget();
-    if (!groqBudget.allowed) {
+    if (process.env.GROQ_API_KEY && !groqBudget.allowed) {
       return NextResponse.json({
         success: false,
         error: formatGroqBudgetError(groqBudget.retryAfterSec, groqBudget.limit),
@@ -92,13 +96,21 @@ export async function POST(req: NextRequest) {
     }
 
     const messages = buildThesisMessages(body);
-    const groqResult = await requestThesisGroq(messages);
+    const llmResult = await requestThesisLlm(messages);
 
-    if (!groqResult.success || !groqResult.content) {
-      return NextResponse.json({ success: false, error: groqResult.error ?? 'AI thesis unavailable' });
+    if (!llmResult.success || !llmResult.content) {
+      return NextResponse.json({
+        success: false,
+        error: llmResult.error ?? 'AI thesis unavailable',
+        errorCode: llmResult.errorCode,
+        retryAfterSec: llmResult.retryAfterSec,
+      });
     }
 
-    const thesis = parseThesisContent(groqResult.content, getGroqModel());
+    const thesis = parseThesisContent(
+      llmResult.content,
+      llmResult.model ?? 'unknown'
+    );
     if (!thesis) {
       return NextResponse.json({
         success: false,
@@ -108,7 +120,12 @@ export async function POST(req: NextRequest) {
 
     await writeCachedThesis(body, thesis);
 
-    return NextResponse.json({ success: true, thesis });
+    return NextResponse.json({
+      success: true,
+      thesis,
+      provider: llmResult.provider,
+      cached: false,
+    });
   } catch (error) {
     console.error('AI thesis API error:', error);
     return NextResponse.json({

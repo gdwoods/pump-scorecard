@@ -65,6 +65,9 @@ Open [http://localhost:3000](http://localhost:3000).
 | `FMP_API_KEY` | Financial Modeling Prep (quotes, fundamentals) |
 | `POLYGON_API_KEY` | Market data / fundamentals |
 | `GROQ_API_KEY` | AI thesis synthesis (server-side) |
+| `GROQ_MODEL` | Groq model override (default `openai/gpt-oss-20b`) |
+| `OPENROUTER_API_KEY` | Automatic AI thesis fallback when Groq is rate-limited |
+| `OPENROUTER_MODEL` | OpenRouter model override (default `google/gemini-2.0-flash-001`) |
 | `AI_THESIS_RATE_LIMIT_WHITELIST` | Comma-separated IPs bypassing thesis rate limit |
 | `AI_THESIS_RATE_LIMIT_PER_HOUR` | Per-IP thesis cap (default 10; lower for groups) |
 | `AI_THESIS_DAILY_GROQ_BUDGET` | Shared daily Groq API call cap (default 50) |

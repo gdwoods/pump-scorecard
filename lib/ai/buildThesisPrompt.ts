@@ -84,7 +84,7 @@ type NewsItem = {
 function formatNewsList(news: NewsItem[] | undefined): string {
   if (!news || !Array.isArray(news) || news.length === 0) return '(none)';
   return news
-    .slice(0, 8)
+    .slice(0, 5)
     .map((n) => {
       const title = n.title || n.headline || '(untitled)';
       const date =

@@ -3,6 +3,7 @@
 // Verifies Quick Scorecard scoring without network calls.
 
 import { buildQuickScorecard } from '../lib/forensic/quickScorecard/buildQuickScorecard';
+import { QUICK_SCORE_METRIC_TOOLTIPS } from '../lib/forensic/quickScorecard/metricTooltips';
 import type { QuickScorecardInput } from '../lib/forensic/quickScorecard/types';
 
 let failures = 0;
@@ -141,6 +142,14 @@ function main() {
     'combined uses intersection weighting, not a simple average'
   );
   assert((max.combined.value ?? 0) >= 9, 'high offering + cash need intersection reaches score 9+');
+
+  const keys = ['combined', 'offering', 'cashNeed', 'delisting', 'survivalPump', 'squeeze'] as const;
+  for (const key of keys) {
+    assert(
+      QUICK_SCORE_METRIC_TOOLTIPS[key].length > 20,
+      `tooltip defined for ${key}`
+    );
+  }
 
   if (failures > 0) {
     console.error(`\n${failures} assertion(s) failed.`);

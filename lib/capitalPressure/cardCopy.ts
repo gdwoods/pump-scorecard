@@ -44,6 +44,19 @@ export function statusHeadlineLabel(status: CapitalPressureStatus): string {
   }
 }
 
+export const CP_HEADER_TOOLTIP =
+  'SEC filing-derived dilution and listing pressure score. Feeds Quick Scorecard offering/dilution and delisting when verified evidence is available.';
+
+export const CP_SCORE_TOOLTIP =
+  '0–100 composite from weighted filing reasons in the scan window (shelf, ATM, issuance, deficiencies, splits). Not a trade recommendation.';
+
+export const CP_STATUS_TOOLTIPS: Record<CapitalPressureStatus, string> = {
+  low: 'Few verified dilution or listing signals in the filing window.',
+  watch: 'Some financing or compliance signals — monitor filings and issuance.',
+  elevated: 'Multiple weighted reasons or recent verified issuance — dilution risk rising.',
+  high: 'Strong filing evidence of active or imminent dilution / listing stress.',
+};
+
 function hasIssuanceInWindow(ri: RecentIssuanceField | undefined): boolean {
   if (!ri || ri.status === 'unknown') return false;
   const nums = [
