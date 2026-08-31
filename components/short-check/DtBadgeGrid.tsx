@@ -44,14 +44,6 @@ export default function DtBadgeGrid({ extractedData }: DtBadgeGridProps) {
 
   return (
     <Card className="p-4 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 rounded-xl">
-      <div className="mb-3">
-        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-          DilutionTracker badges
-        </h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-          OCR&apos;d High / Medium / Low from your DT screenshot
-        </p>
-      </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
         {stats.map((stat) => (
           <DtBadgeTile key={stat.label} stat={stat} />
