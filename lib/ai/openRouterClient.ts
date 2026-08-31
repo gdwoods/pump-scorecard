@@ -2,7 +2,7 @@ import type { GroqResponseFormat } from './thesisJsonSchema';
 import type { GroqCallResult, GroqChatMessage, GroqFetcher } from './groqClient';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_OPENROUTER_MODEL = 'google/gemini-2.0-flash-001';
+const DEFAULT_OPENROUTER_MODEL = 'google/gemini-flash-latest';
 const REQUEST_TIMEOUT_MS = 25_000;
 
 export function getOpenRouterModel(): string {
