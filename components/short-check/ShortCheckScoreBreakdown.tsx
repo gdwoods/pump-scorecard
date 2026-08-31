@@ -11,6 +11,7 @@ import {
   getScoreContributionLevel,
   getTopScoreDrivers,
   SCORE_LEVEL_LABEL,
+  SCORE_LEVEL_TOOLTIP,
   SCORE_LEVEL_PILL_CLASS,
   SCORE_LEVEL_TILE_CLASS,
   SCORE_SUMMARY_LABELS,
@@ -52,7 +53,10 @@ function SummaryTile({ item, data, breakdown }: { item: ScoreBreakdownItem; data
   const shortLabel = item.label.replace(" Ability", "").replace("Historical ", "");
 
   return (
-    <Tooltip content={explanation.explanation} side="top">
+    <Tooltip
+      content={`${explanation.explanation} Band: ${SCORE_LEVEL_TOOLTIP[level]}`}
+      side="top"
+    >
       <div
         className={`rounded-lg border p-3 min-h-[88px] flex flex-col justify-between cursor-help ${SCORE_LEVEL_TILE_CLASS[level]}`}
       >
@@ -106,11 +110,13 @@ function DetailRow({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-medium text-gray-800 dark:text-gray-200">{item.label}</span>
-          <span
-            className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${SCORE_LEVEL_PILL_CLASS[level]}`}
-          >
-            {SCORE_LEVEL_LABEL[level]}
-          </span>
+          <Tooltip content={SCORE_LEVEL_TOOLTIP[level]} side="left">
+            <span
+              className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase cursor-help ${SCORE_LEVEL_PILL_CLASS[level]}`}
+            >
+              {SCORE_LEVEL_LABEL[level]}
+            </span>
+          </Tooltip>
           {redFlag && (
             <Tooltip content={redFlag.tooltip} side="right">
               <span
@@ -207,7 +213,7 @@ export default function ShortCheckScoreBreakdown({
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Score Breakdown</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            At-a-glance risk grid — expand for full 12-factor detail
+            High / Medium / Low bands match DilutionTracker-style risk — expand for full 12-factor detail
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

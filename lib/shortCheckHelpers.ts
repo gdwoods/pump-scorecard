@@ -263,42 +263,49 @@ export function getCategoryExplanation(category: string): CategoryExplanation {
   };
 }
 
-/** Short-side contribution band for at-a-glance score breakdown tiles. */
-export type ScoreContributionLevel = 'high' | 'medium' | 'low' | 'favorable';
+/** Short-side contribution band for at-a-glance score breakdown tiles (DT-aligned: High/Medium/Low). */
+export type ScoreContributionLevel = 'high' | 'medium' | 'minimal' | 'low';
 
 export function getScoreContributionLevel(
   value: number,
   max: number,
   min = 0
 ): ScoreContributionLevel {
-  if (value < 0) return 'favorable';
+  if (value < 0) return 'low';
   const range = max - min;
-  if (range <= 0) return value > 0 ? 'medium' : 'low';
+  if (range <= 0) return value > 0 ? 'medium' : 'minimal';
   const pct = ((value - min) / range) * 100;
   if (pct >= 75) return 'high';
   if (pct >= 40) return 'medium';
-  return 'low';
+  return 'minimal';
 }
 
 export const SCORE_LEVEL_LABEL: Record<ScoreContributionLevel, string> = {
   high: 'High',
   medium: 'Medium',
+  minimal: 'Minimal',
   low: 'Low',
-  favorable: 'Favorable',
+};
+
+export const SCORE_LEVEL_TOOLTIP: Record<ScoreContributionLevel, string> = {
+  high: 'High contribution to the short rating on this factor.',
+  medium: 'Moderate contribution to the short rating.',
+  minimal: 'Small positive contribution — limited short edge from this factor.',
+  low: 'Low contribution — negative points pull the rating down (same sense as DT Low/Green offering ability).',
 };
 
 export const SCORE_LEVEL_PILL_CLASS: Record<ScoreContributionLevel, string> = {
   high: 'bg-red-600 text-white',
   medium: 'bg-amber-500 text-white',
-  low: 'bg-emerald-600 text-white',
-  favorable: 'bg-emerald-700 text-white',
+  minimal: 'bg-emerald-500 text-white',
+  low: 'bg-emerald-700 text-white',
 };
 
 export const SCORE_LEVEL_TILE_CLASS: Record<ScoreContributionLevel, string> = {
   high: 'border-red-200 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20',
   medium: 'border-amber-200 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/15',
-  low: 'border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/10',
-  favorable: 'border-emerald-300 dark:border-emerald-800/50 bg-emerald-50/60 dark:bg-emerald-950/25',
+  minimal: 'border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/10',
+  low: 'border-emerald-300 dark:border-emerald-800/50 bg-emerald-50/60 dark:bg-emerald-950/25',
 };
 
 export interface ScoreBreakdownItem {
