@@ -292,7 +292,7 @@ export default function ShortCheckResults({
                 onClick={handleCopySummary}
                 disabled={copyingSummary}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md transition-colors"
-                title="Copy complete analysis summary to clipboard"
+                title="Copy full text summary for Discord, Slack, or notes — includes rating, breakdown, walk-aways, and compact alert card"
               >
                 {copyingSummary ? (
                   <>
@@ -615,16 +615,6 @@ export default function ShortCheckResults({
             </ul>
           </div>
         )}
-      </Card>
-
-      {/* Alert Card — above score breakdown */}
-      <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700">
-        <h2 className="text-lg font-semibold mb-4">Alert Card</h2>
-        <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg font-mono text-sm whitespace-pre-wrap">
-          {effectiveTicker && result.alertCard?.includes('N/A') 
-            ? result.alertCard.replace(/N\/A/g, effectiveTicker)
-            : result.alertCard}
-        </div>
       </Card>
 
       {/* Score Breakdown */}
