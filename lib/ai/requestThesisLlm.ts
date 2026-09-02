@@ -29,10 +29,6 @@ function isRateLimited(result: GroqCallResult): boolean {
   return result.errorCode === 'rate_limit';
 }
 
-function isGroqTimeout(result: GroqCallResult): boolean {
-  return Boolean(result.error?.includes('timed out'));
-}
-
 /** Nemotron free tier is too slow for fallback — reserve OpenRouter for Groq 429 only. */
 function shouldTryOpenRouterAfterGroq(groq: GroqCallResult): boolean {
   return isRateLimited(groq);
