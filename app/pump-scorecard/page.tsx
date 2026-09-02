@@ -221,6 +221,7 @@ export default function Page() {
               <CapitalPressureCard
                 ticker={activeTicker.toUpperCase()}
                 data={result.capitalPressure}
+                floatShares={result.floatShares ?? null}
               />
             ) : (
               <div className="p-6 border rounded-xl bg-white dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">

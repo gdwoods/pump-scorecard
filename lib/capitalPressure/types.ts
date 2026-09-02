@@ -19,6 +19,9 @@ export type CapitalEventType =
 
 export type CapitalPressureStatus = 'low' | 'watch' | 'elevated' | 'high';
 
+/** Set = confirmed date/mechanism. Possible = contingent (approval, optional redemption). */
+export type EventCertainty = 'set' | 'possible';
+
 export type SecEvidence = {
   form: string;
   accessionNumber?: string;
@@ -52,6 +55,10 @@ export type CapitalEvent = {
   potentialShares?: number;
   filedAt?: string;
   verifiedAt?: string;
+  /** Set vs Possible epistemic marker for catalysts and compliance deadlines. */
+  certainty?: EventCertainty;
+  /** Compliance cure deadline extracted from deficiency notice (ISO date). */
+  cureDate?: string;
   evidence: SecEvidence;
 };
 

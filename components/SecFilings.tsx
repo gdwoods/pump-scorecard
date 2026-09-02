@@ -93,7 +93,7 @@ export default function SecFilings({
               : "bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200"
               }`}
           >
-            Insider (Form 4)
+            Insider (Form 4 / 144)
             {insiderItems.length > 0 && (
               <span className="ml-1 bg-white text-purple-600 rounded-full px-2 py-0.5 text-xs">
                 {insiderItems.length}
@@ -107,12 +107,12 @@ export default function SecFilings({
         // Show insider transactions
         insiderItems.length === 0 ? (
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            No Form 4 (insider trading) filings found in the last 12 months
+            No Form 4 or Form 144 filings found in the last 12 months
           </p>
         ) : (
           <div className="space-y-2">
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-              Form 4 filings indicate insider buy/sell activity. Click "View" to see transaction details on SEC.gov
+              Form 4 = completed insider trades. Form 144 = filed intent to sell (earlier warning). Click View for SEC details.
             </p>
             <ul className="space-y-2 text-sm">
               {insiderItems.map((tx, i) => (

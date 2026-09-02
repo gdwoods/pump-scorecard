@@ -14,6 +14,7 @@ import type {
   XbrlSnapshot,
 } from './types';
 import { cleanFilingText } from './textClean';
+import { extractNasdaqCureDate, inferEventCertainty } from './certainty';
 
 const MAX_EXCERPT = 280;
 
@@ -428,6 +429,14 @@ export function parseFilingDocument(doc: FilingDocumentInput): ParseDocResult {
       if (isIssuance && event.sharesIssued === undefined && amount !== undefined && shares === undefined) {
         // Prefer not to invent shares from dollar amounts
       }
+
+      if (finalType === 'nasdaq_deficiency' || finalType === 'nasdaq_compliance') {
+        const blob = `${title} ${event.description} ${excerpt}`;
+        const cureDate = extractNasdaqCureDate(blob, doc.filingDate);
+        if (cureDate) event.cureDate = cureDate;
+      }
+      const certainty = inferEventCertainty(event);
+      if (certainty) event.certainty = certainty;
 
       // De-dupe identical type+date+form within same doc for same phrase type
       const dup = events.some(

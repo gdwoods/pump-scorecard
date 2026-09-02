@@ -10,3 +10,9 @@ export const INCLUDE_CAPITAL_PRESSURE_IN_OVERALL_SCORE = false;
 
 /** On-demand AI thesis synthesis (Groq). Requires GROQ_API_KEY server-side. */
 export const SHOW_AI_THESIS = true;
+
+/**
+ * Market-wide universe feeds / screener (TTP-style) are intentionally not built here.
+ * See docs/TTP_COMPETITIVE_NOTES.md before adding push-first discovery features.
+ */
+export const ENABLE_MARKET_WIDE_FEEDS = false;

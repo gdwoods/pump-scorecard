@@ -21,6 +21,15 @@ import {
   issuanceWindowSummary,
   statusHeadlineLabel,
 } from "@/lib/capitalPressure/cardCopy";
+import {
+  certaintyLabel,
+  certaintyTip,
+  eventPercentOfFloat,
+  getEventIssuanceStatus,
+  issuanceStatusLabel,
+  issuanceStatusTip,
+} from "@/lib/capitalPressure/eventLabels";
+import { inferEventCertainty, inferUpcomingReverseSplitCertainty } from "@/lib/capitalPressure/certainty";
 import type {
   CapitalEvent,
   CapitalPressureResult,
@@ -34,7 +43,7 @@ const NEEDS_REVIEW_TIP =
   "Matched a financing-related phrase, but not auto-scored — verify the linked filing.";
 
 const TIMELINE_LEGEND_TIP =
-  "Issued = shares sold into the market. Capacity = shelf, ATM, or contractual ability to sell — not confirmed issuance. Needs review = phrase matched; open the SEC link before relying on it.";
+  "Issued = shares sold into the market. Filed = shelf, ATM, or registration — not confirmed issuance. Needs review = phrase matched; open the SEC link before relying on it. Set / Possible = confirmed vs contingent catalyst dates.";
 
 type Panel = "timeline" | "detail" | null;
 
@@ -64,24 +73,6 @@ function evidenceStatusClass(status: EvidenceStatus): string {
   }
 }
 
-function isIssuanceEvent(event: CapitalEvent): boolean {
-  if (event.isCapacityOnly === true) return false;
-  return [
-    "registered_direct",
-    "private_placement",
-    "note_conversion",
-    "debt_for_equity",
-    "warrant_exercise",
-    "prospectus_supplement",
-    "equity_line",
-    "atm_program",
-  ].includes(event.type);
-}
-
-function isCapacityEvent(event: CapitalEvent): boolean {
-  return event.isCapacityOnly === true;
-}
-
 function SecLink({ url, label }: { url?: string; label?: string }) {
   if (!url) return null;
   return (
@@ -99,27 +90,30 @@ function SecLink({ url, label }: { url?: string; label?: string }) {
 function TimelineRow({
   event,
   highlighted,
+  floatShares,
 }: {
   event: CapitalEvent;
   highlighted?: boolean;
+  floatShares?: number | null;
 }) {
   const evidence = event.evidence;
-  const capacity = isCapacityEvent(event);
-  const issued = isIssuanceEvent(event);
+  const issuanceStatus = getEventIssuanceStatus(event);
+  const pctFloat = eventPercentOfFloat(event, floatShares);
+  const certainty = inferEventCertainty(event);
   const description = cleanFilingText(event.description || "");
   const excerpt = cleanFilingText(evidence?.excerpt || "");
 
   const borderClass = highlighted
     ? "border-red-500 dark:border-red-400"
-    : issued
+    : issuanceStatus === "issued"
       ? "border-red-400 dark:border-red-500"
-      : capacity
+      : issuanceStatus === "filed"
         ? "border-sky-300 dark:border-sky-600 opacity-90"
         : "border-slate-300 dark:border-slate-500";
 
   const rowBg = highlighted
     ? "bg-red-50/70 dark:bg-red-950/30 rounded-r-md -ml-1 pl-3"
-    : issued
+    : issuanceStatus === "issued"
       ? "bg-red-50/40 dark:bg-red-950/20 rounded-r-md -ml-1 pl-3"
       : "";
 
@@ -135,15 +129,31 @@ function TimelineRow({
         <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700">
           {humanEventType(event.type)}
         </span>
-        {capacity && (
-          <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-100 dark:border-sky-800">
-            📋 Capacity
-          </span>
+        {issuanceStatus && (
+          <Tooltip content={issuanceStatusTip(issuanceStatus)}>
+            <span
+              className={`px-1.5 py-0.5 rounded font-medium cursor-help ${
+                issuanceStatus === "issued"
+                  ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+                  : "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-100 dark:border-sky-800"
+              }`}
+            >
+              {issuanceStatusLabel(issuanceStatus)}
+            </span>
+          </Tooltip>
         )}
-        {issued && (
-          <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200 font-medium">
-            🔴 Issued
-          </span>
+        {certainty && (
+          <Tooltip content={certaintyTip(certainty)}>
+            <span
+              className={`px-1.5 py-0.5 rounded cursor-help ${
+                certainty === "set"
+                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+                  : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+              }`}
+            >
+              {certaintyLabel(certainty)}
+            </span>
+          </Tooltip>
         )}
         {evidence?.confidence === "needs_review" && (
           <Tooltip content={NEEDS_REVIEW_TIP}>
@@ -155,13 +165,18 @@ function TimelineRow({
       </div>
       <p
         className={`text-sm ${
-          capacity
+          issuanceStatus === "filed"
             ? "text-gray-600 dark:text-gray-400"
             : "text-gray-900 dark:text-gray-100 font-medium"
         }`}
       >
         {event.title}
       </p>
+      {event.cureDate && (
+        <p className="text-xs text-amber-700 dark:text-amber-300">
+          Cure deadline: {event.cureDate}
+        </p>
+      )}
       {(description || excerpt) && (
         <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
           {description || excerpt}
@@ -174,6 +189,7 @@ function TimelineRow({
         {event.potentialShares != null && Number.isFinite(event.potentialShares) && (
           <span>Potential: {formatSharesShort(event.potentialShares)}</span>
         )}
+        {pctFloat && <span className="font-medium">{pctFloat}</span>}
         {event.grossProceedsUsd != null && Number.isFinite(event.grossProceedsUsd) && (
           <span>Amount: {formatUsdShort(event.grossProceedsUsd)}</span>
         )}
@@ -183,12 +199,39 @@ function TimelineRow({
   );
 }
 
-function ReasonRow({ reason }: { reason: ScoreReason }) {
+function ReasonRow({
+  reason,
+  floatShares,
+  matchedEvent,
+}: {
+  reason: ScoreReason;
+  floatShares?: number | null;
+  matchedEvent?: CapitalEvent;
+}) {
+  const issuanceStatus = matchedEvent ? getEventIssuanceStatus(matchedEvent) : null;
+  const pctFloat = matchedEvent ? eventPercentOfFloat(matchedEvent, floatShares) : null;
+
   return (
     <div className="text-sm space-y-1 border-b border-gray-100 dark:border-gray-700 pb-2 mb-2 last:border-0">
-      <div className="flex justify-between gap-2">
-        <span className="text-gray-800 dark:text-gray-200">{reason.label}</span>
-        <span className="font-semibold text-red-700 dark:text-red-300">+{reason.points}</span>
+      <div className="flex flex-wrap justify-between gap-2 items-start">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <span className="text-gray-800 dark:text-gray-200">{reason.label}</span>
+          {issuanceStatus && (
+            <span
+              className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                issuanceStatus === "issued"
+                  ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+                  : "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+              }`}
+            >
+              {issuanceStatusLabel(issuanceStatus)}
+            </span>
+          )}
+          {pctFloat && (
+            <span className="text-[10px] font-medium text-gray-600 dark:text-gray-400">{pctFloat}</span>
+          )}
+        </div>
+        <span className="font-semibold text-red-700 dark:text-red-300 shrink-0">+{reason.points}</span>
       </div>
       <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3">
         {cleanFilingText(reason.evidence?.excerpt ?? "")}
@@ -207,7 +250,7 @@ function EventSparkline({ events }: { events: CapitalEvent[] }) {
       <div className="flex items-center gap-0.5 flex-wrap" aria-label="Recent filing activity">
         {recent.map((e) => {
           const label = `${e.eventDate} — ${humanEventType(e.type)}`;
-          const issued = isIssuanceEvent(e);
+          const status = getEventIssuanceStatus(e);
           return (
             <Tooltip key={e.id} content={label} side="top">
               <button
@@ -217,7 +260,7 @@ function EventSparkline({ events }: { events: CapitalEvent[] }) {
               >
                 <span
                   className={`block w-2.5 h-2.5 rounded-full ${
-                    issued ? "bg-red-500" : "bg-sky-400"
+                    status === "issued" ? "bg-red-500" : "bg-sky-400"
                   }`}
                 />
               </button>
@@ -232,22 +275,29 @@ function EventSparkline({ events }: { events: CapitalEvent[] }) {
   );
 }
 
+function findEventForReason(events: CapitalEvent[], reason: ScoreReason): CapitalEvent | undefined {
+  return findPinnedEvent(events, reason);
+}
+
 export default function CapitalPressureCard({
   ticker,
   data,
   extractedData,
   capacityQuarters,
   derivedOfferingAbility,
+  floatShares,
 }: {
   ticker: string;
   data?: CapitalPressureResult | null;
   extractedData?: ExtractedData | null;
   capacityQuarters?: number | null;
   derivedOfferingAbility?: OfferingAbility | null;
+  /** Public float share count for % of float on timeline events. */
+  floatShares?: number | null;
 }) {
   const [openPanel, setOpenPanel] = useState<Panel>(null);
   const [timelineFilter, setTimelineFilter] = useState<
-    "all" | "issued" | "capacity" | "needs_review"
+    "all" | "issued" | "filed" | "needs_review"
   >("all");
   const [copiedSummary, setCopiedSummary] = useState(false);
 
@@ -268,8 +318,8 @@ export default function CapitalPressureCard({
   const filteredEvents = useMemo(() => {
     return orderedEvents.filter((e) => {
       if (timelineFilter === "all") return true;
-      if (timelineFilter === "issued") return isIssuanceEvent(e);
-      if (timelineFilter === "capacity") return isCapacityEvent(e);
+      if (timelineFilter === "issued") return getEventIssuanceStatus(e) === "issued";
+      if (timelineFilter === "filed") return getEventIssuanceStatus(e) === "filed";
       if (timelineFilter === "needs_review") {
         return e.evidence?.confidence === "needs_review" || e.scoreEligible === false;
       }
@@ -347,7 +397,7 @@ export default function CapitalPressureCard({
   const filterOptions = [
     ["all", "All"],
     ["issued", "Issued"],
-    ["capacity", "Capacity"],
+    ["filed", "Filed"],
     ["needs_review", "Needs review"],
   ] as const;
 
@@ -426,11 +476,26 @@ export default function CapitalPressureCard({
           </div>
         )}
 
-        {data.upcomingReverseSplit && (
+        {data.upcomingReverseSplit && (() => {
+          const rsCertainty = inferUpcomingReverseSplitCertainty(data.upcomingReverseSplit);
+          return (
           <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/25 px-3 py-2 space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">
-              Upcoming reverse split
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">
+                Upcoming reverse split
+              </p>
+              <Tooltip content={certaintyTip(rsCertainty)}>
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium cursor-help ${
+                    rsCertainty === "set"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+                      : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                  }`}
+                >
+                  {certaintyLabel(rsCertainty)}
+                </span>
+              </Tooltip>
+            </div>
             <p className="text-sm text-amber-900 dark:text-amber-100">
               {data.upcomingReverseSplit.ratio
                 ? `${data.upcomingReverseSplit.ratio} effective ${data.upcomingReverseSplit.effectiveDate}`
@@ -444,7 +509,8 @@ export default function CapitalPressureCard({
               <SecLink url={data.upcomingReverseSplit.documentUrl} label="View filing" />
             )}
           </div>
-        )}
+          );
+        })()}
 
         {data.unscoredFilings && data.unscoredFilings.length > 0 && (
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 px-3 py-2 space-y-1">
@@ -525,7 +591,7 @@ export default function CapitalPressureCard({
               Top score driver
             </h3>
             <ul className="space-y-1">
-              <TimelineRow event={pinned} highlighted />
+              <TimelineRow event={pinned} highlighted floatShares={floatShares} />
             </ul>
           </div>
         ) : topReason ? (
@@ -533,7 +599,7 @@ export default function CapitalPressureCard({
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
               Top score driver
             </h3>
-            <ReasonRow reason={topReason} />
+            <ReasonRow reason={topReason} floatShares={floatShares} matchedEvent={pinned} />
           </div>
         ) : (
           <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -595,7 +661,12 @@ export default function CapitalPressureCard({
                 ) : (
                   <ul className="space-y-1 max-h-96 overflow-y-auto">
                     {filteredEvents.map((e) => (
-                      <TimelineRow key={e.id} event={e} highlighted={pinned?.id === e.id} />
+                      <TimelineRow
+                        key={e.id}
+                        event={e}
+                        highlighted={pinned?.id === e.id}
+                        floatShares={floatShares}
+                      />
                     ))}
                   </ul>
                 )}
@@ -704,7 +775,12 @@ export default function CapitalPressureCard({
                       Other score reasons
                     </h4>
                     {otherReasons.map((r, i) => (
-                      <ReasonRow key={`${r.label}-${i}`} reason={r} />
+                      <ReasonRow
+                        key={`${r.label}-${i}`}
+                        reason={r}
+                        floatShares={floatShares}
+                        matchedEvent={findEventForReason(events, r)}
+                      />
                     ))}
                   </div>
                 )}

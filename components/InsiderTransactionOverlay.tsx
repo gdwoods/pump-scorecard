@@ -36,6 +36,7 @@ export default function InsiderTransactionOverlay({
                         {transactions.slice(0, 20).map((tx, idx) => {
                             const isBuy = tx.transactionType === 'buy';
                             const isSell = tx.transactionType === 'sell';
+                            const isIntent = tx.transactionType === 'intent_to_sell';
 
                             return (
                                 <tr
@@ -48,11 +49,12 @@ export default function InsiderTransactionOverlay({
                                     <td className="p-2">
                                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${isBuy ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                                                 isSell ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                    isIntent ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
                                                     'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                                             }`}>
                                             {isBuy && '↑'}
                                             {isSell && '↓'}
-                                            {tx.transactionType.toUpperCase()}
+                                            {isIntent ? 'INTENT' : tx.transactionType.toUpperCase()}
                                         </span>
                                     </td>
                                     <td className="p-2 text-gray-700 dark:text-gray-300 max-w-[150px] truncate" title={tx.insiderName}>
@@ -62,18 +64,19 @@ export default function InsiderTransactionOverlay({
                                         {tx.insiderTitle}
                                     </td>
                                     <td className="p-2 text-right text-gray-700 dark:text-gray-300 font-mono">
-                                        {tx.shares.toLocaleString()}
+                                        {tx.shares > 0 ? tx.shares.toLocaleString() : '—'}
                                     </td>
                                     <td className="p-2 text-right text-gray-700 dark:text-gray-300 font-mono">
-                                        ${tx.pricePerShare.toFixed(2)}
+                                        {tx.pricePerShare > 0 ? `$${tx.pricePerShare.toFixed(2)}` : '—'}
                                     </td>
                                     <td className="p-2 text-right font-semibold font-mono">
                                         <span className={
                                             isBuy ? 'text-green-600 dark:text-green-400' :
                                                 isSell ? 'text-red-600 dark:text-red-400' :
+                                                    isIntent ? 'text-purple-600 dark:text-purple-400' :
                                                     'text-gray-700 dark:text-gray-300'
                                         }>
-                                            ${(tx.totalValue / 1000).toFixed(0)}K
+                                            {tx.totalValue > 0 ? `$${(tx.totalValue / 1000).toFixed(0)}K` : '—'}
                                         </span>
                                     </td>
                                     <td className="p-2 text-center">

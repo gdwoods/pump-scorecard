@@ -100,7 +100,7 @@ function FastScanInner() {
 
   const capitalPressureBlock =
     pumpData?.capitalPressure ? (
-      <CapitalPressureCard ticker={ticker.toUpperCase()} data={pumpData.capitalPressure} />
+      <CapitalPressureCard ticker={ticker.toUpperCase()} data={pumpData.capitalPressure} floatShares={pumpData.floatShares ?? null} />
     ) : null;
 
   const quickScorecard = useMemo(() => {

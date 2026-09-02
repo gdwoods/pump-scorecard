@@ -1,4 +1,5 @@
-import type { CapitalEvent } from './types';
+import { inferEventCertainty } from './certainty';
+import type { CapitalEvent, EventCertainty } from './types';
 
 export type UpcomingReverseSplitInfo = {
   effectiveDate: string;
@@ -6,6 +7,7 @@ export type UpcomingReverseSplitInfo = {
   source: 'edgar' | 'polygon';
   summary: string;
   documentUrl?: string;
+  certainty?: EventCertainty;
 };
 
 const UPCOMING_EDGAR =
@@ -51,6 +53,7 @@ export function detectUpcomingReverseSplitFromEvents(
       source: 'edgar',
       summary: e.description || e.title,
       documentUrl: e.evidence.documentUrl,
+      certainty: inferEventCertainty(e),
     };
   }
   return null;
@@ -72,6 +75,7 @@ export function detectUpcomingReverseSplitFromPolygon(
     ratio: next.ratio,
     source: 'polygon',
     summary: `Scheduled reverse split (${next.ratio}) per exchange reference data.`,
+    certainty: 'set',
   };
 }
 

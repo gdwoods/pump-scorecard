@@ -312,6 +312,7 @@ export default function ShortCheckPage() {
         extractedData={extractedData}
         capacityQuarters={enrichedFastVerdict?.dilution?.capacityQuarters ?? null}
         derivedOfferingAbility={enrichedFastVerdict?.dilution?.derivedOfferingAbility ?? null}
+        floatShares={pumpScorecardData.floatShares ?? extractedData?.float ?? null}
       />
     ) : null;
 
