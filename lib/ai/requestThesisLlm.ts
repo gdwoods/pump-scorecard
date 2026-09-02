@@ -209,17 +209,13 @@ export async function requestThesisLlm(
     return withMeta(groq, 'groq', getGroqModel());
   }
 
+  let openRouterAttempt: ThesisLlmResult | null = null;
   if (openRouterReady && shouldTryOpenRouterAfterGroq(groq)) {
-    const or = await tryOpenRouter(messages, deadline);
-    if (or?.success) return or;
-    if (or) return preferOpenRouterError(groq, or);
+    openRouterAttempt = await tryOpenRouter(messages, deadline);
+    if (openRouterAttempt?.success) return openRouterAttempt;
   }
 
-  if (
-    !groq.success &&
-    !isRateLimited(groq) &&
-    remainingBudgetMs(deadline) >= MIN_PROVIDER_MS
-  ) {
+  if (!groq.success && !isRateLimited(groq) && remainingBudgetMs(deadline) >= MIN_PROVIDER_MS) {
     groq = await callGroqForThesis(messages, deadline, {
       temperature: 0.15,
       timeoutCap: GROQ_PLAIN_RETRY_TIMEOUT_MS,
@@ -230,6 +226,7 @@ export async function requestThesisLlm(
     }
   }
 
+  if (openRouterAttempt) return preferOpenRouterError(groq, openRouterAttempt);
   return withMeta(groq, 'groq', getGroqModel());
 }
 
