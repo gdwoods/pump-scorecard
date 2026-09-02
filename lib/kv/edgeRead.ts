@@ -28,6 +28,8 @@ function parseUpstashCreds(): UpstashCreds | null {
   }
 }
 
+const KV_FETCH_TIMEOUT_MS = 3_000;
+
 async function upstashFetch(
   creds: UpstashCreds,
   command: string
@@ -36,6 +38,7 @@ async function upstashFetch(
     const res = await fetch(`${creds.url}/${command}`, {
       headers: { Authorization: `Bearer ${creds.token}` },
       cache: 'no-store',
+      signal: AbortSignal.timeout(KV_FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     return (await res.json()) as { result?: unknown; error?: string };

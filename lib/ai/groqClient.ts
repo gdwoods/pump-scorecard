@@ -35,7 +35,7 @@ export type GroqFetcher = (apiKey: string, body: Record<string, unknown>) => Pro
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 /** Groq retired llama-3.3-70b-versatile 2026-08-16; override via GROQ_MODEL env. */
 const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-20b';
-const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 12_000;
 
 export function getGroqModel(): string {
   const fromEnv = process.env.GROQ_MODEL?.trim();

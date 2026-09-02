@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "app/api/ai-thesis/route.ts": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/wire-news",

@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildThesisMessages } from '@/lib/ai/buildThesisPrompt';
 import { parseThesisContent } from '@/lib/ai/parseThesisContent';
-import { requestThesisLlm } from '@/lib/ai/requestThesisLlm';
+import { withThesisLlmDeadline } from '@/lib/ai/requestThesisLlm';
 import { isOpenRouterConfigured } from '@/lib/ai/openRouterClient';
 import { checkAiThesisRateLimit, getClientIpFromHeaders } from '@/lib/ai/rateLimit';
 import { checkGroqDailyBudget, formatGroqBudgetError } from '@/lib/ai/groqBudget';
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
         throw new Error(`AI thesis prompt error: ${msg}`);
       }
     })();
-    const llmResult = await requestThesisLlm(messages, { groqAllowed });
+    const llmResult = await withThesisLlmDeadline(messages, { groqAllowed });
 
     if (!llmResult.success || !llmResult.content) {
       return NextResponse.json({
@@ -127,7 +127,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    await writeCachedThesis(body, thesis);
+    void writeCachedThesis(body, thesis).catch((err) => {
+      console.warn('AI thesis cache write failed:', err);
+    });
 
     return NextResponse.json({
       success: true,

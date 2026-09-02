@@ -3,7 +3,7 @@ import type { GroqCallResult, GroqChatMessage, GroqFetcher } from './groqClient'
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_OPENROUTER_MODEL = 'nvidia/nemotron-3.5-lightning:free';
-const REQUEST_TIMEOUT_MS = 18_000;
+const REQUEST_TIMEOUT_MS = 14_000;
 
 /** Retired slugs that OpenRouter no longer routes — ignore env override. */
 const DEPRECATED_OPENROUTER_MODELS = new Set([

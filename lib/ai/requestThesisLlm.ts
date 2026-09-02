@@ -1,18 +1,21 @@
 // lib/ai/requestThesisLlm.ts
 //
 // Thesis LLM chain: Groq first (or OpenRouter first when explicitly enabled).
-// OpenRouter runs on Groq rate-limit, JSON validation failure, timeout, or bad parse.
+// OpenRouter runs on Groq failure when configured. Hard budget keeps responses under Vercel limits.
 
 import { callGroq, getGroqModel, type GroqCallResult, type GroqChatMessage } from './groqClient';
 import { recordGroqApiCall } from './groqBudget';
 import { callOpenRouter, getOpenRouterModel, isOpenRouterConfigured } from './openRouterClient';
 import { parseThesisContent } from './parseThesisContent';
-import { getThesisResponseFormat, type GroqResponseFormat } from './thesisJsonSchema';
 
-const THESIS_MAX_TOKENS = 900;
-/** Stay under Vercel maxDuration with prompt build + KV. */
-const THESIS_LLM_BUDGET_MS = 28_000;
-const MIN_PROVIDER_MS = 2_500;
+const THESIS_MAX_TOKENS = 700;
+/** Hard cap for all provider attempts in one request. */
+const THESIS_LLM_BUDGET_MS = 22_000;
+const MIN_PROVIDER_MS = 2_000;
+const GROQ_FIRST_TIMEOUT_MS = 5_000;
+const GROQ_RETRY_TIMEOUT_MS = 4_000;
+const OPENROUTER_FALLBACK_TIMEOUT_MS = 14_000;
+const OPENROUTER_PRIMARY_TIMEOUT_MS = 18_000;
 
 export type ThesisLlmResult = GroqCallResult & {
   provider?: 'groq' | 'openrouter';
@@ -45,14 +48,12 @@ function remainingBudgetMs(deadline: number): number {
   return Math.max(0, deadline - Date.now());
 }
 
-function shouldFallbackToOpenRouter(groq: GroqCallResult): boolean {
-  if (groq.success) return false;
-  if (isRateLimited(groq)) return true;
-  if (groq.errorCode === 'json_validate_failed') return true;
-  if (groq.errorCode === 'parse_failed') return true;
-  if (groq.error?.includes('timed out')) return true;
-  if (groq.error?.includes('empty response')) return true;
-  return true;
+function budgetTimeoutMs(deadline: number, capMs: number): number {
+  return Math.min(capMs, remainingBudgetMs(deadline) - 500);
+}
+
+function timedOutResult(): GroqCallResult {
+  return { success: false, error: 'AI thesis timed out — try again in a moment.' };
 }
 
 function parseFailureResult(): GroqCallResult {
@@ -63,32 +64,33 @@ function parseFailureResult(): GroqCallResult {
   };
 }
 
+function shouldFallbackToOpenRouter(groq: GroqCallResult): boolean {
+  if (groq.success) return false;
+  if (isRateLimited(groq)) return true;
+  return true;
+}
+
 async function callGroqOnce(
   messages: GroqChatMessage[],
   deadline: number,
   opts: {
     temperature?: number;
     timeoutCap?: number;
-    responseFormat?: GroqResponseFormat | null;
+    useJsonObject?: boolean;
+    omitResponseFormat?: boolean;
   } = {}
 ): Promise<GroqCallResult> {
-  const timeoutMs = Math.min(
-    opts.timeoutCap ?? 9_000,
-    remainingBudgetMs(deadline) - 1_000
-  );
-  if (timeoutMs < MIN_PROVIDER_MS) {
-    return { success: false, error: 'AI thesis timed out — try again in a moment.' };
-  }
-
-  const responseFormat =
-    opts.responseFormat === null
-      ? undefined
-      : (opts.responseFormat ?? getThesisResponseFormat());
+  const timeoutMs = budgetTimeoutMs(deadline, opts.timeoutCap ?? GROQ_FIRST_TIMEOUT_MS);
+  if (timeoutMs < MIN_PROVIDER_MS) return timedOutResult();
 
   const result = await callGroq(messages, {
     maxTokens: THESIS_MAX_TOKENS,
     temperature: opts.temperature ?? 0.2,
-    responseFormat,
+    responseFormat: opts.omitResponseFormat
+      ? null
+      : opts.useJsonObject === false
+        ? undefined
+        : { type: 'json_object' },
     timeoutMs,
   });
   if (result.errorCode !== 'rate_limit') {
@@ -103,7 +105,8 @@ async function callGroqForThesis(
   opts: {
     temperature?: number;
     timeoutCap?: number;
-    responseFormat?: GroqResponseFormat | null;
+    useJsonObject?: boolean;
+    omitResponseFormat?: boolean;
   } = {}
 ): Promise<GroqCallResult> {
   const result = await callGroqOnce(messages, deadline, opts);
@@ -114,26 +117,19 @@ async function callGroqForThesis(
   return parseFailureResult();
 }
 
-async function callOpenRouterOnce(
+async function callOpenRouterForThesis(
   messages: GroqChatMessage[],
-  deadline: number
+  deadline: number,
+  timeoutCap: number
 ): Promise<GroqCallResult> {
-  const timeoutMs = Math.min(16_000, remainingBudgetMs(deadline) - 1_000);
-  if (timeoutMs < MIN_PROVIDER_MS) {
-    return { success: false, error: 'AI thesis timed out — try again in a moment.' };
-  }
-  return callOpenRouter(messages, {
+  const timeoutMs = budgetTimeoutMs(deadline, timeoutCap);
+  if (timeoutMs < MIN_PROVIDER_MS) return timedOutResult();
+
+  const result = await callOpenRouter(messages, {
     maxTokens: THESIS_MAX_TOKENS,
     temperature: 0.2,
     timeoutMs,
   });
-}
-
-async function callOpenRouterForThesis(
-  messages: GroqChatMessage[],
-  deadline: number
-): Promise<GroqCallResult> {
-  const result = await callOpenRouterOnce(messages, deadline);
   if (!result.success || !result.content) return result;
 
   const model = getOpenRouterModel();
@@ -147,10 +143,11 @@ async function callOpenRouterForThesis(
 
 async function tryOpenRouter(
   messages: GroqChatMessage[],
-  deadline: number
+  deadline: number,
+  timeoutCap: number
 ): Promise<ThesisLlmResult | null> {
   if (!isOpenRouterConfigured()) return null;
-  const fallback = await callOpenRouterForThesis(messages, deadline);
+  const fallback = await callOpenRouterForThesis(messages, deadline, timeoutCap);
   if (fallback.success && fallback.content) {
     return withMeta(fallback, 'openrouter', getOpenRouterModel());
   }
@@ -182,7 +179,7 @@ function preferOpenRouterError(groq: GroqCallResult, or: ThesisLlmResult): Thesi
 }
 
 /**
- * Request an AI thesis. Default: one Groq attempt, then OpenRouter on failure when configured.
+ * Request an AI thesis. Default: Groq (≤2 attempts), then OpenRouter on failure when configured.
  */
 export async function requestThesisLlm(
   messages: GroqChatMessage[],
@@ -190,9 +187,10 @@ export async function requestThesisLlm(
 ): Promise<ThesisLlmResult> {
   const deadline = Date.now() + THESIS_LLM_BUDGET_MS;
   const groqAllowed = options.groqAllowed !== false && Boolean(process.env.GROQ_API_KEY);
+  const openRouterReady = isOpenRouterConfigured();
 
   if (shouldUseOpenRouterFirst()) {
-    const orFirst = await tryOpenRouter(messages, deadline);
+    const orFirst = await tryOpenRouter(messages, deadline, OPENROUTER_PRIMARY_TIMEOUT_MS);
     if (orFirst?.success) return orFirst;
     if (
       groqAllowed &&
@@ -211,7 +209,7 @@ export async function requestThesisLlm(
   }
 
   if (!groqAllowed) {
-    const orOnly = await tryOpenRouter(messages, deadline);
+    const orOnly = await tryOpenRouter(messages, deadline, OPENROUTER_PRIMARY_TIMEOUT_MS);
     return (
       orOnly ?? {
         success: false,
@@ -220,29 +218,48 @@ export async function requestThesisLlm(
     );
   }
 
-  let groq = await callGroqForThesis(messages, deadline);
+  let groq = await callGroqForThesis(messages, deadline, { timeoutCap: GROQ_FIRST_TIMEOUT_MS });
   if (groq.success && groq.content) {
     return withMeta(groq, 'groq', getGroqModel());
   }
 
-  if (isOpenRouterConfigured() && shouldFallbackToOpenRouter(groq)) {
-    const or = await tryOpenRouter(messages, deadline);
-    if (or?.success) return or;
-    if (or) return preferOpenRouterError(groq, or);
-  }
-
-  if (!groq.success && remainingBudgetMs(deadline) >= MIN_PROVIDER_MS && !isOpenRouterConfigured()) {
+  if (
+    !groq.success &&
+    !isRateLimited(groq) &&
+    remainingBudgetMs(deadline) >= MIN_PROVIDER_MS &&
+    !openRouterReady
+  ) {
     groq = await callGroqForThesis(messages, deadline, {
       temperature: 0.15,
-      timeoutCap: 8_000,
-      responseFormat: null,
+      timeoutCap: GROQ_RETRY_TIMEOUT_MS,
+      omitResponseFormat: true,
     });
     if (groq.success && groq.content) {
       return withMeta(groq, 'groq', getGroqModel());
     }
   }
 
+  if (openRouterReady && shouldFallbackToOpenRouter(groq)) {
+    const or = await tryOpenRouter(messages, deadline, OPENROUTER_FALLBACK_TIMEOUT_MS);
+    if (or?.success) return or;
+    if (or) return preferOpenRouterError(groq, or);
+  }
+
   return withMeta(groq, 'groq', getGroqModel());
+}
+
+/** Hard wall-clock cap so the route always returns JSON before platform timeout. */
+export function withThesisLlmDeadline(
+  messages: GroqChatMessage[],
+  options: ThesisLlmOptions = {},
+  budgetMs = 24_000
+): Promise<ThesisLlmResult> {
+  return Promise.race([
+    requestThesisLlm(messages, options),
+    new Promise<ThesisLlmResult>((resolve) => {
+      setTimeout(() => resolve(timedOutResult()), budgetMs);
+    }),
+  ]);
 }
 
 /** @deprecated Use requestThesisLlm */
