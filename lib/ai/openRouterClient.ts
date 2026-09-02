@@ -2,16 +2,16 @@ import type { GroqResponseFormat } from './thesisJsonSchema';
 import type { GroqCallResult, GroqChatMessage, GroqFetcher } from './groqClient';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_OPENROUTER_MODEL = 'google/gemini-flash-latest';
+const DEFAULT_OPENROUTER_MODEL = 'nvidia/nemotron-3.5-lightning:free';
 const REQUEST_TIMEOUT_MS = 25_000;
 
 /** Retired slugs that OpenRouter no longer routes — ignore env override. */
-const DEPRECATED_OPENROUTER_MODELS = new Set(['google/gemini-2.0-flash-001']);
+const DEPRECATED_OPENROUTER_MODELS = new Set([
+  'google/gemini-2.0-flash-001',
+  'google/gemini-flash-latest',
+]);
 
-const OPENROUTER_MODEL_FALLBACKS = [
-  DEFAULT_OPENROUTER_MODEL,
-  'google/gemini-3.5-flash',
-] as const;
+const OPENROUTER_MODEL_FALLBACKS = [DEFAULT_OPENROUTER_MODEL] as const;
 
 export function getOpenRouterModel(): string {
   return resolveOpenRouterModels()[0];
@@ -30,8 +30,10 @@ export function resolveOpenRouterModels(): string[] {
   return models;
 }
 
-function isMissingOpenRouterEndpoint(status: number, bodyText: string): boolean {
-  return status === 404 && bodyText.includes('No endpoints found');
+function shouldTryNextOpenRouterModel(status: number, bodyText: string): boolean {
+  if (status === 404 && bodyText.includes('No endpoints found')) return true;
+  if (status === 400 && bodyText.includes('not a valid model ID')) return true;
+  return false;
 }
 
 export function isOpenRouterConfigured(): boolean {
@@ -127,7 +129,7 @@ export async function callOpenRouter(
         success: false,
         error: `OpenRouter API error ${response.status} (${model}): ${bodyText.slice(0, 200)}`,
       };
-      if (isMissingOpenRouterEndpoint(response.status, bodyText)) {
+      if (shouldTryNextOpenRouterModel(response.status, bodyText)) {
         continue;
       }
       break;

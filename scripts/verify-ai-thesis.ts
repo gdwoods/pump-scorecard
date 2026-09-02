@@ -286,10 +286,10 @@ async function testCallOpenRouterModelFallback() {
   const mockFetcher: GroqFetcher = async (_key, body) => {
     call++;
     const model = body.model as string;
-    if (model === 'google/gemini-flash-latest') {
+    if (model === 'vendor/invalid-model') {
       return new Response(
-        JSON.stringify({ error: { message: 'No endpoints found for google/gemini-flash-latest.' } }),
-        { status: 404 }
+        JSON.stringify({ error: { message: 'vendor/invalid-model is not a valid model ID' } }),
+        { status: 400 }
       );
     }
     return new Response(
@@ -302,19 +302,26 @@ async function testCallOpenRouterModelFallback() {
   const originalKey = process.env.OPENROUTER_API_KEY;
   const originalModel = process.env.OPENROUTER_MODEL;
   process.env.OPENROUTER_API_KEY = 'test-or-key';
-  delete process.env.OPENROUTER_MODEL;
-  const { resolveOpenRouterModels } = await import('../lib/ai/openRouterClient');
+  const { resolveOpenRouterModels, DEFAULT_OPENROUTER_MODEL } = await import('../lib/ai/openRouterClient');
   process.env.OPENROUTER_MODEL = 'google/gemini-2.0-flash-001';
   assert(
     !resolveOpenRouterModels().includes('google/gemini-2.0-flash-001'),
     'deprecated OpenRouter model env override is ignored'
   );
-  delete process.env.OPENROUTER_MODEL;
+  process.env.OPENROUTER_MODEL = 'vendor/invalid-model';
+  assert(
+    resolveOpenRouterModels()[0] === 'vendor/invalid-model',
+    'custom OpenRouter model env override is honored when valid slug'
+  );
   const result = await callOpenRouter([{ role: 'user', content: 'hi' }], { fetcher: mockFetcher });
   process.env.OPENROUTER_API_KEY = originalKey;
   process.env.OPENROUTER_MODEL = originalModel;
-  assert(result.success === true, 'callOpenRouter falls back after retired model 404');
-  assert(call >= 2, 'callOpenRouter tries fallback model after 404');
+  assert(result.success === true, 'callOpenRouter falls back after invalid model 400');
+  assert(call >= 2, 'callOpenRouter tries fallback model after 400');
+  assert(
+    DEFAULT_OPENROUTER_MODEL === 'nvidia/nemotron-3.5-lightning:free',
+    'default OpenRouter model is Nemotron 3.5 Lightning (free)'
+  );
 }
 
 async function testCallGroqNoKey() {
