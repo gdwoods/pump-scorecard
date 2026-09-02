@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildThesisMessages } from '@/lib/ai/buildThesisPrompt';
 import { parseThesisContent } from '@/lib/ai/parseThesisContent';
-import { withThesisLlmDeadline } from '@/lib/ai/requestThesisLlm';
+import { requestThesisLlm, type ThesisLlmResult } from '@/lib/ai/requestThesisLlm';
 import { isOpenRouterConfigured } from '@/lib/ai/openRouterClient';
 import { checkAiThesisRateLimit, getClientIpFromHeaders } from '@/lib/ai/rateLimit';
 import { checkGroqDailyBudget, formatGroqBudgetError } from '@/lib/ai/groqBudget';
@@ -20,6 +20,24 @@ import type { ThesisPromptInput } from '@/lib/ai/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+
+const ROUTE_DEADLINE_MS = 52_000;
+
+function routeTimedOut(): NextResponse {
+  return NextResponse.json({
+    success: false,
+    error: 'AI thesis timed out — try again in a moment.',
+  });
+}
+
+function withRouteDeadline<T>(work: Promise<T>): Promise<T | NextResponse> {
+  return Promise.race([
+    work,
+    new Promise<NextResponse>((resolve) => {
+      setTimeout(() => resolve(routeTimedOut()), ROUTE_DEADLINE_MS);
+    }),
+  ]);
+}
 
 function hasPromptData(body: ThesisPromptInput): boolean {
   return Boolean(body.shortCheck || body.scan || body.extractedData || body.fastVerdict);
@@ -38,6 +56,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const result = await withRouteDeadline(handleThesisPost(req));
+  if (result instanceof NextResponse) return result;
+  return result;
+}
+
+async function handleThesisPost(req: NextRequest): Promise<NextResponse> {
   try {
     if (!SHOW_AI_THESIS) {
       return NextResponse.json({ success: false, error: 'AI thesis is disabled' });
@@ -51,17 +75,6 @@ export async function POST(req: NextRequest) {
     }
 
     const clientIp = getClientIpFromHeaders(req.headers);
-    const rateLimit = await checkAiThesisRateLimit(clientIp);
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `AI thesis rate limit reached — try again in ${rateLimit.retryAfterSec} seconds.`,
-        },
-        { status: 429 }
-      );
-    }
-
     const body = (await req.json()) as ThesisPromptInput;
 
     if (!body?.ticker) {
@@ -78,7 +91,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cached = await readCachedThesis(body);
+    const [rateLimit, cached, groqBudget] = await Promise.all([
+      checkAiThesisRateLimit(clientIp),
+      readCachedThesis(body),
+      checkGroqDailyBudget(),
+    ]);
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `AI thesis rate limit reached — try again in ${rateLimit.retryAfterSec} seconds.`,
+        },
+        { status: 429 }
+      );
+    }
+
     if (cached) {
       return NextResponse.json({
         success: true,
@@ -88,7 +116,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const groqBudget = await checkGroqDailyBudget();
     const groqAllowed = !process.env.GROQ_API_KEY || groqBudget.allowed;
     if (process.env.GROQ_API_KEY && !groqBudget.allowed && !isOpenRouterConfigured()) {
       return NextResponse.json({
@@ -105,7 +132,7 @@ export async function POST(req: NextRequest) {
         throw new Error(`AI thesis prompt error: ${msg}`);
       }
     })();
-    const llmResult = await withThesisLlmDeadline(messages, { groqAllowed });
+    const llmResult: ThesisLlmResult = await requestThesisLlm(messages, { groqAllowed });
 
     if (!llmResult.success || !llmResult.content) {
       return NextResponse.json({

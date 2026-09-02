@@ -43,16 +43,13 @@ export function getGroqModel(): string {
 }
 
 function createTimeoutFetcher(endpoint: string, timeoutMs: number, headers: Record<string, string>): GroqFetcher {
-  return (_apiKey, body) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    return fetch(endpoint, {
+  return (_apiKey, body) =>
+    fetch(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
-  };
+      signal: AbortSignal.timeout(timeoutMs),
+    });
 }
 
 /**

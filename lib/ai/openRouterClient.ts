@@ -57,26 +57,20 @@ function extractOpenRouterContent(data: unknown): string | null {
   return null;
 }
 
-function createOpenRouterFetcher(timeoutMs: number): GroqFetcher {
-  return (apiKey, body) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    const referer =
-      process.env.OPENROUTER_HTTP_REFERER?.trim() || 'https://short-check.vercel.app';
-    const title = process.env.OPENROUTER_APP_TITLE?.trim() || 'Pump Scorecard';
-
-    return fetch(OPENROUTER_ENDPOINT, {
+function createTimeoutFetcher(timeoutMs: number): GroqFetcher {
+  return (_apiKey, body) =>
+    fetch(OPENROUTER_ENDPOINT, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${_apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': referer,
-        'X-Title': title,
+        'HTTP-Referer':
+          process.env.OPENROUTER_HTTP_REFERER?.trim() || 'https://short-check.vercel.app',
+        'X-Title': process.env.OPENROUTER_APP_TITLE?.trim() || 'Pump Scorecard',
       },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
-  };
+      body: JSON.stringify({ ...body, stream: false }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
 }
 
 export function isOpenRouterConfigured(): boolean {
