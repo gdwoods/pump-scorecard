@@ -97,7 +97,7 @@ export async function callOpenRouter(
   }
 
   const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
-  const fetcher = opts.fetcher ?? createOpenRouterFetcher(timeoutMs);
+  const fetcher = opts.fetcher ?? createTimeoutFetcher(timeoutMs);
   const models = resolveOpenRouterModels();
   let lastResult: GroqCallResult = {
     success: false,
