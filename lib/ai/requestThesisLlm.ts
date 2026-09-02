@@ -1,20 +1,18 @@
 // lib/ai/requestThesisLlm.ts
 //
-// Thesis LLM chain: Groq first with enough time for full scans.
-// OpenRouter only on fast Groq failures (JSON/rate-limit) — not after Groq timeouts.
+// Thesis LLM chain: Groq first, compact Groq retry on bad JSON, OpenRouter on Groq 429.
 
 import { callGroq, getGroqModel, type GroqCallResult, type GroqChatMessage } from './groqClient';
 import { recordGroqApiCall } from './groqBudget';
 import { callOpenRouter, getOpenRouterModel, isOpenRouterConfigured } from './openRouterClient';
 import { parseThesisContent } from './parseThesisContent';
 
-const THESIS_MAX_TOKENS = 1000;
+const THESIS_MAX_TOKENS = 900;
 const THESIS_LLM_BUDGET_MS = 46_000;
 const MIN_PROVIDER_MS = 2_000;
-/** Full-scan prompts (JLHL ~6KB) often need 15–22s on Groq. */
-const GROQ_TIMEOUT_MS = 25_000;
+const GROQ_TIMEOUT_MS = 20_000;
 const GROQ_PLAIN_RETRY_TIMEOUT_MS = 12_000;
-const OPENROUTER_TIMEOUT_MS = 18_000;
+const OPENROUTER_TIMEOUT_MS = 22_000;
 
 export type ThesisLlmResult = GroqCallResult & {
   provider?: 'groq' | 'openrouter';
@@ -27,11 +25,6 @@ export type ThesisLlmOptions = {
 
 function isRateLimited(result: GroqCallResult): boolean {
   return result.errorCode === 'rate_limit';
-}
-
-/** Nemotron free tier is too slow for fallback — reserve OpenRouter for Groq 429 only. */
-function shouldTryOpenRouterAfterGroq(groq: GroqCallResult): boolean {
-  return isRateLimited(groq);
 }
 
 function withMeta(
@@ -65,6 +58,16 @@ function parseFailureResult(): GroqCallResult {
     error: 'AI response was not in the expected format — try again.',
     errorCode: 'parse_failed',
   };
+}
+
+function compactMessages(messages: GroqChatMessage[]): GroqChatMessage[] {
+  return [
+    messages[0],
+    {
+      role: 'user',
+      content: `${messages[1]?.content ?? ''}\n\nReturn ONLY compact valid JSON. Max 3 catalysts. Keep summary ≤2 sentences and thesis ≤120 words. Use empty strings for optional fields. keyRisks must be a string array.`,
+    },
+  ];
 }
 
 async function callGroqOnce(
@@ -152,19 +155,24 @@ async function tryOpenRouter(
   );
 }
 
-function groqRateLimitMessage(groq: GroqCallResult): string {
-  if (groq.retryAfterSec != null && groq.retryAfterSec < 60) {
-    return `Groq tokens-per-minute limit — wait ${groq.retryAfterSec}s. OpenRouter fallback was attempted.`;
-  }
-  return groq.error ?? 'Groq rate limit reached';
-}
-
-function preferOpenRouterError(groq: GroqCallResult, or: ThesisLlmResult): ThesisLlmResult {
-  if (or.success) return or;
-  if (isRateLimited(groq)) {
-    return withMeta({ ...groq, error: groqRateLimitMessage(groq) }, 'groq', getGroqModel());
-  }
-  return or;
+function rateLimitResult(groq: GroqCallResult, openRouterTried: boolean): ThesisLlmResult {
+  const wait = groq.retryAfterSec ?? 30;
+  const base =
+    wait >= 60
+      ? `Groq rate limit — try again in about ${Math.ceil(wait / 60)} minute(s).`
+      : `Groq tokens-per-minute limit — wait ${wait}s before retrying.`;
+  return withMeta(
+    {
+      success: false,
+      errorCode: 'rate_limit',
+      retryAfterSec: wait,
+      error: openRouterTried
+        ? `${base} OpenRouter fallback was attempted.`
+        : `${base} OpenRouter is not configured for fallback.`,
+    },
+    'groq',
+    getGroqModel()
+  );
 }
 
 export async function requestThesisLlm(
@@ -200,21 +208,19 @@ export async function requestThesisLlm(
     return withMeta(groq, 'groq', getGroqModel());
   }
 
-  let openRouterAttempt: ThesisLlmResult | null = null;
-  if (openRouterReady && shouldTryOpenRouterAfterGroq(groq)) {
-    openRouterAttempt = await tryOpenRouter(messages, deadline);
-    if (openRouterAttempt?.success) return openRouterAttempt;
+  // Rate limit on first attempt → OpenRouter immediately (do not burn another Groq call).
+  if (isRateLimited(groq)) {
+    if (openRouterReady && remainingBudgetMs(deadline) >= MIN_PROVIDER_MS) {
+      const or = await tryOpenRouter(compactMessages(messages), deadline);
+      if (or?.success) return or;
+      return rateLimitResult(groq, true);
+    }
+    return rateLimitResult(groq, false);
   }
 
-  if (!groq.success && !isRateLimited(groq) && remainingBudgetMs(deadline) >= MIN_PROVIDER_MS) {
-    const compactMessages: GroqChatMessage[] = [
-      messages[0],
-      {
-        role: 'user',
-        content: `${messages[1]?.content ?? ''}\n\nReturn ONLY compact valid JSON. Max 3 catalysts. Use empty strings for optional fields (regulatoryAlert, rubricNarrative, ceoLens, traderLens). keyRisks must be a string array.`,
-      },
-    ];
-    groq = await callGroqForThesis(compactMessages, deadline, {
+  // Bad JSON / other failure → compact plain Groq retry.
+  if (remainingBudgetMs(deadline) >= MIN_PROVIDER_MS) {
+    groq = await callGroqForThesis(compactMessages(messages), deadline, {
       temperature: 0.1,
       timeoutCap: GROQ_PLAIN_RETRY_TIMEOUT_MS,
       omitResponseFormat: true,
@@ -224,7 +230,16 @@ export async function requestThesisLlm(
     }
   }
 
-  if (openRouterAttempt) return preferOpenRouterError(groq, openRouterAttempt);
+  // Compact retry hit rate limit → OpenRouter.
+  if (isRateLimited(groq)) {
+    if (openRouterReady && remainingBudgetMs(deadline) >= MIN_PROVIDER_MS) {
+      const or = await tryOpenRouter(compactMessages(messages), deadline);
+      if (or?.success) return or;
+      return rateLimitResult(groq, true);
+    }
+    return rateLimitResult(groq, false);
+  }
+
   return withMeta(groq, 'groq', getGroqModel());
 }
 

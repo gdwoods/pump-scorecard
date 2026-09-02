@@ -238,7 +238,33 @@ const invalidCatalyst = parseThesisContent(
   }),
   'test-model'
 );
-assert(invalidCatalyst?.catalysts.length === 0, 'parseThesisContent drops invalid catalysts');
+assert(invalidCatalyst?.catalysts.length === 1, 'parseThesisContent defaults invalid catalyst significance');
+assert(invalidCatalyst?.catalysts[0]?.significance === 'moderate', 'bogus significance maps to moderate');
+
+const emptyCatalyst = parseThesisContent(
+  JSON.stringify({
+    summary: 'ok',
+    thesis: 'ok',
+    catalysts: [{ description: '', significance: 'high', rationale: 'x' }],
+    keyRisks: 'single risk',
+  }),
+  'test-model'
+);
+assert(emptyCatalyst?.catalysts.length === 0, 'parseThesisContent drops empty catalyst descriptions');
+assert(emptyCatalyst?.keyRisks.length === 1, 'parseThesisContent coerces string keyRisks');
+
+const truncated = parseThesisContent(
+  '{"summary":"S","thesis":"T","catalysts":[{"description":"ATM","significance":"high","rationale":"filed"',
+  'test-model'
+);
+assert(truncated !== null, 'parseThesisContent repairs truncated JSON when possible');
+assert(truncated?.summary === 'S', 'repaired truncated JSON keeps summary');
+
+const nested = parseThesisContent(
+  JSON.stringify({ data: { summary: 'nested', thesis: 'nested thesis', catalysts: [], keyRisks: [] } }),
+  'test-model'
+);
+assert(nested?.summary === 'nested', 'parseThesisContent unwraps nested data objects');
 
 async function testCallGroqSuccess() {
   const mockFetcher: GroqFetcher = async () =>
