@@ -33,14 +33,9 @@ function isGroqTimeout(result: GroqCallResult): boolean {
   return Boolean(result.error?.includes('timed out'));
 }
 
-/** OpenRouter is slow on free Nemotron — only use when Groq fails fast, not after a long wait. */
+/** Nemotron free tier is too slow for fallback — reserve OpenRouter for Groq 429 only. */
 function shouldTryOpenRouterAfterGroq(groq: GroqCallResult): boolean {
-  if (groq.success) return false;
-  if (isGroqTimeout(groq)) return false;
-  if (isRateLimited(groq)) return true;
-  if (groq.errorCode === 'json_validate_failed') return true;
-  if (groq.errorCode === 'parse_failed') return true;
-  return false;
+  return isRateLimited(groq);
 }
 
 function withMeta(
