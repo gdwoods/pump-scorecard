@@ -1,6 +1,7 @@
 // lib/ai/requestThesisLlm.ts
 //
-// Thesis LLM chain: Groq first with enough time for full scans, OpenRouter on failure.
+// Thesis LLM chain: Groq first with enough time for full scans.
+// OpenRouter only on fast Groq failures (JSON/rate-limit) — not after Groq timeouts.
 
 import { callGroq, getGroqModel, type GroqCallResult, type GroqChatMessage } from './groqClient';
 import { recordGroqApiCall } from './groqBudget';
@@ -8,12 +9,12 @@ import { callOpenRouter, getOpenRouterModel, isOpenRouterConfigured } from './op
 import { parseThesisContent } from './parseThesisContent';
 
 const THESIS_MAX_TOKENS = 700;
-const THESIS_LLM_BUDGET_MS = 44_000;
+const THESIS_LLM_BUDGET_MS = 46_000;
 const MIN_PROVIDER_MS = 2_000;
-/** Full-scan prompts need more than 4–10s on Groq; 18s covers JLHL-sized payloads. */
-const GROQ_TIMEOUT_MS = 18_000;
-const GROQ_PLAIN_RETRY_TIMEOUT_MS = 10_000;
-const OPENROUTER_TIMEOUT_MS = 22_000;
+/** Full-scan prompts (JLHL ~6KB) often need 15–22s on Groq. */
+const GROQ_TIMEOUT_MS = 25_000;
+const GROQ_PLAIN_RETRY_TIMEOUT_MS = 12_000;
+const OPENROUTER_TIMEOUT_MS = 18_000;
 
 export type ThesisLlmResult = GroqCallResult & {
   provider?: 'groq' | 'openrouter';
@@ -26,6 +27,20 @@ export type ThesisLlmOptions = {
 
 function isRateLimited(result: GroqCallResult): boolean {
   return result.errorCode === 'rate_limit';
+}
+
+function isGroqTimeout(result: GroqCallResult): boolean {
+  return Boolean(result.error?.includes('timed out'));
+}
+
+/** OpenRouter is slow on free Nemotron — only use when Groq fails fast, not after a long wait. */
+function shouldTryOpenRouterAfterGroq(groq: GroqCallResult): boolean {
+  if (groq.success) return false;
+  if (isGroqTimeout(groq)) return false;
+  if (isRateLimited(groq)) return true;
+  if (groq.errorCode === 'json_validate_failed') return true;
+  if (groq.errorCode === 'parse_failed') return true;
+  return false;
 }
 
 function withMeta(
@@ -194,11 +209,17 @@ export async function requestThesisLlm(
     return withMeta(groq, 'groq', getGroqModel());
   }
 
-  if (openRouterReady) {
+  if (openRouterReady && shouldTryOpenRouterAfterGroq(groq)) {
     const or = await tryOpenRouter(messages, deadline);
     if (or?.success) return or;
     if (or) return preferOpenRouterError(groq, or);
-  } else if (!groq.success && !isRateLimited(groq) && remainingBudgetMs(deadline) >= MIN_PROVIDER_MS) {
+  }
+
+  if (
+    !groq.success &&
+    !isRateLimited(groq) &&
+    remainingBudgetMs(deadline) >= MIN_PROVIDER_MS
+  ) {
     groq = await callGroqForThesis(messages, deadline, {
       temperature: 0.15,
       timeoutCap: GROQ_PLAIN_RETRY_TIMEOUT_MS,
