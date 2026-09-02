@@ -204,9 +204,30 @@ export default function AiThesisCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const raw = await res.text();
+      let data: {
+        success?: boolean;
+        thesis?: unknown;
+        error?: string;
+        retryAfterSec?: number;
+      };
+      try {
+        data = JSON.parse(raw) as typeof data;
+      } catch {
+        const timedOut =
+          res.status === 504 ||
+          raw.includes("FUNCTION_INVOCATION_TIMEOUT") ||
+          raw.includes("An error occurred with your deployment");
+        setError(
+          timedOut
+            ? "AI thesis timed out — the model took too long. Try again in a moment."
+            : "Could not reach the AI thesis service."
+        );
+        setStatus("error");
+        return;
+      }
       if (data.success && data.thesis) {
-        setThesis(data.thesis);
+        setThesis(data.thesis as AiThesisResult);
         setLastPayload(payload);
         setStatus("success");
         setRetryAfterSec(0);

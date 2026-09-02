@@ -42,19 +42,18 @@ export function getGroqModel(): string {
   return fromEnv || DEFAULT_GROQ_MODEL;
 }
 
-const defaultFetcher: GroqFetcher = (apiKey, body) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  return fetch(GROQ_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-    signal: controller.signal,
-  }).finally(() => clearTimeout(timeout));
-};
+function createTimeoutFetcher(endpoint: string, timeoutMs: number, headers: Record<string, string>): GroqFetcher {
+  return (_apiKey, body) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
+  };
+}
 
 /**
  * Call Groq's chat completions endpoint and return the raw assistant
@@ -69,6 +68,7 @@ export async function callGroq(
     temperature?: number;
     maxTokens?: number;
     responseFormat?: GroqResponseFormat;
+    timeoutMs?: number;
   } = {}
 ): Promise<GroqCallResult> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -76,7 +76,13 @@ export async function callGroq(
     return { success: false, error: 'GROQ_API_KEY not configured' };
   }
 
-  const fetcher = opts.fetcher ?? defaultFetcher;
+  const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const fetcher =
+    opts.fetcher ??
+    createTimeoutFetcher(GROQ_ENDPOINT, timeoutMs, {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    });
 
   try {
     const response = await fetcher(apiKey, {
@@ -131,7 +137,13 @@ export async function callGroq(
     return { success: true, content };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return { success: false, error: `Groq request failed: ${message}` };
+    const timedOut = error instanceof Error && error.name === 'AbortError';
+    return {
+      success: false,
+      error: timedOut
+        ? `Groq request timed out after ${Math.round(timeoutMs / 1000)}s`
+        : `Groq request failed: ${message}`,
+    };
   }
 }
 

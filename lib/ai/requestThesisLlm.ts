@@ -1,6 +1,7 @@
 // lib/ai/requestThesisLlm.ts
 //
 // Thesis LLM chain: Groq first (or OpenRouter first when configured), with cross-fallback.
+// Total LLM wall time is capped so /api/ai-thesis stays under Vercel maxDuration (30s).
 
 import { callGroq, getGroqModel, type GroqCallResult, type GroqChatMessage } from './groqClient';
 import { recordGroqApiCall } from './groqBudget';
@@ -8,6 +9,9 @@ import { callOpenRouter, getOpenRouterModel, isOpenRouterConfigured } from './op
 import { getThesisResponseFormat } from './thesisJsonSchema';
 
 const THESIS_MAX_TOKENS = 1200;
+/** Keep under route maxDuration (30s) including prompt build + cache I/O. */
+const THESIS_LLM_BUDGET_MS = 26_000;
+const MIN_PROVIDER_MS = 3_000;
 
 export type ThesisLlmResult = GroqCallResult & {
   provider?: 'groq' | 'openrouter';
@@ -35,14 +39,24 @@ function shouldUseOpenRouterFirst(): boolean {
   return process.env.AI_THESIS_OPENROUTER_FIRST !== 'false';
 }
 
+function remainingBudgetMs(deadline: number): number {
+  return Math.max(0, deadline - Date.now());
+}
+
 async function callGroqOnce(
   messages: GroqChatMessage[],
-  strict: boolean
+  strict: boolean,
+  deadline: number
 ): Promise<GroqCallResult> {
+  const timeoutMs = Math.min(15_000, remainingBudgetMs(deadline) - 1_000);
+  if (timeoutMs < MIN_PROVIDER_MS) {
+    return { success: false, error: 'AI thesis timed out before Groq could run — try again.' };
+  }
   const result = await callGroq(messages, {
     maxTokens: THESIS_MAX_TOKENS,
     temperature: strict ? 0.2 : 0.15,
     responseFormat: getThesisResponseFormat(strict),
+    timeoutMs,
   });
   if (result.errorCode !== 'rate_limit') {
     await recordGroqApiCall();
@@ -50,18 +64,32 @@ async function callGroqOnce(
   return result;
 }
 
-async function callOpenRouterOnce(messages: GroqChatMessage[]): Promise<GroqCallResult> {
+async function callOpenRouterOnce(
+  messages: GroqChatMessage[],
+  deadline: number
+): Promise<GroqCallResult> {
+  const timeoutMs = Math.min(18_000, remainingBudgetMs(deadline) - 2_000);
+  if (timeoutMs < MIN_PROVIDER_MS) {
+    return {
+      success: false,
+      error: 'AI thesis timed out before OpenRouter could run — try again.',
+    };
+  }
+  // Prompt enforces JSON; Nemotron free tier is more reliable without response_format.
   return callOpenRouter(messages, {
     maxTokens: THESIS_MAX_TOKENS,
     temperature: 0.2,
-    responseFormat: { type: 'json_object' },
+    timeoutMs,
   });
 }
 
 /** Returns OpenRouter result when configured; null when OpenRouter is not set up. */
-async function tryOpenRouter(messages: GroqChatMessage[]): Promise<ThesisLlmResult | null> {
+async function tryOpenRouter(
+  messages: GroqChatMessage[],
+  deadline: number
+): Promise<ThesisLlmResult | null> {
   if (!isOpenRouterConfigured()) return null;
-  const fallback = await callOpenRouterOnce(messages);
+  const fallback = await callOpenRouterOnce(messages, deadline);
   if (fallback.success && fallback.content) {
     return withMeta(fallback, 'openrouter', getOpenRouterModel());
   }
@@ -88,19 +116,28 @@ function groqRateLimitMessage(groqStrict: GroqCallResult): string {
  * Request an AI thesis with Groq/OpenRouter cross-fallback.
  */
 export async function requestThesisLlm(messages: GroqChatMessage[]): Promise<ThesisLlmResult> {
+  const deadline = Date.now() + THESIS_LLM_BUDGET_MS;
+
   if (shouldUseOpenRouterFirst()) {
-    const orFirst = await tryOpenRouter(messages);
+    const orFirst = await tryOpenRouter(messages, deadline);
     if (orFirst?.success) return orFirst;
-    // Fall through to Groq when OpenRouter fails (e.g. no credits).
+    if (remainingBudgetMs(deadline) < MIN_PROVIDER_MS) {
+      return (
+        orFirst ?? {
+          success: false,
+          error: 'AI thesis timed out — try again in a moment.',
+        }
+      );
+    }
   }
 
-  const groqStrict = await callGroqOnce(messages, true);
+  const groqStrict = await callGroqOnce(messages, true, deadline);
   if (groqStrict.success && groqStrict.content) {
     return withMeta(groqStrict, 'groq', getGroqModel());
   }
 
   if (isRateLimited(groqStrict)) {
-    const or = await tryOpenRouter(messages);
+    const or = await tryOpenRouter(messages, deadline);
     if (or?.success) return or;
     if (or) return or;
     return withMeta(
@@ -111,27 +148,37 @@ export async function requestThesisLlm(messages: GroqChatMessage[]): Promise<The
   }
 
   if (isJsonValidateFailure(groqStrict)) {
-    const or = await tryOpenRouter(messages);
+    const or = await tryOpenRouter(messages, deadline);
     if (or?.success) return or;
 
-    const groqRelaxed = await callGroqOnce(messages, false);
-    if (groqRelaxed.success && groqRelaxed.content) {
+    if (remainingBudgetMs(deadline) >= MIN_PROVIDER_MS) {
+      const groqRelaxed = await callGroqOnce(messages, false, deadline);
+      if (groqRelaxed.success && groqRelaxed.content) {
+        return withMeta(groqRelaxed, 'groq', getGroqModel());
+      }
+
+      if (isRateLimited(groqRelaxed)) {
+        const orAfterRateLimit = await tryOpenRouter(messages, deadline);
+        if (orAfterRateLimit?.success) return orAfterRateLimit;
+        if (orAfterRateLimit) return orAfterRateLimit;
+        return withMeta(
+          { ...groqRelaxed, error: groqRateLimitMessage(groqRelaxed) },
+          'groq',
+          getGroqModel()
+        );
+      }
+
+      if (or && !or.success) return or;
       return withMeta(groqRelaxed, 'groq', getGroqModel());
     }
 
-    if (isRateLimited(groqRelaxed)) {
-      const orAfterRateLimit = await tryOpenRouter(messages);
-      if (orAfterRateLimit?.success) return orAfterRateLimit;
-      if (orAfterRateLimit) return orAfterRateLimit;
-      return withMeta(
-        { ...groqRelaxed, error: groqRateLimitMessage(groqRelaxed) },
-        'groq',
-        getGroqModel()
-      );
-    }
-
     if (or && !or.success) return or;
-    return withMeta(groqRelaxed, 'groq', getGroqModel());
+  }
+
+  if (!shouldUseOpenRouterFirst()) {
+    const or = await tryOpenRouter(messages, deadline);
+    if (or?.success) return or;
+    if (or && !or.success && !groqStrict.success) return or;
   }
 
   return withMeta(groqStrict, 'groq', getGroqModel());

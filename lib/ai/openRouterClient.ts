@@ -3,7 +3,7 @@ import type { GroqCallResult, GroqChatMessage, GroqFetcher } from './groqClient'
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_OPENROUTER_MODEL = 'nvidia/nemotron-3.5-lightning:free';
-const REQUEST_TIMEOUT_MS = 25_000;
+const REQUEST_TIMEOUT_MS = 18_000;
 
 /** Retired slugs that OpenRouter no longer routes — ignore env override. */
 const DEPRECATED_OPENROUTER_MODELS = new Set([
@@ -33,35 +33,59 @@ export function resolveOpenRouterModels(): string[] {
 function shouldTryNextOpenRouterModel(status: number, bodyText: string): boolean {
   if (status === 404 && bodyText.includes('No endpoints found')) return true;
   if (status === 400 && bodyText.includes('not a valid model ID')) return true;
+  if (status === 400 && /response_format|json_schema|json_object/i.test(bodyText)) return true;
   return false;
+}
+
+function extractOpenRouterContent(data: unknown): string | null {
+  const message = (data as { choices?: Array<{ message?: { content?: unknown } }> })?.choices?.[0]
+    ?.message;
+  if (!message) return null;
+  const { content } = message;
+  if (typeof content === 'string' && content.trim()) return content;
+  if (Array.isArray(content)) {
+    const text = content
+      .map((part) => {
+        if (!part || typeof part !== 'object') return '';
+        const p = part as { type?: string; text?: string };
+        return p.type === 'text' && typeof p.text === 'string' ? p.text : '';
+      })
+      .join('')
+      .trim();
+    if (text) return text;
+  }
+  return null;
+}
+
+function createOpenRouterFetcher(timeoutMs: number): GroqFetcher {
+  return (apiKey, body) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const referer =
+      process.env.OPENROUTER_HTTP_REFERER?.trim() || 'https://short-check.vercel.app';
+    const title = process.env.OPENROUTER_APP_TITLE?.trim() || 'Pump Scorecard';
+
+    return fetch(OPENROUTER_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': referer,
+        'X-Title': title,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
+  };
 }
 
 export function isOpenRouterConfigured(): boolean {
   return Boolean(process.env.OPENROUTER_API_KEY?.trim());
 }
 
-const defaultFetcher: GroqFetcher = (apiKey, body) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const referer =
-    process.env.OPENROUTER_HTTP_REFERER?.trim() || 'https://short-check.vercel.app';
-  const title = process.env.OPENROUTER_APP_TITLE?.trim() || 'Pump Scorecard';
-
-  return fetch(OPENROUTER_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': referer,
-      'X-Title': title,
-    },
-    body: JSON.stringify(body),
-    signal: controller.signal,
-  }).finally(() => clearTimeout(timeout));
-};
-
 /**
  * OpenRouter chat completions — OpenAI-compatible, used as Groq fallback on 429.
+ * Nemotron free tier: omit response_format by default (prompt enforces JSON).
  */
 export async function callOpenRouter(
   messages: GroqChatMessage[],
@@ -70,6 +94,7 @@ export async function callOpenRouter(
     temperature?: number;
     maxTokens?: number;
     responseFormat?: GroqResponseFormat;
+    timeoutMs?: number;
   } = {}
 ): Promise<GroqCallResult> {
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
@@ -77,68 +102,81 @@ export async function callOpenRouter(
     return { success: false, error: 'OPENROUTER_API_KEY not configured' };
   }
 
-  const fetcher = opts.fetcher ?? defaultFetcher;
+  const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const fetcher = opts.fetcher ?? createOpenRouterFetcher(timeoutMs);
   const models = resolveOpenRouterModels();
   let lastResult: GroqCallResult = {
     success: false,
     error: 'OpenRouter request failed — no models to try',
   };
 
+  const formatAttempts: Array<GroqResponseFormat | undefined> = opts.responseFormat
+    ? [opts.responseFormat, undefined]
+    : [undefined];
+
   try {
     for (const model of models) {
-      const body: Record<string, unknown> = {
-        model,
-        messages,
-        temperature: opts.temperature ?? 0.2,
-        max_tokens: opts.maxTokens ?? 1200,
-      };
-      if (opts.responseFormat) {
-        body.response_format = opts.responseFormat;
-      }
+      for (const responseFormat of formatAttempts) {
+        const body: Record<string, unknown> = {
+          model,
+          messages,
+          temperature: opts.temperature ?? 0.2,
+          max_tokens: opts.maxTokens ?? 1200,
+        };
+        if (responseFormat) {
+          body.response_format = responseFormat;
+        }
 
-      const response = await fetcher(apiKey, body);
+        const response = await fetcher(apiKey, body);
 
-      if (response.ok) {
-        const data = await response.json();
-        const content = data?.choices?.[0]?.message?.content;
-        if (typeof content !== 'string' || !content.trim()) {
-          lastResult = { success: false, error: 'OpenRouter returned an empty response' };
+        if (response.ok) {
+          const data = await response.json();
+          const content = extractOpenRouterContent(data);
+          if (!content) {
+            lastResult = { success: false, error: 'OpenRouter returned an empty response' };
+            continue;
+          }
+          return { success: true, content };
+        }
+
+        if (response.status === 429) {
+          const retryAfterHeader = response.headers.get('retry-after');
+          const retryAfterSec = retryAfterHeader
+            ? Math.max(1, Number.parseInt(retryAfterHeader, 10) || 60)
+            : 60;
+          return {
+            success: false,
+            errorCode: 'rate_limit',
+            retryAfterSec,
+            error:
+              retryAfterSec >= 60
+                ? `OpenRouter rate limit — try again in about ${Math.ceil(retryAfterSec / 60)} minute(s).`
+                : `OpenRouter rate limit — try again in ${retryAfterSec} seconds.`,
+          };
+        }
+
+        const bodyText = await response.text().catch(() => '');
+        lastResult = {
+          success: false,
+          error: `OpenRouter API error ${response.status} (${model}): ${bodyText.slice(0, 200)}`,
+        };
+        if (shouldTryNextOpenRouterModel(response.status, bodyText)) {
           continue;
         }
-        return { success: true, content };
+        break;
       }
-
-      if (response.status === 429) {
-        const retryAfterHeader = response.headers.get('retry-after');
-        const retryAfterSec = retryAfterHeader
-          ? Math.max(1, Number.parseInt(retryAfterHeader, 10) || 60)
-          : 60;
-        return {
-          success: false,
-          errorCode: 'rate_limit',
-          retryAfterSec,
-          error:
-            retryAfterSec >= 60
-              ? `OpenRouter rate limit — try again in about ${Math.ceil(retryAfterSec / 60)} minute(s).`
-              : `OpenRouter rate limit — try again in ${retryAfterSec} seconds.`,
-        };
-      }
-
-      const bodyText = await response.text().catch(() => '');
-      lastResult = {
-        success: false,
-        error: `OpenRouter API error ${response.status} (${model}): ${bodyText.slice(0, 200)}`,
-      };
-      if (shouldTryNextOpenRouterModel(response.status, bodyText)) {
-        continue;
-      }
-      break;
     }
 
     return lastResult;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return { success: false, error: `OpenRouter request failed: ${message}` };
+    const timedOut = error instanceof Error && error.name === 'AbortError';
+    return {
+      success: false,
+      error: timedOut
+        ? `OpenRouter request timed out after ${Math.round(timeoutMs / 1000)}s`
+        : `OpenRouter request failed: ${message}`,
+    };
   }
 }
 

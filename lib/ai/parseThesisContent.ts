@@ -64,14 +64,34 @@ function normalizeForwardDate(f: AiThesisForwardDate): AiThesisForwardDate {
   };
 }
 
-export function parseThesisContent(content: string, model: string): AiThesisResult | null {
-  let raw: unknown;
+function parseThesisJson(content: string): unknown | null {
   try {
-    raw = JSON.parse(content);
+    return JSON.parse(content);
   } catch {
-    return null;
+    // fall through
   }
+  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) {
+    try {
+      return JSON.parse(fenced[1].trim());
+    } catch {
+      // fall through
+    }
+  }
+  const start = content.indexOf('{');
+  const end = content.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    try {
+      return JSON.parse(content.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
 
+export function parseThesisContent(content: string, model: string): AiThesisResult | null {
+  const raw = parseThesisJson(content);
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
 
