@@ -175,6 +175,9 @@ export default function AiThesisCard({
   const [error, setError] = useState<string | null>(null);
   const [retryAfterSec, setRetryAfterSec] = useState(0);
   const [openRouterFallback, setOpenRouterFallback] = useState(false);
+  const [openRouterFirst, setOpenRouterFirst] = useState(false);
+  const [thesisProvider, setThesisProvider] = useState<"groq" | "openrouter" | null>(null);
+  const [thesisCached, setThesisCached] = useState(false);
   const [serviceState, setServiceState] = useState<"checking" | "ready" | "unconfigured" | "disabled">(
     "checking"
   );
@@ -196,6 +199,7 @@ export default function AiThesisCard({
         } else {
           setServiceState("ready");
           setOpenRouterFallback(Boolean(data.openRouterFallback));
+          setOpenRouterFirst(Boolean(data.openRouterFirst));
         }
       })
       .catch(() => {
@@ -240,6 +244,8 @@ export default function AiThesisCard({
         thesis?: unknown;
         error?: string;
         retryAfterSec?: number;
+        provider?: "groq" | "openrouter";
+        cached?: boolean;
       };
       try {
         data = JSON.parse(raw) as typeof data;
@@ -259,6 +265,8 @@ export default function AiThesisCard({
       if (data.success && data.thesis) {
         setThesis(data.thesis as AiThesisResult);
         setLastPayload(payload);
+        setThesisProvider(data.provider ?? null);
+        setThesisCached(Boolean(data.cached));
         setStatus("success");
         setRetryAfterSec(0);
       } else {
@@ -492,6 +500,18 @@ export default function AiThesisCard({
             <p className="text-[11px] text-gray-400 dark:text-gray-500 border-t border-gray-200 dark:border-gray-700 pt-2">
               AI synthesis (Framework 3.0 lowest-precedence input) — informational only. VERIFY / CONFLICT / OPINION
               tags mark epistemic status. Never overrides a walk-away flag or veto above. Not trade authorization.
+              {(thesisProvider || thesis.model) && (
+                <span className="block mt-1">
+                  Model:{" "}
+                  {thesisProvider === "openrouter"
+                    ? "OpenRouter"
+                    : thesisProvider === "groq"
+                      ? "Groq"
+                      : "Unknown provider"}
+                  {thesis.model ? ` · ${thesis.model}` : ""}
+                  {thesisCached ? " · cached" : ""}
+                </span>
+              )}
               {thesis.reportVersion && (
                 <span className="block mt-1">Report schema: {thesis.reportVersion}</span>
               )}

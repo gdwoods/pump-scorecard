@@ -33,6 +33,7 @@ export async function GET() {
     configured: groq || openRouter,
     groq,
     openRouterFallback: openRouter,
+    openRouterFirst: process.env.AI_THESIS_OPENROUTER_FIRST === 'true' && openRouter,
   });
 }
 
@@ -88,7 +89,8 @@ export async function POST(req: NextRequest) {
     }
 
     const groqBudget = await checkGroqDailyBudget();
-    if (process.env.GROQ_API_KEY && !groqBudget.allowed) {
+    const groqAllowed = !process.env.GROQ_API_KEY || groqBudget.allowed;
+    if (process.env.GROQ_API_KEY && !groqBudget.allowed && !isOpenRouterConfigured()) {
       return NextResponse.json({
         success: false,
         error: formatGroqBudgetError(groqBudget.retryAfterSec, groqBudget.limit),
@@ -103,7 +105,7 @@ export async function POST(req: NextRequest) {
         throw new Error(`AI thesis prompt error: ${msg}`);
       }
     })();
-    const llmResult = await requestThesisLlm(messages);
+    const llmResult = await requestThesisLlm(messages, { groqAllowed });
 
     if (!llmResult.success || !llmResult.content) {
       return NextResponse.json({

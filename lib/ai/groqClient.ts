@@ -67,7 +67,7 @@ export async function callGroq(
     fetcher?: GroqFetcher;
     temperature?: number;
     maxTokens?: number;
-    responseFormat?: GroqResponseFormat;
+    responseFormat?: GroqResponseFormat | null;
     timeoutMs?: number;
   } = {}
 ): Promise<GroqCallResult> {
@@ -85,13 +85,19 @@ export async function callGroq(
     });
 
   try {
-    const response = await fetcher(apiKey, {
+    const body: Record<string, unknown> = {
       model: getGroqModel(),
       messages,
       temperature: opts.temperature ?? 0.3,
       max_completion_tokens: opts.maxTokens ?? 900,
-      response_format: opts.responseFormat ?? { type: 'json_object' },
-    });
+    };
+    const responseFormat =
+      opts.responseFormat === null ? undefined : (opts.responseFormat ?? { type: 'json_object' });
+    if (responseFormat) {
+      body.response_format = responseFormat;
+    }
+
+    const response = await fetcher(apiKey, body);
 
     if (!response.ok) {
       if (response.status === 429) {
