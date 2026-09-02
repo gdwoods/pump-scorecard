@@ -81,6 +81,36 @@ function buildThesisPayload(
   scanData?: ScanDataForThesis | null,
   fastVerdict?: FastVerdict | null
 ): ThesisPromptInput {
+  const droppinessDetail = scanData?.droppinessDetail
+    ? [...scanData.droppinessDetail]
+        .sort((a, b) => b.spikePct - a.spikePct)
+        .slice(0, 5)
+    : undefined;
+
+  const capitalPressure = scanData?.capitalPressure
+    ? {
+        score: scanData.capitalPressure.score,
+        status: scanData.capitalPressure.status,
+        summary: scanData.capitalPressure.summary,
+        reasons: scanData.capitalPressure.reasons?.slice(0, 3),
+        events: scanData.capitalPressure.events?.slice(0, 5).map((event) => ({
+          eventDate: event.eventDate,
+          type: event.type,
+          title: event.title,
+          description: event.description?.slice(0, 200),
+          evidence: event.evidence
+            ? {
+                form: event.evidence.form,
+                filingDate: event.evidence.filingDate,
+                documentUrl: event.evidence.documentUrl,
+                excerpt: event.evidence.excerpt?.slice(0, 220),
+                accessionNumber: event.evidence.accessionNumber,
+              }
+            : undefined,
+        })),
+      }
+    : undefined;
+
   return {
     ticker,
     fastVerdict: fastVerdict ? fastVerdictToPromptSlice(fastVerdict) : undefined,
@@ -112,9 +142,9 @@ function buildThesisPayload(
           summaryVerdict: scanData.summaryVerdict,
           droppinessVerdict: scanData.droppinessVerdict,
           droppinessScore: scanData.droppinessScore,
-          droppinessDetail: scanData.droppinessDetail,
-          capitalPressure: scanData.capitalPressure,
-          news: scanData.news,
+          droppinessDetail,
+          capitalPressure,
+          news: scanData.news?.slice(0, 5),
           insiderTransactionsCount: Array.isArray(scanData.insiderTransactions)
             ? scanData.insiderTransactions.length
             : undefined,

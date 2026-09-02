@@ -106,7 +106,9 @@ export function parseThesisContent(content: string, model: string): AiThesisResu
     : [];
   const keyRisks = Array.isArray(r.keyRisks)
     ? r.keyRisks.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-    : [];
+    : typeof r.keyRisks === 'string' && r.keyRisks.trim()
+      ? [r.keyRisks.trim()]
+      : [];
   const dataGaps = Array.isArray(r.dataGaps)
     ? r.dataGaps.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
     : [];
