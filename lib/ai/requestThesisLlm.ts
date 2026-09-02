@@ -36,7 +36,8 @@ function withMeta(
 
 function shouldUseOpenRouterFirst(): boolean {
   if (!isOpenRouterConfigured()) return false;
-  return process.env.AI_THESIS_OPENROUTER_FIRST !== 'false';
+  // Groq first by default (faster structured JSON). Set AI_THESIS_OPENROUTER_FIRST=true for Nemotron primary.
+  return process.env.AI_THESIS_OPENROUTER_FIRST === 'true';
 }
 
 function remainingBudgetMs(deadline: number): number {
@@ -121,14 +122,15 @@ export async function requestThesisLlm(messages: GroqChatMessage[]): Promise<The
   if (shouldUseOpenRouterFirst()) {
     const orFirst = await tryOpenRouter(messages, deadline);
     if (orFirst?.success) return orFirst;
-    if (remainingBudgetMs(deadline) < MIN_PROVIDER_MS) {
-      return (
-        orFirst ?? {
-          success: false,
-          error: 'AI thesis timed out — try again in a moment.',
-        }
-      );
+    // When OpenRouter is primary, avoid chaining Groq after a slow/failed Nemotron call (Vercel 30s cap).
+    if (orFirst?.errorCode === 'rate_limit' && remainingBudgetMs(deadline) >= MIN_PROVIDER_MS) {
+      const groqAfterOr = await callGroqOnce(messages, true, deadline);
+      if (groqAfterOr.success && groqAfterOr.content) {
+        return withMeta(groqAfterOr, 'groq', getGroqModel());
+      }
     }
+    if (orFirst) return orFirst;
+    return { success: false, error: 'OpenRouter thesis request failed — try again.' };
   }
 
   const groqStrict = await callGroqOnce(messages, true, deadline);

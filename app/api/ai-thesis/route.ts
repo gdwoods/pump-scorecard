@@ -19,7 +19,7 @@ import { SHOW_AI_THESIS } from '@/lib/config/features';
 import type { ThesisPromptInput } from '@/lib/ai/types';
 
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function hasPromptData(body: ThesisPromptInput): boolean {
   return Boolean(body.shortCheck || body.scan || body.extractedData || body.fastVerdict);
@@ -95,7 +95,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const messages = buildThesisMessages(body);
+    const messages = (() => {
+      try {
+        return buildThesisMessages(body);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Prompt build failed';
+        throw new Error(`AI thesis prompt error: ${msg}`);
+      }
+    })();
     const llmResult = await requestThesisLlm(messages);
 
     if (!llmResult.success || !llmResult.content) {

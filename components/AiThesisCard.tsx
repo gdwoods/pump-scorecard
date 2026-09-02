@@ -238,8 +238,14 @@ export default function AiThesisCard({
           setRetryAfterSec(data.retryAfterSec);
         }
       }
-    } catch {
-      setError("Could not reach the AI thesis service.");
+    } catch (err) {
+      const msg =
+        err instanceof Error && err.name === "AbortError"
+          ? "AI thesis request was interrupted — try again."
+          : err instanceof Error
+            ? err.message
+            : "Could not reach the AI thesis service.";
+      setError(msg.includes("AI thesis") ? msg : "Could not reach the AI thesis service.");
       setStatus("error");
     }
   }

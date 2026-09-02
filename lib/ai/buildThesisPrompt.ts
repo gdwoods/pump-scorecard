@@ -215,8 +215,8 @@ function formatFastVerdict(fv: FastVerdictPromptSlice): string {
   if (fv.capacityQuarters != null) {
     lines.push(`Capacity quarters: ${fv.capacityQuarters.toFixed(1)}`);
   }
-  lines.push(`Derived offering ability: ${fv.derivedOfferingAbility}`);
-  if (fv.unavailable.length) {
+  lines.push(`Derived offering ability: ${fv.derivedOfferingAbility ?? 'unknown'}`);
+  if (fv.unavailable?.length) {
     lines.push(`Unavailable inputs: ${fv.unavailable.join(', ')}`);
   }
   return lines.join('\n');
@@ -247,12 +247,12 @@ export function buildThesisMessages(input: ThesisPromptInput): GroqChatMessage[]
     if (completeness) parts.push(completeness);
     parts.push(
       `Walk-away flags (BINDING — treat as vetoes, do not argue around these): ${
-        sc.walkAwayFlags.length ? sc.walkAwayFlags.join(' | ') : '(none)'
+        sc.walkAwayFlags?.length ? sc.walkAwayFlags.join(' | ') : '(none)'
       }`
     );
     parts.push(
       `Alert labels: ${
-        sc.alertLabels.length ? sc.alertLabels.map((a) => a.label).join(', ') : '(none)'
+        sc.alertLabels?.length ? sc.alertLabels.map((a) => a.label).join(', ') : '(none)'
       }`
     );
     parts.push('Score component detail:');
