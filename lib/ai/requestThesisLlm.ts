@@ -226,8 +226,7 @@ export async function requestThesisLlm(
   if (
     !groq.success &&
     !isRateLimited(groq) &&
-    remainingBudgetMs(deadline) >= MIN_PROVIDER_MS &&
-    !openRouterReady
+    remainingBudgetMs(deadline) >= MIN_PROVIDER_MS
   ) {
     groq = await callGroqForThesis(messages, deadline, {
       temperature: 0.15,
@@ -252,7 +251,7 @@ export async function requestThesisLlm(
 export function withThesisLlmDeadline(
   messages: GroqChatMessage[],
   options: ThesisLlmOptions = {},
-  budgetMs = 30_000
+  budgetMs = 32_000
 ): Promise<ThesisLlmResult> {
   return Promise.race([
     requestThesisLlm(messages, options),
