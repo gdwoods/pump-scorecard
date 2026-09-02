@@ -10,12 +10,12 @@ import { parseThesisContent } from './parseThesisContent';
 
 const THESIS_MAX_TOKENS = 700;
 /** Hard cap for all provider attempts in one request. */
-const THESIS_LLM_BUDGET_MS = 22_000;
+const THESIS_LLM_BUDGET_MS = 28_000;
 const MIN_PROVIDER_MS = 2_000;
-const GROQ_FIRST_TIMEOUT_MS = 5_000;
+const GROQ_FIRST_TIMEOUT_MS = 4_000;
 const GROQ_RETRY_TIMEOUT_MS = 4_000;
-const OPENROUTER_FALLBACK_TIMEOUT_MS = 14_000;
-const OPENROUTER_PRIMARY_TIMEOUT_MS = 18_000;
+const OPENROUTER_FALLBACK_TIMEOUT_MS = 20_000;
+const OPENROUTER_PRIMARY_TIMEOUT_MS = 22_000;
 
 export type ThesisLlmResult = GroqCallResult & {
   provider?: 'groq' | 'openrouter';
@@ -252,7 +252,7 @@ export async function requestThesisLlm(
 export function withThesisLlmDeadline(
   messages: GroqChatMessage[],
   options: ThesisLlmOptions = {},
-  budgetMs = 24_000
+  budgetMs = 30_000
 ): Promise<ThesisLlmResult> {
   return Promise.race([
     requestThesisLlm(messages, options),
