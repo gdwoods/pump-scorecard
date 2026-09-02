@@ -8,7 +8,7 @@ import { recordGroqApiCall } from './groqBudget';
 import { callOpenRouter, getOpenRouterModel, isOpenRouterConfigured } from './openRouterClient';
 import { parseThesisContent } from './parseThesisContent';
 
-const THESIS_MAX_TOKENS = 700;
+const THESIS_MAX_TOKENS = 1000;
 const THESIS_LLM_BUDGET_MS = 46_000;
 const MIN_PROVIDER_MS = 2_000;
 /** Full-scan prompts (JLHL ~6KB) often need 15–22s on Groq. */
@@ -62,7 +62,7 @@ function timedOutResult(): GroqCallResult {
 function parseFailureResult(): GroqCallResult {
   return {
     success: false,
-    error: 'Groq response was not in the expected format — trying fallback.',
+    error: 'AI response was not in the expected format — try again.',
     errorCode: 'parse_failed',
   };
 }
@@ -207,8 +207,15 @@ export async function requestThesisLlm(
   }
 
   if (!groq.success && !isRateLimited(groq) && remainingBudgetMs(deadline) >= MIN_PROVIDER_MS) {
-    groq = await callGroqForThesis(messages, deadline, {
-      temperature: 0.15,
+    const compactMessages: GroqChatMessage[] = [
+      messages[0],
+      {
+        role: 'user',
+        content: `${messages[1]?.content ?? ''}\n\nReturn ONLY compact valid JSON. Max 3 catalysts. Use empty strings for optional fields (regulatoryAlert, rubricNarrative, ceoLens, traderLens). keyRisks must be a string array.`,
+      },
+    ];
+    groq = await callGroqForThesis(compactMessages, deadline, {
+      temperature: 0.1,
       timeoutCap: GROQ_PLAIN_RETRY_TIMEOUT_MS,
       omitResponseFormat: true,
     });
