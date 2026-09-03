@@ -392,8 +392,13 @@ async function testCallOpenRouterModelFallback() {
   assert(result.success === true, 'callOpenRouter falls back after invalid model 400');
   assert(call >= 2, 'callOpenRouter tries fallback model after 400');
   assert(
-    DEFAULT_OPENROUTER_MODEL === 'nvidia/nemotron-3.5-lightning:free',
-    'default OpenRouter model is Nemotron 3.5 Lightning (free)'
+    DEFAULT_OPENROUTER_MODEL === 'cohere/north-mini-code:free',
+    'default OpenRouter model is Cohere North Mini Code (free)'
+  );
+  const { OPENROUTER_FALLBACK_MODEL } = await import('../lib/ai/openRouterClient');
+  assert(
+    OPENROUTER_FALLBACK_MODEL === 'nvidia/nemotron-3.5-lightning:free',
+    'OpenRouter fallback model is Nemotron 3.5 Lightning (free)'
   );
 }
 

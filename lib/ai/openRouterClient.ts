@@ -2,8 +2,10 @@ import type { GroqResponseFormat } from './thesisJsonSchema';
 import type { GroqCallResult, GroqChatMessage, GroqFetcher } from './groqClient';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_OPENROUTER_MODEL = 'nvidia/nemotron-3.5-lightning:free';
-const REQUEST_TIMEOUT_MS = 14_000;
+/** Fast free model (~0.8s P50). Prefer over Nemotron Lightning (~28s P50 free). */
+const DEFAULT_OPENROUTER_MODEL = 'cohere/north-mini-code:free';
+const OPENROUTER_FALLBACK_MODEL = 'nvidia/nemotron-3.5-lightning:free';
+const REQUEST_TIMEOUT_MS = 16_000;
 
 /** Retired slugs that OpenRouter no longer routes — ignore env override. */
 const DEPRECATED_OPENROUTER_MODELS = new Set([
@@ -11,7 +13,7 @@ const DEPRECATED_OPENROUTER_MODELS = new Set([
   'google/gemini-flash-latest',
 ]);
 
-const OPENROUTER_MODEL_FALLBACKS = [DEFAULT_OPENROUTER_MODEL] as const;
+const OPENROUTER_MODEL_FALLBACKS = [DEFAULT_OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODEL] as const;
 
 export function getOpenRouterModel(): string {
   return resolveOpenRouterModels()[0];
@@ -34,6 +36,7 @@ function shouldTryNextOpenRouterModel(status: number, bodyText: string): boolean
   if (status === 404 && bodyText.includes('No endpoints found')) return true;
   if (status === 400 && bodyText.includes('not a valid model ID')) return true;
   if (status === 400 && /response_format|json_schema|json_object/i.test(bodyText)) return true;
+  if (status === 429) return true;
   return false;
 }
 
@@ -78,8 +81,8 @@ export function isOpenRouterConfigured(): boolean {
 }
 
 /**
- * OpenRouter chat completions — OpenAI-compatible, used as Groq fallback on 429.
- * Nemotron free tier: omit response_format by default (prompt enforces JSON).
+ * OpenRouter chat completions — OpenAI-compatible.
+ * Tries North Mini Code first, then Nemotron Lightning.
  */
 export async function callOpenRouter(
   messages: GroqChatMessage[],
@@ -108,26 +111,26 @@ export async function callOpenRouter(
     ? [opts.responseFormat, undefined]
     : [undefined];
 
-  try {
-    for (const model of models) {
-      for (const responseFormat of formatAttempts) {
-        const body: Record<string, unknown> = {
-          model,
-          messages,
-          temperature: opts.temperature ?? 0.2,
-          max_tokens: opts.maxTokens ?? 1200,
-        };
-        if (responseFormat) {
-          body.response_format = responseFormat;
-        }
+  for (const model of models) {
+    for (const responseFormat of formatAttempts) {
+      const body: Record<string, unknown> = {
+        model,
+        messages,
+        temperature: opts.temperature ?? 0.2,
+        max_tokens: opts.maxTokens ?? 1200,
+      };
+      if (responseFormat) {
+        body.response_format = responseFormat;
+      }
 
+      try {
         const response = await fetcher(apiKey, body);
 
         if (response.ok) {
           const data = await response.json();
           const content = extractOpenRouterContent(data);
           if (!content) {
-            lastResult = { success: false, error: 'OpenRouter returned an empty response' };
+            lastResult = { success: false, error: `OpenRouter returned an empty response (${model})` };
             continue;
           }
           return { success: true, content };
@@ -138,7 +141,7 @@ export async function callOpenRouter(
           const retryAfterSec = retryAfterHeader
             ? Math.max(1, Number.parseInt(retryAfterHeader, 10) || 60)
             : 60;
-          return {
+          lastResult = {
             success: false,
             errorCode: 'rate_limit',
             retryAfterSec,
@@ -147,6 +150,8 @@ export async function callOpenRouter(
                 ? `OpenRouter rate limit — try again in about ${Math.ceil(retryAfterSec / 60)} minute(s).`
                 : `OpenRouter rate limit — try again in ${retryAfterSec} seconds.`,
           };
+          // Try next model on free-tier 429.
+          break;
         }
 
         const bodyText = await response.text().catch(() => '');
@@ -158,20 +163,26 @@ export async function callOpenRouter(
           continue;
         }
         break;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        const timedOut =
+          error instanceof Error &&
+          (error.name === 'AbortError' ||
+            error.name === 'TimeoutError' ||
+            /aborted|timeout/i.test(message));
+        lastResult = {
+          success: false,
+          error: timedOut
+            ? `OpenRouter request timed out after ${Math.round(timeoutMs / 1000)}s (${model})`
+            : `OpenRouter request failed (${model}): ${message}`,
+        };
+        // Try next model on timeout/network error.
+        break;
       }
     }
-
-    return lastResult;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    const timedOut = error instanceof Error && error.name === 'AbortError';
-    return {
-      success: false,
-      error: timedOut
-        ? `OpenRouter request timed out after ${Math.round(timeoutMs / 1000)}s`
-        : `OpenRouter request failed: ${message}`,
-    };
   }
+
+  return lastResult;
 }
 
-export { OPENROUTER_ENDPOINT, DEFAULT_OPENROUTER_MODEL };
+export { OPENROUTER_ENDPOINT, DEFAULT_OPENROUTER_MODEL, OPENROUTER_FALLBACK_MODEL };

@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { buildThesisMessages } from '@/lib/ai/buildThesisPrompt';
 import { parseThesisContent } from '@/lib/ai/parseThesisContent';
 import { requestThesisLlm, type ThesisLlmResult } from '@/lib/ai/requestThesisLlm';
-import { isOpenRouterConfigured } from '@/lib/ai/openRouterClient';
+import { getOpenRouterModel, isOpenRouterConfigured } from '@/lib/ai/openRouterClient';
 import { checkAiThesisRateLimit, getClientIpFromHeaders } from '@/lib/ai/rateLimit';
 import { checkGroqDailyBudget, formatGroqBudgetError } from '@/lib/ai/groqBudget';
 import { readCachedThesis, writeCachedThesis } from '@/lib/ai/thesisCache';
@@ -51,7 +51,8 @@ export async function GET() {
     configured: groq || openRouter,
     groq,
     openRouterFallback: openRouter,
-    openRouterFirst: process.env.AI_THESIS_OPENROUTER_FIRST === 'true' && openRouter,
+    openRouterFirst: openRouter && process.env.AI_THESIS_OPENROUTER_FIRST !== 'false',
+    openRouterModel: openRouter ? getOpenRouterModel() : undefined,
   });
 }
 

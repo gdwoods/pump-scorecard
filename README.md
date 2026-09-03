@@ -67,8 +67,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | `GROQ_API_KEY` | AI thesis synthesis (server-side) |
 | `GROQ_MODEL` | Groq model override (default `openai/gpt-oss-20b`) |
 | `OPENROUTER_API_KEY` | Automatic AI thesis fallback when Groq is rate-limited |
-| `OPENROUTER_MODEL` | OpenRouter model override (default `nvidia/nemotron-3.5-lightning:free`; retired slugs fall back automatically) |
-| `AI_THESIS_OPENROUTER_FIRST` | Set to `true` to call OpenRouter (Nemotron) before Groq when both keys exist (default: Groq first) |
+| `OPENROUTER_MODEL` | OpenRouter model override (default `cohere/north-mini-code:free`, then `nvidia/nemotron-3.5-lightning:free`; retired slugs fall back automatically) |
+| `AI_THESIS_OPENROUTER_FIRST` | Default is OpenRouter-first when `OPENROUTER_API_KEY` is set. Set to `false` to prefer Groq first |
 | `AI_THESIS_RATE_LIMIT_WHITELIST` | Comma-separated IPs bypassing thesis rate limit |
 | `AI_THESIS_RATE_LIMIT_PER_HOUR` | Per-IP thesis cap (default 10; lower for groups) |
 | `AI_THESIS_DAILY_GROQ_BUDGET` | Shared daily Groq API call cap (default 50) |
