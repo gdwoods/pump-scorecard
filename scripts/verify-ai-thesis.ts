@@ -5,7 +5,7 @@
 
 import { buildThesisMessages } from '../lib/ai/buildThesisPrompt';
 import { fastVerdictToPromptSlice } from '../lib/ai/fastVerdictPrompt';
-import { callGroq, type GroqFetcher } from '../lib/ai/groqClient';
+import { callGroq, extractGroqContent, type GroqFetcher } from '../lib/ai/groqClient';
 import { callOpenRouter } from '../lib/ai/openRouterClient';
 import {
   checkGroqDailyBudget,
@@ -279,6 +279,53 @@ async function testCallGroqSuccess() {
   assert(result.success === true, 'callGroq returns success on 200 with valid content');
 }
 
+async function testExtractGroqContent() {
+  assert(
+    extractGroqContent({ choices: [{ message: { content: '{"a":1}' } }] }) === '{"a":1}',
+    'extractGroqContent reads string content'
+  );
+  assert(
+    extractGroqContent({
+      choices: [{ message: { content: '', reasoning: '{"summary":"r","thesis":"r"}' } }],
+    }) === '{"summary":"r","thesis":"r"}',
+    'extractGroqContent falls back to reasoning field'
+  );
+  assert(
+    extractGroqContent({
+      choices: [{ message: { content: [{ type: 'text', text: '{"ok":true}' }] } }],
+    }) === '{"ok":true}',
+    'extractGroqContent joins array content parts'
+  );
+}
+
+async function testCallGroqEmptyAndTokenBudget() {
+  const emptyFetcher: GroqFetcher = async () =>
+    new Response(
+      JSON.stringify({
+        choices: [{ finish_reason: 'stop', message: { content: '' } }],
+        usage: { completion_tokens: 40, completion_tokens_details: { reasoning_tokens: 40 } },
+      }),
+      { status: 200 }
+    );
+  const lengthFetcher: GroqFetcher = async () =>
+    new Response(
+      JSON.stringify({
+        choices: [{ finish_reason: 'length', message: { content: '' } }],
+        usage: { completion_tokens: 900, completion_tokens_details: { reasoning_tokens: 900 } },
+      }),
+      { status: 200 }
+    );
+  const originalKey = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = 'test-key';
+  const empty = await callGroq([{ role: 'user', content: 'hi' }], { fetcher: emptyFetcher });
+  const length = await callGroq([{ role: 'user', content: 'hi' }], { fetcher: lengthFetcher });
+  process.env.GROQ_API_KEY = originalKey;
+  assert(empty.success === false, 'callGroq fails on empty content');
+  assert(empty.errorCode === 'empty_content', 'callGroq tags empty_content');
+  assert(length.errorCode === 'token_budget', 'callGroq tags token_budget on finish_reason length');
+  assert(!!length.error?.includes('reasoning'), 'token_budget error mentions reasoning');
+}
+
 async function testCallGroqRateLimit() {
   const mockFetcher: GroqFetcher = async () =>
     new Response('rate limited', { status: 429, headers: { 'retry-after': '120' } });
@@ -428,6 +475,8 @@ async function main() {
   testThesisCacheKeys();
   await testGroqDailyBudget();
   await testCallGroqSuccess();
+  testExtractGroqContent();
+  await testCallGroqEmptyAndTokenBudget();
   await testCallGroqRateLimit();
   await testCallOpenRouterSuccess();
   await testCallOpenRouterModelFallback();

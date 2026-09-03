@@ -7,11 +7,12 @@ import { recordGroqApiCall } from './groqBudget';
 import { callOpenRouter, getOpenRouterModel, isOpenRouterConfigured } from './openRouterClient';
 import { parseThesisContent } from './parseThesisContent';
 
-const THESIS_MAX_TOKENS = 900;
+const THESIS_MAX_TOKENS = 2500;
+const THESIS_RETRY_MAX_TOKENS = 3500;
 const THESIS_LLM_BUDGET_MS = 46_000;
 const MIN_PROVIDER_MS = 2_000;
 const GROQ_TIMEOUT_MS = 20_000;
-const GROQ_PLAIN_RETRY_TIMEOUT_MS = 12_000;
+const GROQ_PLAIN_RETRY_TIMEOUT_MS = 14_000;
 const OPENROUTER_TIMEOUT_MS = 22_000;
 
 export type ThesisLlmResult = GroqCallResult & {
@@ -77,16 +78,18 @@ async function callGroqOnce(
     temperature?: number;
     timeoutCap?: number;
     omitResponseFormat?: boolean;
+    maxTokens?: number;
   } = {}
 ): Promise<GroqCallResult> {
   const timeoutMs = budgetTimeoutMs(deadline, opts.timeoutCap ?? GROQ_TIMEOUT_MS);
   if (timeoutMs < MIN_PROVIDER_MS) return timedOutResult();
 
   const result = await callGroq(messages, {
-    maxTokens: THESIS_MAX_TOKENS,
+    maxTokens: opts.maxTokens ?? THESIS_MAX_TOKENS,
     temperature: opts.temperature ?? 0.2,
     responseFormat: opts.omitResponseFormat ? null : { type: 'json_object' },
     timeoutMs,
+    reasoningEffort: 'low',
   });
   if (result.errorCode !== 'rate_limit') {
     await recordGroqApiCall();
@@ -101,6 +104,7 @@ async function callGroqForThesis(
     temperature?: number;
     timeoutCap?: number;
     omitResponseFormat?: boolean;
+    maxTokens?: number;
   } = {}
 ): Promise<GroqCallResult> {
   const result = await callGroqOnce(messages, deadline, opts);
@@ -218,12 +222,13 @@ export async function requestThesisLlm(
     return rateLimitResult(groq, false);
   }
 
-  // Bad JSON / other failure → compact plain Groq retry.
+  // Bad JSON / empty / token-budget → compact plain Groq retry with a larger completion budget.
   if (remainingBudgetMs(deadline) >= MIN_PROVIDER_MS) {
     groq = await callGroqForThesis(compactMessages(messages), deadline, {
       temperature: 0.1,
       timeoutCap: GROQ_PLAIN_RETRY_TIMEOUT_MS,
       omitResponseFormat: true,
+      maxTokens: THESIS_RETRY_MAX_TOKENS,
     });
     if (groq.success && groq.content) {
       return withMeta(groq, 'groq', getGroqModel());

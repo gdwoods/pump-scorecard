@@ -23,7 +23,7 @@ export interface GroqCallResult {
   success: boolean;
   content?: string;
   error?: string;
-  /** Groq error code when present (e.g. json_validate_failed, rate_limit). */
+  /** Groq error code when present (e.g. json_validate_failed, rate_limit, empty_content). */
   errorCode?: string;
   /** Seconds to wait before retrying, when Groq returns 429. */
   retryAfterSec?: number;
@@ -40,6 +40,65 @@ const REQUEST_TIMEOUT_MS = 12_000;
 export function getGroqModel(): string {
   const fromEnv = process.env.GROQ_MODEL?.trim();
   return fromEnv || DEFAULT_GROQ_MODEL;
+}
+
+function isGptOssModel(model: string): boolean {
+  return model.startsWith('openai/gpt-oss');
+}
+
+/** Extract visible assistant text from Groq/OpenAI-compatible chat payloads. */
+export function extractGroqContent(data: unknown): string | null {
+  const choice = (data as { choices?: Array<{ message?: Record<string, unknown> }> })?.choices?.[0];
+  const message = choice?.message;
+  if (!message) return null;
+
+  const fromField = (value: unknown): string | null => {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (Array.isArray(value)) {
+      const text = value
+        .map((part) => {
+          if (typeof part === 'string') return part;
+          if (!part || typeof part !== 'object') return '';
+          const p = part as { type?: string; text?: string };
+          return typeof p.text === 'string' ? p.text : '';
+        })
+        .join('')
+        .trim();
+      return text || null;
+    }
+    return null;
+  };
+
+  return fromField(message.content) ?? fromField(message.reasoning) ?? null;
+}
+
+function emptyContentError(data: unknown): GroqCallResult {
+  const choice = (data as { choices?: Array<{ finish_reason?: string }> })?.choices?.[0];
+  const finishReason = choice?.finish_reason;
+  const usage = (data as {
+    usage?: { completion_tokens?: number; completion_tokens_details?: { reasoning_tokens?: number } };
+  })?.usage;
+  const reasoningTokens = usage?.completion_tokens_details?.reasoning_tokens;
+  const completionTokens = usage?.completion_tokens;
+
+  if (finishReason === 'length') {
+    return {
+      success: false,
+      errorCode: 'token_budget',
+      error:
+        'Groq used the full token budget on reasoning and returned no thesis — retrying with a larger budget.',
+    };
+  }
+
+  const detail =
+    reasoningTokens != null && completionTokens != null
+      ? ` (reasoning ${reasoningTokens}/${completionTokens} completion tokens)`
+      : '';
+  return {
+    success: false,
+    errorCode: 'empty_content',
+    error: `Groq returned an empty response${detail}`,
+  };
 }
 
 function createTimeoutFetcher(endpoint: string, timeoutMs: number, headers: Record<string, string>): GroqFetcher {
@@ -66,6 +125,7 @@ export async function callGroq(
     maxTokens?: number;
     responseFormat?: GroqResponseFormat | null;
     timeoutMs?: number;
+    reasoningEffort?: 'low' | 'medium' | 'high';
   } = {}
 ): Promise<GroqCallResult> {
   const apiKey = process.env.GROQ_API_KEY;
@@ -74,6 +134,7 @@ export async function callGroq(
   }
 
   const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const model = getGroqModel();
   const fetcher =
     opts.fetcher ??
     createTimeoutFetcher(GROQ_ENDPOINT, timeoutMs, {
@@ -83,15 +144,20 @@ export async function callGroq(
 
   try {
     const body: Record<string, unknown> = {
-      model: getGroqModel(),
+      model,
       messages,
       temperature: opts.temperature ?? 0.3,
-      max_completion_tokens: opts.maxTokens ?? 900,
+      // gpt-oss spends completion tokens on hidden reasoning first — budget must cover both.
+      max_completion_tokens: opts.maxTokens ?? 2500,
     };
     const responseFormat =
       opts.responseFormat === null ? undefined : (opts.responseFormat ?? { type: 'json_object' });
     if (responseFormat) {
       body.response_format = responseFormat;
+    }
+    if (isGptOssModel(model)) {
+      body.reasoning_effort = opts.reasoningEffort ?? 'low';
+      body.include_reasoning = false;
     }
 
     const response = await fetcher(apiKey, body);
@@ -132,15 +198,17 @@ export async function callGroq(
     }
 
     const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) {
-      return { success: false, error: 'Groq returned an empty response' };
+    const content = extractGroqContent(data);
+    if (!content) {
+      return emptyContentError(data);
     }
 
     return { success: true, content };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    const timedOut = error instanceof Error && error.name === 'AbortError';
+    const timedOut =
+      error instanceof Error &&
+      (error.name === 'AbortError' || error.name === 'TimeoutError' || /aborted|timeout/i.test(message));
     return {
       success: false,
       error: timedOut
