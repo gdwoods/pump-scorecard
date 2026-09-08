@@ -17,12 +17,14 @@ import SentimentCard from "@/components/SentimentCard";
 import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import CapitalPressureCard from "@/components/CapitalPressureCard";
 import QuickScorecardCard from "@/components/forensic/QuickScorecardCard";
+import DilutionBrief from "@/components/dilution/DilutionBrief";
 import AiThesisCard from "@/components/AiThesisCard";
 import { PairGrid } from "@/components/layout/PairGrid";
 import type { FastVerdict } from "@/lib/fast/types";
 import { SHOW_FAST_VERDICT_UI, SHOW_AI_THESIS } from "@/lib/config/features";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
 import { buildQuickScorecard, toQuickScorecardInputFromScan } from "@/lib/forensic/quickScorecard";
+import { buildDilutionBrief } from "@/lib/dilution";
 import { PAGE_CONTENT_CLASS } from "@/lib/ui/pageLayout";
 
 function FastScanInner() {
@@ -111,6 +113,22 @@ function FastScanInner() {
   const quickScorecardBlock = quickScorecard ? (
     <QuickScorecardCard scorecard={quickScorecard} />
   ) : null;
+
+  const dilutionBrief = useMemo(
+    () =>
+      ticker
+        ? buildDilutionBrief({
+            ticker,
+            fastVerdict,
+            quickScorecard,
+            capitalPressure: pumpData?.capitalPressure ?? null,
+            scanData: pumpData,
+          })
+        : null,
+    [ticker, fastVerdict, quickScorecard, pumpData]
+  );
+
+  const dilutionBriefBlock = dilutionBrief ? <DilutionBrief brief={dilutionBrief} /> : null;
 
   const aiThesisBlock =
     SHOW_AI_THESIS && ticker && pumpData ? (
@@ -215,6 +233,8 @@ function FastScanInner() {
         {SHOW_FAST_VERDICT_UI && (loading || fastVerdict) && (
           <FastVerdictCard verdict={fastVerdict} loading={loading && !fastVerdict} />
         )}
+
+        {dilutionBriefBlock}
 
         {loading && !pumpData && (
           <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 rounded-xl">

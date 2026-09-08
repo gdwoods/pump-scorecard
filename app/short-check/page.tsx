@@ -17,6 +17,7 @@ import Fundamentals from "@/components/Fundamentals";
 import SecFilings from "@/components/SecFilings";
 import CapitalPressureCard from "@/components/CapitalPressureCard";
 import QuickScorecardCard from "@/components/forensic/QuickScorecardCard";
+import DilutionBrief from "@/components/dilution/DilutionBrief";
 import AiThesisCard from "@/components/AiThesisCard";
 import NewsSection from "@/components/NewsSection";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
@@ -32,6 +33,7 @@ import type { FastVerdict } from "@/lib/fast/types";
 import { enrichFastVerdictFromShortCheck } from "@/lib/fast/enrichFromShortCheck";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
 import { buildQuickScorecard, toQuickScorecardInputFromScan } from "@/lib/forensic/quickScorecard";
+import { buildDilutionBrief } from "@/lib/dilution";
 import { SHOW_FAST_VERDICT_ON_SHORT_CHECK, SHOW_AI_THESIS } from "@/lib/config/features";
 import { PAGE_CONTENT_CLASS } from "@/lib/ui/pageLayout";
 import { PairGrid } from "@/components/layout/PairGrid";
@@ -332,6 +334,32 @@ export default function ShortCheckPage() {
     <QuickScorecardCard scorecard={quickScorecard} />
   ) : null;
 
+  const dilutionBrief = useMemo(
+    () =>
+      ticker
+        ? buildDilutionBrief({
+            ticker,
+            fastVerdict: enrichedFastVerdict,
+            quickScorecard,
+            capitalPressure: pumpScorecardData?.capitalPressure ?? null,
+            scanData: pumpScorecardData,
+            shortCheck:
+              result && extractedData
+                ? {
+                    synopsis: generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData),
+                    secFilingUrl: pumpScorecardData?.capitalPressure?.reasons?.[0]?.evidence?.documentUrl ?? null,
+                    extracted: extractedData,
+                  }
+                : extractedData
+                  ? { extracted: extractedData }
+                  : null,
+          })
+        : null,
+    [ticker, enrichedFastVerdict, quickScorecard, pumpScorecardData, result, extractedData]
+  );
+
+  const dilutionBriefBlock = dilutionBrief ? <DilutionBrief brief={dilutionBrief} /> : null;
+
   const aiThesisBlock =
     SHOW_AI_THESIS &&
     ticker &&
@@ -567,6 +595,7 @@ export default function ShortCheckPage() {
             extractedData={extractedData || undefined}
             pumpScorecardData={pumpScorecardData}
             afterQuickActions={fastVerdictCard}
+            afterFastVerdict={dilutionBriefBlock}
             synopsisInVerdictStack={verdictStackActive}
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
@@ -603,6 +632,7 @@ export default function ShortCheckPage() {
 
         {/* Quick Ticker path — Fast Verdict before market enrichment */}
         {hasAnalyzedTicker && !result && fastVerdictCard}
+        {hasAnalyzedTicker && !result && dilutionBriefBlock}
 
         {/* Unified scan enrichment — same layout for DT screenshot and Quick Ticker paths */}
         {showMarketData && (
