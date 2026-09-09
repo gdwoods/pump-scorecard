@@ -234,6 +234,8 @@ function FastScanInner() {
           <FastVerdictCard verdict={fastVerdict} loading={loading && !fastVerdict} />
         )}
 
+        <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
+
         {dilutionBriefBlock}
 
         {loading && !pumpData && (
@@ -246,8 +248,6 @@ function FastScanInner() {
 
         {ticker && pumpData && !loading && (
           <>
-            <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
-
             {capitalPressureBlock}
 
             {quickScorecardBlock}
