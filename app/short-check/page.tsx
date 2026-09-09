@@ -349,7 +349,18 @@ export default function ShortCheckPage() {
                     synopsis: generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData),
                     secFilingUrl: pumpScorecardData?.capitalPressure?.reasons?.[0]?.evidence?.documentUrl ?? null,
                     extracted: extractedData,
+                    rating: result.rating,
+                    category: result.category,
+                    alertLabels: result.alertLabels,
+                    dataCompleteness: result.dataCompleteness,
                   }
+                : result
+                  ? {
+                      rating: result.rating,
+                      category: result.category,
+                      alertLabels: result.alertLabels,
+                      dataCompleteness: result.dataCompleteness,
+                    }
                 : extractedData
                   ? { extracted: extractedData }
                   : null,
@@ -597,6 +608,7 @@ export default function ShortCheckPage() {
             afterQuickActions={fastVerdictCard}
             afterFastVerdict={dilutionBriefBlock}
             synopsisInVerdictStack={verdictStackActive}
+            hideRatingHero={Boolean(dilutionBrief?.shortRating)}
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
               setHasAnalyzedTicker(true);

@@ -26,6 +26,8 @@ interface ShortCheckResultsProps {
   afterFastVerdict?: ReactNode;
   /** When true, risk synopsis + walk-aways render in the verdict stack instead. */
   synopsisInVerdictStack?: boolean;
+  /** When true, the hero % card is already inside Dilution Brief. */
+  hideRatingHero?: boolean;
 }
 
 export default function ShortCheckResults({
@@ -37,6 +39,7 @@ export default function ShortCheckResults({
   afterQuickActions,
   afterFastVerdict,
   synopsisInVerdictStack = false,
+  hideRatingHero = false,
 }: ShortCheckResultsProps) {
   const [showScoringGuide, setShowScoringGuide] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -453,10 +456,12 @@ export default function ShortCheckResults({
 
       {afterFastVerdict}
 
-      {/* Main Rating Card */}
+      {/* Hero rating lives in Dilution Brief when hideRatingHero. Keep fallbacks for share/PDF paths. */}
+      {(!hideRatingHero || (extractedData && !synopsisInVerdictStack) || (result.walkAwayFlags.length > 0 && !synopsisInVerdictStack)) && (
       <Card
-        className={`p-4 md:p-6 shadow-lg border-2 ${categoryBgColors[result.category]}`}
+        className={`p-4 md:p-6 shadow-lg border-2 ${hideRatingHero ? "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800" : categoryBgColors[result.category]}`}
       >
+        {!hideRatingHero && (
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <h2 className="text-xl md:text-2xl font-bold">
@@ -498,10 +503,11 @@ export default function ShortCheckResults({
             {result.category}
           </div>
         </div>
+        )}
 
         {/* Risk synopsis — fallback when not merged into verdict stack */}
         {extractedData && !synopsisInVerdictStack && (
-          <div className="mt-4 pt-4 border-t border-current/15 space-y-2 text-left">
+          <div className={`${hideRatingHero ? "" : "mt-4 pt-4 border-t border-current/15"} space-y-2 text-left`}>
             <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Risk synopsis
             </p>
@@ -558,6 +564,7 @@ export default function ShortCheckResults({
           </div>
         )}
       </Card>
+      )}
 
       {/* Score Breakdown */}
       <ShortCheckScoreBreakdown

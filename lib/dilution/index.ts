@@ -5,6 +5,7 @@ export type {
   DilutionFinalCell,
   DilutionOverall,
   DilutionPillar,
+  DilutionShortRating,
   DilutionSource,
   DilutionStatusPill,
   DilutionWeapon,

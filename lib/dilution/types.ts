@@ -62,6 +62,18 @@ export type DilutionOverall = {
   caption: string;
 };
 
+/** Existing Short Check composite — passed through, never recomputed here. */
+export type DilutionShortRating = {
+  rating: number;
+  category:
+    | 'High-Priority Short Candidate'
+    | 'Moderate Short Candidate'
+    | 'Speculative Short Candidate'
+    | 'No-Trade';
+  alerts: Array<{ label: string; color: 'red' | 'orange' | 'yellow' }>;
+  dataCompleteness: number | null;
+};
+
 export type DilutionBrief = {
   ticker: string;
   session?: FastVerdict['session'] | null;
@@ -76,6 +88,7 @@ export type DilutionBrief = {
   weapon: DilutionWeapon;
   finalRead: DilutionFinalCell[];
   overall: DilutionOverall;
+  shortRating?: DilutionShortRating | null;
   sources: DilutionSource[];
 };
 
@@ -100,6 +113,10 @@ export type DilutionBriefInput = {
     synopsis?: string | null;
     secFilingUrl?: string | null;
     extracted?: ExtractedData | null;
+    rating?: number | null;
+    category?: DilutionShortRating['category'] | null;
+    alertLabels?: DilutionShortRating['alerts'] | null;
+    dataCompleteness?: number | null;
   } | null;
   aiThesisLead?: string | null;
 };

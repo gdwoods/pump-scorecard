@@ -67,6 +67,7 @@ export type FastVerdict = {
     derivedOfferingAbility: OfferingAbility;
     atmDetected: boolean | null;
     equityLineCounterparty: string | null;
+    hasEffectiveShelf?: boolean | null;
   };
   flags: string[];
   unavailable: string[];

@@ -18,11 +18,14 @@ type ScanPayload = {
   marketCap?: number;
   institutionalOwnership?: number;
   shortFloat?: number;
+  lastPrice?: number | null;
+  currentPrice?: number | null;
   capitalPressure?: {
     fundamentals?: {
       cashUsd?: number;
       operatingCashFlowUsd?: number;
     };
+    events?: Array<{ type?: string; isRetrospective?: boolean }>;
   };
 };
 
@@ -112,13 +115,25 @@ export function enrichFastVerdictFromScan(
   const floatShares =
     normalizeShareCount(scan.floatShares) ?? next.fundamentals.float ?? null;
   const burn = burnFromScan(scan);
-  const price = next.price.last;
+  const price = next.price.last ?? scan.lastPrice ?? scan.currentPrice ?? null;
+  const shelfFromFilings = scan.capitalPressure?.events?.some(
+    (e) =>
+      !e.isRetrospective &&
+      (e.type === 'shelf_registration' || e.type === 'atm_program' || e.type === 'prospectus_supplement')
+  );
+  const hasEffectiveShelf =
+    next.dilution.hasEffectiveShelf ?? (shelfFromFilings ? true : null);
+  const atmDetected =
+    next.dilution.atmDetected === true ||
+    Boolean(scan.capitalPressure?.events?.some((e) => !e.isRetrospective && e.type === 'atm_program'))
+      ? true
+      : next.dilution.atmDetected;
   const dilution = computeBabyShelf({
     floatShares,
     price,
     quarterlyBurn: burn.quarterlyBurn,
-    atmDetected: next.dilution.atmDetected,
-    hasEffectiveShelf: next.dilution.hasEffectiveShelf,
+    atmDetected,
+    hasEffectiveShelf,
   });
 
   const fundamentalsPatched =
@@ -130,6 +145,8 @@ export function enrichFastVerdictFromScan(
   if (fundamentalsPatched || burn.quarterlyBurn != null) {
     next = {
       ...next,
+      price:
+        next.price.last == null && price != null ? { ...next.price, last: price } : next.price,
       fundamentals: {
         ...next.fundamentals,
         float: floatShares ?? next.fundamentals.float,
@@ -146,6 +163,8 @@ export function enrichFastVerdictFromScan(
         ...next.dilution,
         ...dilution,
         derivedOfferingAbility: dilution.derivedOfferingAbility,
+        atmDetected,
+        hasEffectiveShelf,
       },
     };
 

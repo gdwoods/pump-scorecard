@@ -97,5 +97,34 @@ assert(
 );
 assert(!enriched.flags.some((f) => /droppiness\s+UNVERIFIED/i.test(f)), 'UNVERIFIED flag cleared');
 
+const moddLike = enrichFastVerdictFromScan(
+  {
+    ...base,
+    ticker: 'MODD',
+    price: { last: null, todayMovePct: null, volVs20d: null, floatRotation: null },
+    fundamentals: { ...base.fundamentals, float: null, marketCap: null },
+    dilution: {
+      publicFloatValue: null,
+      babyShelfCapacity: null,
+      capacityQuarters: null,
+      derivedOfferingAbility: 'UNKNOWN',
+      atmDetected: true,
+      equityLineCounterparty: null,
+    },
+  },
+  {
+    floatShares: 7_144_359,
+    lastPrice: 2.82,
+    capitalPressure: {
+      events: [
+        { type: 'atm_program' },
+        { type: 'shelf_registration' },
+      ],
+    },
+  }
+);
+assert(moddLike.dilution.derivedOfferingAbility !== 'LOW', 'ATM+shelf does not collapse to baby-shelf LOW');
+assert(moddLike.dilution.hasEffectiveShelf === true, 'scan ATM/shelf sets effective shelf');
+
 console.log(failed === 0 ? '\nALL FAST SCAN ENRICHMENT ASSERTIONS PASSED' : `\n${failed} FAILURES`);
 process.exit(failed === 0 ? 0 : 1);

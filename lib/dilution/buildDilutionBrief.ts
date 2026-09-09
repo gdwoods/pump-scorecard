@@ -6,6 +6,7 @@ import {
   humanEventType,
 } from '@/lib/capitalPressure/cardCopy';
 import type { CapitalEvent, CapitalEventType, CapitalPressureResult } from '@/lib/capitalPressure/types';
+import { offeringAbilityFromExtracted } from '@/lib/fast/enrichFromShortCheck';
 import type { FastVerdict, FastVerdictKind, NewsClass, OfferingAbility } from '@/lib/fast/types';
 import type { QuickScoreMetric, QuickScorecard } from '@/lib/forensic/quickScorecard/types';
 import type {
@@ -15,6 +16,7 @@ import type {
   DilutionOverall,
   DilutionPillar,
   DilutionPillTone,
+  DilutionShortRating,
   DilutionSource,
   DilutionStatusPill,
   DilutionWeapon,
@@ -253,6 +255,41 @@ function needRows(input: DilutionBriefInput): DilutionPillar['rows'] {
   return rows.slice(0, 5);
 }
 
+function cpOfferingAbility(cp?: CapitalPressureResult | null): OfferingAbility | null {
+  if (!cp?.available) return null;
+  const liveTool = cp.events?.some(
+    (e) =>
+      !e.isRetrospective &&
+      (e.type === 'atm_program' || e.type === 'equity_line' || e.type === 'prospectus_supplement')
+  );
+  const shelf = cp.events?.some((e) => !e.isRetrospective && e.type === 'shelf_registration');
+  if (liveTool || shelf || cp.capacity?.status === 'reported') return 'HIGH';
+  if (cp.dilutionLikelihood != null && cp.dilutionLikelihood >= 7) return 'HIGH';
+  if (cp.dilutionLikelihood != null && cp.dilutionLikelihood >= 4) return 'MEDIUM';
+  return null;
+}
+
+function displayOfferingAbility(input: DilutionBriefInput): {
+  value: OfferingAbility;
+  source: 'dt' | 'capital-pressure' | 'fast';
+} | null {
+  const dt = offeringAbilityFromExtracted(input.shortCheck?.extracted);
+  if (dt) return { value: dt, source: 'dt' };
+  const fromCp = cpOfferingAbility(input.capitalPressure);
+  if (fromCp) return { value: fromCp, source: 'capital-pressure' };
+  const fromFast = input.fastVerdict?.dilution.derivedOfferingAbility;
+  if (fromFast && fromFast !== 'UNKNOWN') return { value: fromFast, source: 'fast' };
+  return null;
+}
+
+function offeringAbilityLabel(
+  displayed: { value: OfferingAbility; source: 'dt' | 'capital-pressure' | 'fast' }
+): string {
+  if (displayed.source === 'dt') return `${displayed.value} · DT`;
+  if (displayed.source === 'capital-pressure') return `${displayed.value} · SEC`;
+  return displayed.value;
+}
+
 function abilityRows(input: DilutionBriefInput): DilutionPillar['rows'] {
   const fv = input.fastVerdict;
   const qs = input.quickScorecard;
@@ -260,9 +297,16 @@ function abilityRows(input: DilutionBriefInput): DilutionPillar['rows'] {
   const extracted = input.shortCheck?.extracted;
   const rows: DilutionPillar['rows'] = [];
 
-  const ability = fv?.dilution.derivedOfferingAbility;
-  if (ability) {
-    rows.push({ label: 'Offering ability', value: ability });
+  const displayed = displayOfferingAbility(input);
+  if (displayed) {
+    rows.push({ label: 'Offering ability', value: offeringAbilityLabel(displayed) });
+  }
+  const baby = fv?.dilution.derivedOfferingAbility;
+  if (baby && baby !== 'UNKNOWN' && baby !== displayed?.value) {
+    rows.push({
+      label: 'Baby-shelf screen',
+      value: baby,
+    });
   }
   if (fv?.dilution.atmDetected != null) {
     rows.push({
@@ -493,38 +537,19 @@ function buildWeapon(input: DilutionBriefInput): DilutionWeapon {
   };
 }
 
-function canDiluteToday(
-  ability: OfferingAbility | undefined,
-  fv: FastVerdict | null | undefined,
-  cp: CapitalPressureResult | null | undefined
-): DilutionFinalCell {
+function canDiluteToday(input: DilutionBriefInput): DilutionFinalCell {
+  const fv = input.fastVerdict;
+  const cp = input.capitalPressure;
+  const ability = displayOfferingAbility(input)?.value;
   const capacityKnown = cp?.capacity?.status === 'reported' || cp?.capacity?.status === 'partial';
   const atm = fv?.dilution.atmDetected === true || Boolean(cp?.events?.some((e) => e.type === 'atm_program'));
   const channel = atm ? 'ATM on file' : capacityKnown ? 'Documented financing capacity' : null;
 
-  if (ability === 'LOW') {
-    return {
-      id: 'canDilute',
-      label: 'Can dilute today',
-      value: 'No',
-      detail: 'Derived offering ability LOW',
-      tone: 'ok',
-    };
-  }
-  if (ability === 'MEDIUM' && (atm || capacityKnown)) {
-    return {
-      id: 'canDilute',
-      label: 'Can dilute today',
-      value: 'Conditional',
-      detail: channel,
-      tone: 'warn',
-    };
-  }
   if (atm || capacityKnown || ability === 'HIGH') {
     return {
       id: 'canDilute',
       label: 'Can dilute today',
-      value: ability === 'HIGH' || atm || capacityKnown ? 'Yes' : 'Likely',
+      value: 'Yes',
       detail: channel ?? (ability === 'HIGH' ? 'HIGH offering ability — capacity not fully verified' : 'Offering channel on file'),
       tone: 'risk',
     };
@@ -536,6 +561,15 @@ function canDiluteToday(
       value: 'Conditional',
       detail: 'MEDIUM offering ability — capacity not fully verified',
       tone: 'warn',
+    };
+  }
+  if (ability === 'LOW') {
+    return {
+      id: 'canDilute',
+      label: 'Can dilute today',
+      value: 'No',
+      detail: 'No live ATM/shelf on file',
+      tone: 'ok',
     };
   }
   return {
@@ -560,7 +594,7 @@ function buildFinalRead(input: DilutionBriefInput, weapon: DilutionWeapon): Dilu
   ].filter(Boolean);
 
   return [
-    canDiluteToday(fv?.dilution.derivedOfferingAbility, fv, cp),
+    canDiluteToday(input),
     {
       id: 'weapon',
       label: 'Main weapon',
@@ -701,6 +735,18 @@ function buildSources(input: DilutionBriefInput): DilutionSource[] {
   return sources.slice(0, 12);
 }
 
+function buildShortRating(input: DilutionBriefInput): DilutionShortRating | null {
+  const rating = input.shortCheck?.rating;
+  const category = input.shortCheck?.category;
+  if (rating == null || !Number.isFinite(rating) || !category) return null;
+  return {
+    rating,
+    category,
+    alerts: input.shortCheck?.alertLabels ?? [],
+    dataCompleteness: input.shortCheck?.dataCompleteness ?? null,
+  };
+}
+
 export function buildDilutionBrief(input: DilutionBriefInput): DilutionBrief | null {
   const ticker = input.ticker.trim().toUpperCase();
   if (!ticker) return null;
@@ -729,6 +775,7 @@ export function buildDilutionBrief(input: DilutionBriefInput): DilutionBrief | n
     weapon,
     finalRead: buildFinalRead(input, weapon),
     overall,
+    shortRating: buildShortRating(input),
     sources: buildSources(input),
   };
 }

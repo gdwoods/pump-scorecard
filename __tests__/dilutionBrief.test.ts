@@ -261,4 +261,90 @@ describe('buildDilutionBrief', () => {
     expect(buildDilutionBrief({ ticker: '' })).toBeNull();
     expect(buildDilutionBrief({ ticker: 'X' })).toBeNull();
   });
+
+  it('prefers DT then SEC offering ability over a baby-shelf LOW', () => {
+    const brief = buildDilutionBrief({
+      ticker: 'MODD',
+      fastVerdict: baseVerdict({
+        ticker: 'MODD',
+        dilution: {
+          publicFloatValue: 20_000_000,
+          babyShelfCapacity: 6_700_000,
+          capacityQuarters: null,
+          derivedOfferingAbility: 'LOW',
+          atmDetected: true,
+          equityLineCounterparty: null,
+        },
+      }),
+      quickScorecard: scorecardFrom({
+        ticker: 'MODD',
+        capitalPressure: { available: true, score: 75, status: 'high', dilutionLikelihood: 9 },
+        fastVerdict: { derivedOfferingAbility: 'LOW', atmDetected: true },
+      }),
+      capitalPressure: baseCp({
+        score: 75,
+        status: 'high',
+        dilutionLikelihood: 9,
+      }),
+      shortCheck: { extracted: { ticker: 'MODD', confidence: 0.9, atmShelfStatus: 'DT:Red' } },
+    });
+
+    const ability = brief!.pillars.find((p) => p.id === 'ability');
+    expect(ability?.rows.find((r) => r.label === 'Offering ability')?.value).toBe('HIGH · DT');
+    expect(ability?.rows.find((r) => r.label === 'Baby-shelf screen')?.value).toBe('LOW');
+    expect(brief!.finalRead.find((c) => c.id === 'canDilute')?.value).toBe('Yes');
+  });
+
+  it('uses SEC ATM/shelf as High when DT is absent and baby-shelf says Low', () => {
+    const brief = buildDilutionBrief({
+      ticker: 'MODD',
+      fastVerdict: baseVerdict({
+        ticker: 'MODD',
+        dilution: {
+          publicFloatValue: 20_000_000,
+          babyShelfCapacity: 6_700_000,
+          capacityQuarters: null,
+          derivedOfferingAbility: 'LOW',
+          atmDetected: true,
+          equityLineCounterparty: null,
+        },
+      }),
+      quickScorecard: scorecardFrom({
+        ticker: 'MODD',
+        capitalPressure: { available: true, score: 75, status: 'high', dilutionLikelihood: 9 },
+        fastVerdict: { derivedOfferingAbility: 'LOW', atmDetected: true },
+      }),
+      capitalPressure: baseCp({
+        score: 75,
+        status: 'high',
+        dilutionLikelihood: 9,
+      }),
+    });
+
+    const ability = brief!.pillars.find((p) => p.id === 'ability');
+    expect(ability?.rows.find((r) => r.label === 'Offering ability')?.value).toBe('HIGH · SEC');
+    expect(ability?.rows.find((r) => r.label === 'Baby-shelf screen')?.value).toBe('LOW');
+    expect(brief!.finalRead.find((c) => c.id === 'canDilute')?.value).toBe('Yes');
+  });
+
+  it('passes through the existing Short Rating without changing the number', () => {
+    const brief = buildDilutionBrief({
+      ticker: 'BNC',
+      fastVerdict: baseVerdict(),
+      quickScorecard: scorecardFrom(),
+      shortCheck: {
+        rating: 78.4,
+        category: 'High-Priority Short Candidate',
+        alertLabels: [{ label: 'BABY_SHELF_CRITICAL', color: 'red' }],
+        dataCompleteness: 0.8,
+      },
+    });
+
+    expect(brief!.shortRating).toEqual({
+      rating: 78.4,
+      category: 'High-Priority Short Candidate',
+      alerts: [{ label: 'BABY_SHELF_CRITICAL', color: 'red' }],
+      dataCompleteness: 0.8,
+    });
+  });
 });

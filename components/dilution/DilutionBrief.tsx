@@ -1,12 +1,17 @@
 "use client";
 
+import { useState } from "react";
+import dynamic from "next/dynamic";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip } from "@/components/ui/tooltip";
+
+const ScoringGuideModal = dynamic(() => import("@/components/short-check/ScoringGuideModal"));
 import type { FastVerdictKind } from "@/lib/fast/types";
 import type {
   DilutionBrief as DilutionBriefModel,
   DilutionPillar,
   DilutionPillTone,
+  DilutionShortRating,
 } from "@/lib/dilution/types";
 
 const TRADE_GATE_BADGE: Record<FastVerdictKind, string> = {
@@ -52,12 +57,101 @@ const PILLAR_CHROME: Record<
   },
 };
 
+const SHORT_RATING_TONE: Record<DilutionShortRating["category"], DilutionPillTone> = {
+  "High-Priority Short Candidate": "risk",
+  "Moderate Short Candidate": "warn",
+  "Speculative Short Candidate": "info",
+  "No-Trade": "risk",
+};
+
+const SHORT_RATING_BADGE: Record<DilutionShortRating["category"], string> = {
+  "High-Priority Short Candidate": "bg-red-500 text-white",
+  "Moderate Short Candidate": "bg-yellow-500 text-white",
+  "Speculative Short Candidate": "bg-blue-500 text-white",
+  "No-Trade": "bg-red-600 text-white",
+};
+
+const ALERT_PILL: Record<DilutionShortRating["alerts"][number]["color"], string> = {
+  red: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  orange: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+  yellow: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+};
+
 function AsOf({ value }: { value?: string | null }) {
   if (!value) return null;
   return <span className="text-[10px] text-gray-500 dark:text-gray-400"> · {value}</span>;
 }
 
+function ShortRatingStrip({
+  rating,
+  onOpenGuide,
+}: {
+  rating: DilutionShortRating;
+  onOpenGuide: () => void;
+}) {
+  const completeness =
+    rating.dataCompleteness != null
+      ? `${Math.round(rating.dataCompleteness * 100)}% of scoring factors have data`
+      : null;
+
+  return (
+    <section
+      aria-label="Short Rating"
+      className={`rounded-xl border px-4 py-3 ${OVERALL_CLASS[SHORT_RATING_TONE[rating.category]]}`}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Short Rating
+              </p>
+              <button
+                type="button"
+                onClick={onOpenGuide}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                aria-label="How scoring works"
+                title="How scoring works"
+              >
+                <span className="text-sm">ℹ️</span>
+              </button>
+            </div>
+            <p className="text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-tight">
+              {rating.rating.toFixed(1)}%
+            </p>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+              DT composite score · not the trade gate
+              {completeness ? ` · ${completeness}` : ""}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-col items-start sm:items-end gap-2">
+          <span
+            className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${SHORT_RATING_BADGE[rating.category]}`}
+          >
+            {rating.category}
+          </span>
+          {rating.alerts.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 sm:justify-end">
+              {rating.alerts.map((alert) => (
+                <span
+                  key={alert.label}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ALERT_PILL[alert.color]}`}
+                >
+                  {alert.label}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function DilutionBrief({ brief }: { brief: DilutionBriefModel }) {
+  const [showScoringGuide, setShowScoringGuide] = useState(false);
+
   return (
     <Card
       className="bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden"
@@ -74,7 +168,7 @@ export default function DilutionBrief({ brief }: { brief: DilutionBriefModel }) 
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{brief.ticker}</h2>
                 {brief.tradeGate && (
                   <Tooltip
-                    content="Fast Verdict trade gate (NO TRADE / WATCH / REVIEW). Separate from the dilution letter grade."
+                    content="Fast Verdict trade gate (NO TRADE / WATCH / REVIEW). Separate from the dilution letter grade and Short Rating."
                     side="bottom"
                   >
                     <span
@@ -103,6 +197,13 @@ export default function DilutionBrief({ brief }: { brief: DilutionBriefModel }) 
               <p className="text-[10px] text-gray-500 dark:text-gray-400">{brief.overall.caption}</p>
             </div>
           </div>
+
+          {brief.shortRating && (
+            <ShortRatingStrip
+              rating={brief.shortRating}
+              onOpenGuide={() => setShowScoringGuide(true)}
+            />
+          )}
 
           {brief.pills.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -270,6 +371,12 @@ export default function DilutionBrief({ brief }: { brief: DilutionBriefModel }) 
           )}
         </details>
       </CardContent>
+      {brief.shortRating && (
+        <ScoringGuideModal
+          isOpen={showScoringGuide}
+          onClose={() => setShowScoringGuide(false)}
+        />
+      )}
     </Card>
   );
 }

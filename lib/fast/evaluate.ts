@@ -187,6 +187,7 @@ export function buildFastVerdict(
       derivedOfferingAbility,
       atmDetected,
       equityLineCounterparty: null,
+      hasEffectiveShelf,
     },
     flags,
     unavailable,
