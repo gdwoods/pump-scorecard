@@ -605,7 +605,12 @@ export default function ShortCheckPage() {
             ticker={ticker}
             extractedData={extractedData || undefined}
             pumpScorecardData={pumpScorecardData}
-            afterQuickActions={fastVerdictCard}
+            afterQuickActions={
+              <>
+                {fastVerdictCard}
+                <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
+              </>
+            }
             afterFastVerdict={dilutionBriefBlock}
             synopsisInVerdictStack={verdictStackActive}
             hideRatingHero={Boolean(dilutionBrief?.shortRating)}
@@ -642,15 +647,16 @@ export default function ShortCheckPage() {
           </Card>
         )}
 
-        {/* Quick Ticker path — Fast Verdict before market enrichment */}
+        {/* Quick Ticker path — Fast Verdict, then Droppiness, then Dilution Brief */}
         {hasAnalyzedTicker && !result && fastVerdictCard}
+        {hasAnalyzedTicker && !result && (
+          <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
+        )}
         {hasAnalyzedTicker && !result && dilutionBriefBlock}
 
         {/* Unified scan enrichment — same layout for DT screenshot and Quick Ticker paths */}
         {showMarketData && (
           <>
-            <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
-
             {capitalPressureBlock}
 
             {quickScorecardBlock}
