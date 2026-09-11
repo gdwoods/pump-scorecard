@@ -5,6 +5,10 @@ import { classifyRunner } from './runner';
 import { evaluateWalkAways } from './walkAway';
 import { droppinessFromDailyBars } from './droppinessDaily';
 import { toFastDroppiness, cacheFromCompute } from '@/lib/droppiness/map';
+import {
+  appendNasdaqListingFlag,
+  nasdaqListingUnavailable,
+} from './fetchNasdaqDeficient';
 import type { Tier2Bundle } from './fetchTier2';
 import type { FastVerdict } from './types';
 
@@ -36,6 +40,9 @@ export function buildFastVerdict(
   const borrow = tier2.borrow.ok ? tier2.borrow.value : null;
   const newsBundle = tier2.news.ok ? tier2.news.value : null;
   const cachedDrop = tier2.droppiness.ok ? tier2.droppiness.value : null;
+  const nasdaqListing = tier2.nasdaq?.ok
+    ? tier2.nasdaq.value
+    : nasdaqListingUnavailable();
 
   const session = snap?.session ?? 'closed';
   let todayMovePct = snap?.todayMovePct ?? null;
@@ -139,7 +146,7 @@ export function buildFastVerdict(
     derivedOfferingAbility,
   });
 
-  const flags = [...walk.flags];
+  const flags = appendNasdaqListingFlag([...walk.flags], nasdaqListing);
   if (newsBundle?.tickerRecycleWarning) {
     flags.push('tickerRecycleWarning — old news may be from prior ticker occupant');
   }
@@ -189,6 +196,7 @@ export function buildFastVerdict(
       equityLineCounterparty: null,
       hasEffectiveShelf,
     },
+    nasdaqListing,
     flags,
     unavailable,
   };

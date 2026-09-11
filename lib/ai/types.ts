@@ -167,6 +167,8 @@ export interface FastVerdictPromptSlice {
   /** 0–1 source availability fraction from fast evaluator. */
   dataCompleteness: number;
   unavailable: string[];
+  /** Soft overlay from Nasdaq's official noncompliant list. */
+  nasdaqListing?: string | null;
 }
 
 /** What the client sends to /api/ai-thesis. All sections optional except ticker. */

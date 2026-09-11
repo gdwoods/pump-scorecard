@@ -7,7 +7,8 @@ import { fetchRecentNews } from '@/utils/fetchNews';
 import { normalizeShareCount } from '@/lib/normalizeShares';
 import { settleSource, withTimeout, type SettledSource } from './withTimeout';
 import { fetchBurnRunway, type BurnRunwayData } from './fetchBurn';
-import type { DailyBar, FilingSignal } from './types';
+import { lookupNasdaqDeficient } from './fetchNasdaqDeficient';
+import type { DailyBar, FilingSignal, NasdaqListing } from './types';
 
 const SEC_UA = 'pump-scorecard short-check (garthwoods@gmail.com)';
 
@@ -380,11 +381,12 @@ export type Tier2Bundle = {
   news: SettledSource<Awaited<ReturnType<typeof fetchNewsBundle>>>;
   droppiness: SettledSource<Awaited<ReturnType<typeof fetchDroppinessCached>>>;
   burn: SettledSource<BurnRunwayData>;
+  nasdaq: SettledSource<NasdaqListing>;
 };
 
 export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
   const ms = T.timeouts.perSourceMs;
-  const [snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn] =
+  const [snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn, nasdaq] =
     await Promise.all([
       settleSource('polygon-snapshot', Math.min(ms, 800), () => fetchPolygonSnapshot(ticker)),
       settleSource('polygon-aggs', Math.min(ms, 1000), () => fetchPolygonDailyBars(ticker)),
@@ -396,7 +398,8 @@ export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
       settleSource('news', Math.min(ms, 1000), () => fetchNewsBundle(ticker)),
       settleSource('droppiness-kv', 200, () => fetchDroppinessCached(ticker)),
       settleSource('burn-runway', Math.min(ms, 1200), () => fetchBurnRunway(ticker)),
+      settleSource('nasdaq-deficient', Math.min(ms, 1000), () => lookupNasdaqDeficient(ticker)),
     ]);
 
-  return { snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn };
+  return { snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn, nasdaq };
 }

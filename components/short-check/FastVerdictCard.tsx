@@ -7,7 +7,7 @@ import {
   describeFastWalkAwayFlag,
   describeFastWalkAwayReason,
 } from "@/lib/fast/walkAwayReasons";
-import type { FastVerdict, FastVerdictKind } from "@/lib/fast/types";
+import type { FastVerdict, FastVerdictKind, NasdaqListing } from "@/lib/fast/types";
 import { T } from "@/lib/config/thresholds";
 import RiskSynopsisSection from "./RiskSynopsisSection";
 
@@ -26,6 +26,27 @@ function pct(n: number | null, digits = 0): string {
 function num(n: number | null, digits = 1): string {
   if (n == null || Number.isNaN(n)) return "n/a";
   return n.toFixed(digits);
+}
+
+function NasdaqNoncompliantValue({ listing }: { listing: NasdaqListing }) {
+  const summary = listing.deficiencies
+    .map((d) => (d.notificationDate ? `${d.type} (${d.notificationDate})` : d.type))
+    .filter((s) => s.trim().length > 0)
+    .join("; ");
+  return (
+    <>
+      <a
+        href={listing.sourceUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="text-red-600 dark:text-red-400 font-semibold underline hover:text-red-700 dark:hover:text-red-300"
+      >
+        NONCOMPLIANT
+      </a>
+      {summary ? ` — ${summary}` : ""}
+      {listing.market ? ` · ${listing.market}` : ""}
+    </>
+  );
 }
 
 const VERDICT_STYLES: Record<
@@ -214,6 +235,16 @@ export default function FastVerdictCard({
             {verdict.dilution.capacityQuarters != null
               ? ` · ${num(verdict.dilution.capacityQuarters, 2)} qtrs capacity`
               : ""}
+          </div>
+          <div>
+            <span className="text-gray-500 dark:text-gray-400">Nasdaq </span>
+            {!verdict.nasdaqListing || verdict.nasdaqListing.status === "unavailable" ? (
+              "n/a"
+            ) : verdict.nasdaqListing.status === "not_listed" ? (
+              "not on noncompliant list"
+            ) : (
+              <NasdaqNoncompliantValue listing={verdict.nasdaqListing} />
+            )}
           </div>
         </div>
 

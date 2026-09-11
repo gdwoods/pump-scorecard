@@ -13,6 +13,16 @@ export type OfferingAbility = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
 
 export type FilingSignal = 'CONFIRM' | 'CAUTION' | 'REVIEW';
 
+export type NasdaqListingStatus = 'noncompliant' | 'not_listed' | 'unavailable';
+
+export type NasdaqListing = {
+  status: NasdaqListingStatus;
+  issuerName?: string | null;
+  market?: string | null;
+  deficiencies: Array<{ type: string; notificationDate: string }>;
+  sourceUrl: string;
+};
+
 export type FastVerdict = {
   ticker: string;
   verdict: FastVerdictKind;
@@ -69,6 +79,8 @@ export type FastVerdict = {
     equityLineCounterparty: string | null;
     hasEffectiveShelf?: boolean | null;
   };
+  /** Official Nasdaq noncompliant (deficient) list — overlay, not a walk-away. */
+  nasdaqListing?: NasdaqListing;
   flags: string[];
   unavailable: string[];
 };

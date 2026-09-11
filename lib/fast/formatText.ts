@@ -1,5 +1,6 @@
 // lib/fast/formatText.ts
 import type { FastVerdict } from './types';
+import { formatNasdaqDeficiencySummary } from './fetchNasdaqDeficient';
 
 function pct(n: number | null, digits = 0): string {
   if (n == null || Number.isNaN(n)) return 'n/a';
@@ -56,6 +57,15 @@ export function formatFastVerdictText(v: FastVerdict): string {
   lines.push(
     `Dilute  ability ${v.dilution.derivedOfferingAbility} | baby shelf ${v.dilution.babyShelfCapacity != null ? `$${(v.dilution.babyShelfCapacity / 1e6).toFixed(2)}M` : 'n/a'} | ${num(v.dilution.capacityQuarters, 2)} qtrs capacity`
   );
+
+  if (v.nasdaqListing?.status === 'noncompliant') {
+    const summary = formatNasdaqDeficiencySummary(v.nasdaqListing);
+    lines.push(`Nasdaq  NONCOMPLIANT${summary ? ` — ${summary}` : ''}${v.nasdaqListing.market ? ` · ${v.nasdaqListing.market}` : ''}`);
+  } else if (v.nasdaqListing?.status === 'not_listed') {
+    lines.push('Nasdaq  not on noncompliant list');
+  } else if (v.nasdaqListing) {
+    lines.push('Nasdaq  n/a');
+  }
 
   if (v.flags.length) {
     lines.push('FLAGS   ' + v.flags.join('\n        '));

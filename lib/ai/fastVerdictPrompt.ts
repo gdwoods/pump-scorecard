@@ -4,6 +4,20 @@
 
 import type { FastVerdict } from '@/lib/fast/types';
 import type { FastVerdictPromptSlice } from './types';
+import { formatNasdaqDeficiencySummary } from '@/lib/fast/fetchNasdaqDeficient';
+
+function nasdaqListingPromptLine(verdict: FastVerdict): string | null {
+  const listing = verdict.nasdaqListing;
+  if (!listing) return null;
+  if (listing.status === 'noncompliant') {
+    const summary = formatNasdaqDeficiencySummary(listing);
+    return summary
+      ? `Nasdaq noncompliant — ${summary}`
+      : 'Nasdaq noncompliant';
+  }
+  if (listing.status === 'not_listed') return 'not on Nasdaq noncompliant list';
+  return 'Nasdaq list unavailable';
+}
 
 export function fastVerdictToPromptSlice(verdict: FastVerdict): FastVerdictPromptSlice {
   return {
@@ -26,5 +40,6 @@ export function fastVerdictToPromptSlice(verdict: FastVerdict): FastVerdictPromp
     borrowFeePct: verdict.borrow.feePct,
     dataCompleteness: verdict.dataCompleteness,
     unavailable: verdict.unavailable,
+    nasdaqListing: nasdaqListingPromptLine(verdict),
   };
 }

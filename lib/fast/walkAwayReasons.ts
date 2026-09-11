@@ -32,5 +32,8 @@ export function describeFastWalkAwayFlag(flag: string): string | undefined {
   if (/droppiness\s+UNVERIFIED/i.test(flag)) {
     return 'Droppiness not cached or fewer than 3 spikes — score is informational only on the fast screen.';
   }
+  if (flag.startsWith('Nasdaq noncompliant')) {
+    return "Issuer is on Nasdaq's published noncompliant continued-listing list. Soft flag only — not a Framework walk-away.";
+  }
   return undefined;
 }

@@ -216,6 +216,9 @@ function formatFastVerdict(fv: FastVerdictPromptSlice): string {
     lines.push(`Capacity quarters: ${fv.capacityQuarters.toFixed(1)}`);
   }
   lines.push(`Derived offering ability: ${fv.derivedOfferingAbility ?? 'unknown'}`);
+  if (fv.nasdaqListing) {
+    lines.push(`Nasdaq listing: ${fv.nasdaqListing} (soft flag — not a hard walk-away)`);
+  }
   if (fv.unavailable?.length) {
     lines.push(`Unavailable inputs: ${fv.unavailable.join(', ')}`);
   }
