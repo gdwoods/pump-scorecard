@@ -65,6 +65,12 @@ export interface QuickScorecardInput {
     priorDayPct?: number | null;
     threeDayRunPct?: number | null;
     dataCompleteness?: number;
+    /** Soft overlay from Nasdaq's official noncompliant list (Fast Verdict). */
+    nasdaqListing?: {
+      status: 'noncompliant' | 'not_listed' | 'unavailable';
+      summary?: string | null;
+      market?: string | null;
+    } | null;
   };
   fundamentals?: {
     float?: number | null;

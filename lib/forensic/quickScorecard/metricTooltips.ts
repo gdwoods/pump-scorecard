@@ -18,7 +18,7 @@ export const QUICK_SCORE_METRIC_TOOLTIPS: Record<QuickScoreKey, string> = {
   cashNeed:
     'How urgently the company may need outside capital — from runway months, Short Check cash-need points, or baby-shelf capacity quarters.',
   delisting:
-    'Nasdaq listing risk from deficiency notices, reverse splits, and upcoming split events in the Capital Pressure filing window.',
+    'Nasdaq listing risk from the official noncompliant list (Fast Verdict soft overlay), plus CP deficiency notices, reverse splits, and upcoming split events.',
   survivalPump:
     'Structural incentive for price support when listing pressure, cash need, and dilution ability overlap. Risk classification only — not an allegation of manipulation.',
   squeeze:
