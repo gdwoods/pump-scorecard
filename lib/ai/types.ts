@@ -169,6 +169,8 @@ export interface FastVerdictPromptSlice {
   unavailable: string[];
   /** Soft overlay from Nasdaq's official noncompliant list. */
   nasdaqListing?: string | null;
+  /** Soft overlay from Nasdaq Trader Regulation SHO threshold list. */
+  regSho?: string | null;
 }
 
 /** What the client sends to /api/ai-thesis. All sections optional except ticker. */

@@ -9,6 +9,7 @@ import {
   appendNasdaqListingFlag,
   nasdaqListingUnavailable,
 } from './fetchNasdaqDeficient';
+import { appendRegShoFlag, regShoUnavailable } from './fetchRegSho';
 import type { Tier2Bundle } from './fetchTier2';
 import type { FastVerdict } from './types';
 
@@ -43,6 +44,7 @@ export function buildFastVerdict(
   const nasdaqListing = tier2.nasdaq?.ok
     ? tier2.nasdaq.value
     : nasdaqListingUnavailable();
+  const regSho = tier2.regSho?.ok ? tier2.regSho.value : regShoUnavailable();
 
   const session = snap?.session ?? 'closed';
   let todayMovePct = snap?.todayMovePct ?? null;
@@ -146,7 +148,10 @@ export function buildFastVerdict(
     derivedOfferingAbility,
   });
 
-  const flags = appendNasdaqListingFlag([...walk.flags], nasdaqListing);
+  const flags = appendRegShoFlag(
+    appendNasdaqListingFlag([...walk.flags], nasdaqListing),
+    regSho
+  );
   if (newsBundle?.tickerRecycleWarning) {
     flags.push('tickerRecycleWarning — old news may be from prior ticker occupant');
   }
@@ -197,6 +202,7 @@ export function buildFastVerdict(
       hasEffectiveShelf,
     },
     nasdaqListing,
+    regSho,
     flags,
     unavailable,
   };

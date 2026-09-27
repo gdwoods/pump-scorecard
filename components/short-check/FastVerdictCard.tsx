@@ -7,7 +7,8 @@ import {
   describeFastWalkAwayFlag,
   describeFastWalkAwayReason,
 } from "@/lib/fast/walkAwayReasons";
-import type { FastVerdict, FastVerdictKind, NasdaqListing } from "@/lib/fast/types";
+import type { FastVerdict, FastVerdictKind, NasdaqListing, RegShoListing } from "@/lib/fast/types";
+import { formatRegShoSummary } from "@/lib/fast/fetchRegSho";
 import { T } from "@/lib/config/thresholds";
 import RiskSynopsisSection from "./RiskSynopsisSection";
 
@@ -26,6 +27,23 @@ function pct(n: number | null, digits = 0): string {
 function num(n: number | null, digits = 1): string {
   if (n == null || Number.isNaN(n)) return "n/a";
   return n.toFixed(digits);
+}
+
+function RegShoThresholdValue({ listing }: { listing: RegShoListing }) {
+  const summary = formatRegShoSummary(listing);
+  return (
+    <>
+      <a
+        href={listing.sourceUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="text-red-600 dark:text-red-400 font-semibold underline hover:text-red-700 dark:hover:text-red-300"
+      >
+        THRESHOLD
+      </a>
+      {summary ? ` — ${summary}` : ""}
+    </>
+  );
 }
 
 function NasdaqNoncompliantValue({ listing }: { listing: NasdaqListing }) {
@@ -239,11 +257,21 @@ export default function FastVerdictCard({
           <div>
             <span className="text-gray-500 dark:text-gray-400">Nasdaq </span>
             {!verdict.nasdaqListing || verdict.nasdaqListing.status === "unavailable" ? (
-              "n/a"
+              <span className="text-amber-700 dark:text-amber-400">list unavailable</span>
             ) : verdict.nasdaqListing.status === "not_listed" ? (
               "not on noncompliant list"
             ) : (
               <NasdaqNoncompliantValue listing={verdict.nasdaqListing} />
+            )}
+          </div>
+          <div>
+            <span className="text-gray-500 dark:text-gray-400">Reg SHO </span>
+            {!verdict.regSho || verdict.regSho.status === "unavailable" ? (
+              <span className="text-amber-700 dark:text-amber-400">list unavailable</span>
+            ) : verdict.regSho.status === "not_listed" ? (
+              "not on threshold list"
+            ) : (
+              <RegShoThresholdValue listing={verdict.regSho} />
             )}
           </div>
         </div>

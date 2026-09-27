@@ -1,6 +1,7 @@
 // lib/fast/formatText.ts
 import type { FastVerdict } from './types';
 import { formatNasdaqDeficiencySummary } from './fetchNasdaqDeficient';
+import { formatRegShoSummary } from './fetchRegSho';
 
 function pct(n: number | null, digits = 0): string {
   if (n == null || Number.isNaN(n)) return 'n/a';
@@ -64,7 +65,16 @@ export function formatFastVerdictText(v: FastVerdict): string {
   } else if (v.nasdaqListing?.status === 'not_listed') {
     lines.push('Nasdaq  not on noncompliant list');
   } else if (v.nasdaqListing) {
-    lines.push('Nasdaq  n/a');
+    lines.push('Nasdaq  list unavailable');
+  }
+
+  if (v.regSho?.status === 'threshold') {
+    const summary = formatRegShoSummary(v.regSho);
+    lines.push(`Reg SHO  THRESHOLD${summary ? ` — ${summary}` : ''}`);
+  } else if (v.regSho?.status === 'not_listed') {
+    lines.push('Reg SHO  not on threshold list');
+  } else if (v.regSho) {
+    lines.push('Reg SHO  list unavailable');
   }
 
   if (v.flags.length) {

@@ -6,6 +6,7 @@ import { toFastDroppiness } from '@/lib/droppiness/map';
 import { computeBabyShelf } from '@/lib/fast/babyShelf';
 import { evaluateWalkAways } from '@/lib/fast/walkAway';
 import { appendNasdaqListingFlag } from '@/lib/fast/fetchNasdaqDeficient';
+import { appendRegShoFlag } from '@/lib/fast/fetchRegSho';
 import { normalizeShareCount } from '@/lib/normalizeShares';
 import type { FastVerdict } from '@/lib/fast/types';
 
@@ -68,7 +69,10 @@ function recomputeWalkAway(verdict: FastVerdict): Pick<FastVerdict, 'verdict' | 
     floatShares: verdict.fundamentals.float,
     derivedOfferingAbility: verdict.dilution.derivedOfferingAbility,
   });
-  const flags = appendNasdaqListingFlag([...walk.flags], verdict.nasdaqListing);
+  const flags = appendRegShoFlag(
+    appendNasdaqListingFlag([...walk.flags], verdict.nasdaqListing),
+    verdict.regSho
+  );
   if (verdict.news.tickerRecycleWarning) {
     flags.push('tickerRecycleWarning — old news may be from prior ticker occupant');
   }

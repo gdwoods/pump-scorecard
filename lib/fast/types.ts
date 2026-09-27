@@ -23,6 +23,17 @@ export type NasdaqListing = {
   sourceUrl: string;
 };
 
+export type RegShoStatus = 'threshold' | 'not_listed' | 'unavailable';
+
+export type RegShoListing = {
+  status: RegShoStatus;
+  securityName?: string | null;
+  marketCategory?: string | null;
+  tradeDate?: string | null;
+  rule3210?: string | null;
+  sourceUrl: string;
+};
+
 export type FastVerdict = {
   ticker: string;
   verdict: FastVerdictKind;
@@ -81,6 +92,8 @@ export type FastVerdict = {
   };
   /** Official Nasdaq noncompliant (deficient) list — overlay, not a walk-away. */
   nasdaqListing?: NasdaqListing;
+  /** Nasdaq Trader Regulation SHO threshold list — overlay, not a walk-away. */
+  regSho?: RegShoListing;
   flags: string[];
   unavailable: string[];
 };

@@ -94,6 +94,14 @@ describe('Nasdaq deficient list parser', () => {
     );
   });
 
+  it('rejects an empty rows array', () => {
+    expect(() =>
+      parseNasdaqDeficientPayload({
+        data: { noncomplaintCompanyList: { rows: [] } },
+      })
+    ).toThrow(/nasdaq deficient list empty/);
+  });
+
   it('includes Nasdaq line in text format without changing verdict', () => {
     const verdict: FastVerdict = {
       ticker: 'ADGM',

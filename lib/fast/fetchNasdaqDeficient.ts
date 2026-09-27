@@ -1,5 +1,6 @@
 // lib/fast/fetchNasdaqDeficient.ts
-// Nasdaq daily noncompliant (deficient) list — Edge-safe, list-level cache.
+// Nasdaq daily noncompliant (deficient) list. Direct fetch first; Vercel Edge
+// often gets blocked, so fall back to the Node /api/nasdaq-deficient proxy.
 
 import type { NasdaqListing } from './types';
 
@@ -10,6 +11,15 @@ export const NASDAQ_DEFICIENT_API =
   'https://api.nasdaq.com/api/quote/list-type-extended/listing?queryString=deficient';
 
 const MEM_TTL_MS = 10 * 60 * 1000;
+
+const NASDAQ_HEADERS = {
+  Accept: 'application/json, text/plain, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Origin: 'https://www.nasdaq.com',
+  Referer: 'https://www.nasdaq.com/market-activity/stocks/non-compliant-company-list',
+  'User-Agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+};
 
 type MemCache = { expires: number; index: Map<string, NasdaqListing> };
 let mem: MemCache | null = null;
@@ -71,7 +81,7 @@ export function parseNasdaqDeficientPayload(
     data?: { noncomplaintCompanyList?: { rows?: NasdaqIssuerRow[] } };
   };
   const rows = root?.data?.noncomplaintCompanyList?.rows;
-  if (!Array.isArray(rows)) {
+  if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error('nasdaq deficient list empty');
   }
 
@@ -116,6 +126,10 @@ export function parseNasdaqDeficientPayload(
     }
   }
 
+  if (index.size === 0) {
+    throw new Error('nasdaq deficient list empty');
+  }
+
   return index;
 }
 
@@ -133,25 +147,83 @@ export function listingFromIndex(
   );
 }
 
+export function indexToRecord(
+  index: Map<string, NasdaqListing>
+): Record<string, NasdaqListing> {
+  return Object.fromEntries(index);
+}
+
+export function indexFromRecord(
+  record: Record<string, NasdaqListing>
+): Map<string, NasdaqListing> {
+  return new Map(Object.entries(record));
+}
+
+function remember(index: Map<string, NasdaqListing>): Map<string, NasdaqListing> {
+  mem = { expires: Date.now() + MEM_TTL_MS, index };
+  return index;
+}
+
+/** Upstream Nasdaq fetch. Safe to call from Node; Edge may be blocked. */
+export async function fetchNasdaqFromNasdaqDotCom(
+  timeoutMs?: number
+): Promise<Map<string, NasdaqListing>> {
+  const res = await fetch(NASDAQ_DEFICIENT_API, {
+    headers: NASDAQ_HEADERS,
+    cache: 'no-store',
+    ...(timeoutMs != null ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
+  });
+  if (!res.ok) throw new Error(`nasdaq deficient ${res.status}`);
+  const json: unknown = await res.json();
+  return parseNasdaqDeficientPayload(json);
+}
+
+function internalNasdaqUrl(): string | null {
+  const explicit = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '');
+  if (explicit) return `${explicit}/api/nasdaq-deficient`;
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel.replace(/^https?:\/\//, '')}/api/nasdaq-deficient`;
+  return null;
+}
+
+async function fetchNasdaqFromInternalApi(): Promise<Map<string, NasdaqListing>> {
+  const url = internalNasdaqUrl();
+  if (!url) throw new Error('nasdaq deficient proxy url missing');
+  const res = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`nasdaq deficient proxy ${res.status}`);
+  const json = (await res.json()) as { listings?: Record<string, NasdaqListing> };
+  if (!json.listings || Object.keys(json.listings).length === 0) {
+    throw new Error('nasdaq deficient proxy empty');
+  }
+  return indexFromRecord(json.listings);
+}
+
 export async function fetchNasdaqDeficientIndex(): Promise<
   Map<string, NasdaqListing>
 > {
   const now = Date.now();
   if (mem && mem.expires > now) return mem.index;
 
-  const res = await fetch(NASDAQ_DEFICIENT_API, {
-    headers: {
-      Accept: 'application/json',
-      Origin: 'https://www.nasdaq.com',
-      Referer: 'https://www.nasdaq.com/',
-    },
-    next: { revalidate: 3600 },
-  });
-  if (!res.ok) throw new Error(`nasdaq deficient ${res.status}`);
-  const json: unknown = await res.json();
-  const index = parseNasdaqDeficientPayload(json);
-  mem = { expires: now + MEM_TTL_MS, index };
-  return index;
+  try {
+    return remember(await fetchNasdaqFromNasdaqDotCom(800));
+  } catch (directErr) {
+    console.warn(
+      'nasdaq deficient direct failed',
+      directErr instanceof Error ? directErr.message : directErr
+    );
+    try {
+      return remember(await fetchNasdaqFromInternalApi());
+    } catch (proxyErr) {
+      console.warn(
+        'nasdaq deficient proxy failed',
+        proxyErr instanceof Error ? proxyErr.message : proxyErr
+      );
+      throw directErr;
+    }
+  }
 }
 
 export async function lookupNasdaqDeficient(ticker: string): Promise<NasdaqListing> {

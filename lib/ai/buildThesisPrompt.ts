@@ -219,6 +219,9 @@ function formatFastVerdict(fv: FastVerdictPromptSlice): string {
   if (fv.nasdaqListing) {
     lines.push(`Nasdaq listing: ${fv.nasdaqListing} (soft flag — not a hard walk-away)`);
   }
+  if (fv.regSho) {
+    lines.push(`Reg SHO: ${fv.regSho} (soft flag — not a hard walk-away)`);
+  }
   if (fv.unavailable?.length) {
     lines.push(`Unavailable inputs: ${fv.unavailable.join(', ')}`);
   }

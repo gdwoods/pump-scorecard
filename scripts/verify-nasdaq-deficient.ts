@@ -89,6 +89,13 @@ try {
   threw = true;
 }
 assert(threw, 'malformed payload throws');
+threw = false;
+try {
+  parseNasdaqDeficientPayload({ data: { noncomplaintCompanyList: { rows: [] } } });
+} catch {
+  threw = true;
+}
+assert(threw, 'empty rows throw');
 
 const base: FastVerdict = {
   ticker: 'ADGM',
@@ -155,6 +162,7 @@ const mockTier = {
   droppiness: skip,
   burn: skip,
   nasdaq: { ok: true as const, value: adgm },
+  regSho: skip,
 } as Tier2Bundle;
 const built = buildFastVerdict('ADGM', mockTier, Date.now());
 assert(built.nasdaqListing?.status === 'noncompliant', 'evaluate attaches nasdaq listing');

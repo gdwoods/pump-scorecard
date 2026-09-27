@@ -5,6 +5,7 @@
 import type { FastVerdict } from '@/lib/fast/types';
 import type { FastVerdictPromptSlice } from './types';
 import { formatNasdaqDeficiencySummary } from '@/lib/fast/fetchNasdaqDeficient';
+import { formatRegShoSummary } from '@/lib/fast/fetchRegSho';
 
 function nasdaqListingPromptLine(verdict: FastVerdict): string | null {
   const listing = verdict.nasdaqListing;
@@ -17,6 +18,17 @@ function nasdaqListingPromptLine(verdict: FastVerdict): string | null {
   }
   if (listing.status === 'not_listed') return 'not on Nasdaq noncompliant list';
   return 'Nasdaq list unavailable';
+}
+
+function regShoPromptLine(verdict: FastVerdict): string | null {
+  const listing = verdict.regSho;
+  if (!listing) return null;
+  if (listing.status === 'threshold') {
+    const summary = formatRegShoSummary(listing);
+    return summary ? `Reg SHO threshold — ${summary}` : 'Reg SHO threshold';
+  }
+  if (listing.status === 'not_listed') return 'not on Reg SHO threshold list';
+  return 'Reg SHO list unavailable';
 }
 
 export function fastVerdictToPromptSlice(verdict: FastVerdict): FastVerdictPromptSlice {
@@ -41,5 +53,6 @@ export function fastVerdictToPromptSlice(verdict: FastVerdict): FastVerdictPromp
     dataCompleteness: verdict.dataCompleteness,
     unavailable: verdict.unavailable,
     nasdaqListing: nasdaqListingPromptLine(verdict),
+    regSho: regShoPromptLine(verdict),
   };
 }
