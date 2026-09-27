@@ -1,23 +1,30 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
-  fetchNasdaqFromNasdaqDotCom,
+  fetchNasdaqFromNasdaqDotComCached,
   indexToRecord,
+  listingFromIndex,
 } from '@/lib/fast/fetchNasdaqDeficient';
 
 export const runtime = 'nodejs';
 export const revalidate = 3600;
 
-export async function GET() {
+const CACHE_HEADERS = {
+  'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600',
+};
+
+export async function GET(req: NextRequest) {
   try {
-    const index = await fetchNasdaqFromNasdaqDotCom();
+    const ticker = req.nextUrl.searchParams.get('ticker')?.trim().toUpperCase() || '';
+    const index = await fetchNasdaqFromNasdaqDotComCached();
+    if (ticker) {
+      return NextResponse.json(
+        { listing: listingFromIndex(index, ticker) },
+        { status: 200, headers: CACHE_HEADERS }
+      );
+    }
     return NextResponse.json(
       { listings: indexToRecord(index) },
-      {
-        status: 200,
-        headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600',
-        },
-      }
+      { status: 200, headers: CACHE_HEADERS }
     );
   } catch (err) {
     console.warn(

@@ -164,7 +164,11 @@ function remember(index: Map<string, NasdaqListing>): Map<string, NasdaqListing>
   return index;
 }
 
-/** Upstream Nasdaq fetch. Safe to call from Node; Edge may be blocked. */
+function isVercelEdge(): boolean {
+  return Boolean(process.env.VERCEL) && process.env.NEXT_RUNTIME === 'edge';
+}
+
+/** Upstream Nasdaq fetch. Safe to call from Node; Edge is blocked / times out. */
 export async function fetchNasdaqFromNasdaqDotCom(
   timeoutMs?: number
 ): Promise<Map<string, NasdaqListing>> {
@@ -178,27 +182,40 @@ export async function fetchNasdaqFromNasdaqDotCom(
   return parseNasdaqDeficientPayload(json);
 }
 
-function internalNasdaqUrl(): string | null {
-  const explicit = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '');
-  if (explicit) return `${explicit}/api/nasdaq-deficient`;
-  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-  if (vercel) return `https://${vercel.replace(/^https?:\/\//, '')}/api/nasdaq-deficient`;
-  return null;
+/** Cached origin fetch for the Node proxy. */
+export async function fetchNasdaqFromNasdaqDotComCached(): Promise<
+  Map<string, NasdaqListing>
+> {
+  const now = Date.now();
+  if (mem && mem.expires > now) return mem.index;
+  return remember(await fetchNasdaqFromNasdaqDotCom());
 }
 
-async function fetchNasdaqFromInternalApi(): Promise<Map<string, NasdaqListing>> {
-  const url = internalNasdaqUrl();
+function internalNasdaqUrl(ticker?: string): string | null {
+  const explicit = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '');
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  const host = explicit || (vercel ? `https://${vercel.replace(/^https?:\/\//, '')}` : null);
+  if (!host) return null;
+  const base = `${host}/api/nasdaq-deficient`;
+  if (!ticker) return base;
+  return `${base}?ticker=${encodeURIComponent(ticker)}`;
+}
+
+async function fetchNasdaqListingFromInternalApi(ticker: string): Promise<NasdaqListing> {
+  const url = internalNasdaqUrl(ticker);
   if (!url) throw new Error('nasdaq deficient proxy url missing');
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
     cache: 'no-store',
   });
   if (!res.ok) throw new Error(`nasdaq deficient proxy ${res.status}`);
-  const json = (await res.json()) as { listings?: Record<string, NasdaqListing> };
-  if (!json.listings || Object.keys(json.listings).length === 0) {
-    throw new Error('nasdaq deficient proxy empty');
-  }
-  return indexFromRecord(json.listings);
+  const json = (await res.json()) as {
+    listing?: NasdaqListing;
+    listings?: Record<string, NasdaqListing>;
+  };
+  if (json.listing?.status) return json.listing;
+  if (json.listings) return listingFromIndex(indexFromRecord(json.listings), ticker);
+  throw new Error('nasdaq deficient proxy empty');
 }
 
 export async function fetchNasdaqDeficientIndex(): Promise<
@@ -206,27 +223,27 @@ export async function fetchNasdaqDeficientIndex(): Promise<
 > {
   const now = Date.now();
   if (mem && mem.expires > now) return mem.index;
-
-  try {
-    return remember(await fetchNasdaqFromNasdaqDotCom(800));
-  } catch (directErr) {
-    console.warn(
-      'nasdaq deficient direct failed',
-      directErr instanceof Error ? directErr.message : directErr
-    );
-    try {
-      return remember(await fetchNasdaqFromInternalApi());
-    } catch (proxyErr) {
-      console.warn(
-        'nasdaq deficient proxy failed',
-        proxyErr instanceof Error ? proxyErr.message : proxyErr
-      );
-      throw directErr;
-    }
-  }
+  return remember(await fetchNasdaqFromNasdaqDotCom());
 }
 
 export async function lookupNasdaqDeficient(ticker: string): Promise<NasdaqListing> {
+  const now = Date.now();
+  if (mem && mem.expires > now) return listingFromIndex(mem.index, ticker);
+
+  // Vercel Edge cannot reach api.nasdaq.com; a direct 800ms abort also ate the
+  // budget before the Node proxy could answer. Ask the Node route instead.
+  if (isVercelEdge()) {
+    try {
+      return await fetchNasdaqListingFromInternalApi(ticker);
+    } catch (err) {
+      console.warn(
+        'nasdaq deficient proxy failed',
+        err instanceof Error ? err.message : err
+      );
+      throw err;
+    }
+  }
+
   const index = await fetchNasdaqDeficientIndex();
   return listingFromIndex(index, ticker);
 }

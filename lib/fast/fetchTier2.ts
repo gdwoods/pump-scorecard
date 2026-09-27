@@ -400,7 +400,7 @@ export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
       settleSource('news', Math.min(ms, 1000), () => fetchNewsBundle(ticker)),
       settleSource('droppiness-kv', 200, () => fetchDroppinessCached(ticker)),
       settleSource('burn-runway', Math.min(ms, 1200), () => fetchBurnRunway(ticker)),
-      settleSource('nasdaq-deficient', Math.min(ms, 2000), () => lookupNasdaqDeficient(ticker)),
+      settleSource('nasdaq-deficient', 4000, () => lookupNasdaqDeficient(ticker)),
       settleSource('regsho-threshold', Math.min(ms, 2000), () => lookupRegSho(ticker)),
     ]);
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip } from "@/components/ui/tooltip";
 import { droppinessTailwindClass } from "@/lib/droppiness/colors";
@@ -44,6 +45,32 @@ function RegShoThresholdValue({ listing }: { listing: RegShoListing }) {
       {summary ? ` — ${summary}` : ""}
     </>
   );
+}
+
+function useResolvedNasdaqListing(
+  ticker: string,
+  listing: NasdaqListing | undefined
+): NasdaqListing | undefined {
+  const [resolved, setResolved] = useState(listing);
+
+  useEffect(() => {
+    setResolved(listing);
+    if (!ticker || listing?.status !== "unavailable") return;
+    let cancelled = false;
+    fetch(`/api/nasdaq-deficient?ticker=${encodeURIComponent(ticker)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { listing?: NasdaqListing } | null) => {
+        if (!cancelled && data?.listing?.status && data.listing.status !== "unavailable") {
+          setResolved(data.listing);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [ticker, listing]);
+
+  return resolved;
 }
 
 function NasdaqNoncompliantValue({ listing }: { listing: NasdaqListing }) {
@@ -127,6 +154,11 @@ export default function FastVerdictCard({
   /** Short Check scoring walk-aways (distinct from fast `verdict.flags`). */
   walkAwayFlags?: string[];
 }) {
+  const nasdaqListing = useResolvedNasdaqListing(
+    verdict?.ticker ?? "",
+    verdict?.nasdaqListing
+  );
+
   if (loading) {
     return (
       <Card className="p-6 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 rounded-xl">
@@ -256,12 +288,12 @@ export default function FastVerdictCard({
           </div>
           <div>
             <span className="text-gray-500 dark:text-gray-400">Nasdaq </span>
-            {!verdict.nasdaqListing || verdict.nasdaqListing.status === "unavailable" ? (
+            {!nasdaqListing || nasdaqListing.status === "unavailable" ? (
               <span className="text-amber-700 dark:text-amber-400">list unavailable</span>
-            ) : verdict.nasdaqListing.status === "not_listed" ? (
+            ) : nasdaqListing.status === "not_listed" ? (
               "not on noncompliant list"
             ) : (
-              <NasdaqNoncompliantValue listing={verdict.nasdaqListing} />
+              <NasdaqNoncompliantValue listing={nasdaqListing} />
             )}
           </div>
           <div>
