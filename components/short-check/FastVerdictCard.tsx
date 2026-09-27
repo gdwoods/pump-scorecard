@@ -73,6 +73,32 @@ function useResolvedNasdaqListing(
   return resolved;
 }
 
+function useResolvedRegShoListing(
+  ticker: string,
+  listing: RegShoListing | undefined
+): RegShoListing | undefined {
+  const [resolved, setResolved] = useState(listing);
+
+  useEffect(() => {
+    setResolved(listing);
+    if (!ticker || listing?.status !== "unavailable") return;
+    let cancelled = false;
+    fetch(`/api/regsho-threshold?ticker=${encodeURIComponent(ticker)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { listing?: RegShoListing } | null) => {
+        if (!cancelled && data?.listing?.status && data.listing.status !== "unavailable") {
+          setResolved(data.listing);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [ticker, listing]);
+
+  return resolved;
+}
+
 function NasdaqNoncompliantValue({ listing }: { listing: NasdaqListing }) {
   const summary = listing.deficiencies
     .map((d) => (d.notificationDate ? `${d.type} (${d.notificationDate})` : d.type))
@@ -158,6 +184,7 @@ export default function FastVerdictCard({
     verdict?.ticker ?? "",
     verdict?.nasdaqListing
   );
+  const regSho = useResolvedRegShoListing(verdict?.ticker ?? "", verdict?.regSho);
 
   if (loading) {
     return (
@@ -298,12 +325,12 @@ export default function FastVerdictCard({
           </div>
           <div>
             <span className="text-gray-500 dark:text-gray-400">Reg SHO </span>
-            {!verdict.regSho || verdict.regSho.status === "unavailable" ? (
+            {!regSho || regSho.status === "unavailable" ? (
               <span className="text-amber-700 dark:text-amber-400">list unavailable</span>
-            ) : verdict.regSho.status === "not_listed" ? (
+            ) : regSho.status === "not_listed" ? (
               "not on threshold list"
             ) : (
-              <RegShoThresholdValue listing={verdict.regSho} />
+              <RegShoThresholdValue listing={regSho} />
             )}
           </div>
         </div>

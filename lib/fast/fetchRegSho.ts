@@ -183,8 +183,13 @@ async function fetchRegShoFile(
   }
   if (!res.ok) throw new Error(`regsho ${ymd} ${res.status}`);
   const contentType = res.headers.get('content-type') ?? '';
-  if (contentType.includes('text/html')) throw new Error(`regsho ${ymd} html`);
   const text = await res.text();
+  if (
+    contentType.includes('text/html') ||
+    /incapsula|imperva|additional security check/i.test(text)
+  ) {
+    throw new Error('regsho https blocked');
+  }
   return parseRegShoFile(text, ymd);
 }
 
@@ -204,59 +209,72 @@ export async function fetchRegShoFromNasdaqTrader(
       return await fetchRegShoFile(ymd, remaining);
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err));
+      if (lastErr.message.includes('https blocked')) break;
     }
   }
 
   throw lastErr ?? new Error('regsho list unavailable');
 }
 
-function internalRegShoUrl(): string | null {
-  const explicit = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '');
-  if (explicit) return `${explicit}/api/regsho-threshold`;
-  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-  if (vercel) return `https://${vercel.replace(/^https?:\/\//, '')}/api/regsho-threshold`;
-  return null;
+function isVercelEdge(): boolean {
+  return Boolean(process.env.VERCEL) && process.env.NEXT_RUNTIME === 'edge';
 }
 
-async function fetchRegShoFromInternalApi(): Promise<Map<string, RegShoListing>> {
-  const url = internalRegShoUrl();
+function internalRegShoUrl(ticker?: string): string | null {
+  const explicit = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '');
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  const host = explicit || (vercel ? `https://${vercel.replace(/^https?:\/\//, '')}` : null);
+  if (!host) return null;
+  const base = `${host}/api/regsho-threshold`;
+  if (!ticker) return base;
+  return `${base}?ticker=${encodeURIComponent(ticker)}`;
+}
+
+async function fetchRegShoListingFromInternalApi(ticker: string): Promise<RegShoListing> {
+  const url = internalRegShoUrl(ticker);
   if (!url) throw new Error('regsho proxy url missing');
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
     cache: 'no-store',
   });
   if (!res.ok) throw new Error(`regsho proxy ${res.status}`);
-  const json = (await res.json()) as { listings?: Record<string, RegShoListing> };
-  if (!json.listings || Object.keys(json.listings).length === 0) {
-    throw new Error('regsho proxy empty');
-  }
-  return regShoIndexFromRecord(json.listings);
+  const json = (await res.json()) as {
+    listing?: RegShoListing;
+    listings?: Record<string, RegShoListing>;
+  };
+  if (json.listing?.status) return json.listing;
+  if (json.listings) return listingFromRegShoIndex(regShoIndexFromRecord(json.listings), ticker);
+  throw new Error('regsho proxy empty');
+}
+
+export async function cacheRegShoIndex(
+  loader: () => Promise<Map<string, RegShoListing>>
+): Promise<Map<string, RegShoListing>> {
+  const now = Date.now();
+  if (mem && mem.expires > now) return mem.index;
+  return remember(await loader());
 }
 
 export async function fetchRegShoIndex(): Promise<Map<string, RegShoListing>> {
-  const now = Date.now();
-  if (mem && mem.expires > now) return mem.index;
-
-  try {
-    return remember(await fetchRegShoFromNasdaqTrader(800));
-  } catch (directErr) {
-    console.warn(
-      'regsho direct failed',
-      directErr instanceof Error ? directErr.message : directErr
-    );
-    try {
-      return remember(await fetchRegShoFromInternalApi());
-    } catch (proxyErr) {
-      console.warn(
-        'regsho proxy failed',
-        proxyErr instanceof Error ? proxyErr.message : proxyErr
-      );
-      throw directErr;
-    }
-  }
+  return cacheRegShoIndex(() => fetchRegShoFromNasdaqTrader());
 }
 
 export async function lookupRegSho(ticker: string): Promise<RegShoListing> {
+  const now = Date.now();
+  if (mem && mem.expires > now) return listingFromRegShoIndex(mem.index, ticker);
+
+  if (isVercelEdge()) {
+    try {
+      return await fetchRegShoListingFromInternalApi(ticker);
+    } catch (err) {
+      console.warn(
+        'regsho proxy failed',
+        err instanceof Error ? err.message : err
+      );
+      throw err;
+    }
+  }
+
   const index = await fetchRegShoIndex();
   return listingFromRegShoIndex(index, ticker);
 }

@@ -401,7 +401,7 @@ export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
       settleSource('droppiness-kv', 200, () => fetchDroppinessCached(ticker)),
       settleSource('burn-runway', Math.min(ms, 1200), () => fetchBurnRunway(ticker)),
       settleSource('nasdaq-deficient', 4000, () => lookupNasdaqDeficient(ticker)),
-      settleSource('regsho-threshold', Math.min(ms, 2000), () => lookupRegSho(ticker)),
+      settleSource('regsho-threshold', 8000, () => lookupRegSho(ticker)),
     ]);
 
   return { snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn, nasdaq, regSho };
