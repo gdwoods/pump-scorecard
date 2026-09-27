@@ -72,6 +72,43 @@ const delistingSurvival: QuickScorecardInput = {
   shortCheck: { cashNeedPoints: 18 },
 };
 
+const officialNoncompliantOnly: QuickScorecardInput = {
+  ticker: 'ADGM',
+  now,
+  capitalPressure: {
+    available: true,
+    score: 20,
+    status: 'low',
+    dilutionLikelihood: 2,
+    events: [],
+  },
+  fastVerdict: {
+    nasdaqListing: {
+      status: 'noncompliant',
+      summary: 'Bid Price (6/12/2026)',
+      market: 'NASDAQ Global Market',
+    },
+  },
+};
+
+const officialPlusCpDeficiency: QuickScorecardInput = {
+  ticker: 'BOTH',
+  now,
+  capitalPressure: {
+    available: true,
+    score: 50,
+    status: 'elevated',
+    dilutionLikelihood: 5,
+    events: [{ type: 'nasdaq_deficiency', eventDate: '2026-07-01' }],
+  },
+  fastVerdict: {
+    nasdaqListing: {
+      status: 'noncompliant',
+      summary: 'Equity (8/13/2026)',
+    },
+  },
+};
+
 const unavailableCp: QuickScorecardInput = {
   ticker: 'NOCP',
   now,
@@ -118,6 +155,27 @@ function main() {
   const delist = buildQuickScorecard(delistingSurvival);
   assert((delist.delisting.value ?? 0) >= 7, 'Nasdaq deficiency elevates delisting score');
   assert((delist.survivalPump.value ?? 0) >= 4, 'deficiency + cash need raises survival-pump');
+
+  const official = buildQuickScorecard(officialNoncompliantOnly);
+  assert((official.delisting.value ?? 0) >= 7, 'official Nasdaq noncompliant elevates delisting');
+  assert(
+    official.delisting.confidence === 'verified',
+    'official Nasdaq noncompliant marks delisting verified'
+  );
+  assert(
+    /noncompliant list/i.test(official.delisting.summary),
+    'delisting summary cites official noncompliant list'
+  );
+
+  const both = buildQuickScorecard(officialPlusCpDeficiency);
+  assert(
+    (both.delisting.value ?? 0) === 7,
+    'official list + CP deficiency does not double-count delisting points'
+  );
+  assert(
+    /noncompliant list/i.test(both.delisting.summary) && /CP window/i.test(both.delisting.summary),
+    'both official list and CP deficiency appear in delisting notes'
+  );
 
   const noCp = buildQuickScorecard(unavailableCp);
   assert(noCp.offering.value == null, 'unavailable CP leaves offering unknown');
