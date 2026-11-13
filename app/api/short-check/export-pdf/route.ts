@@ -318,6 +318,26 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      if (pumpScorecardData.operatingNexus?.headline) {
+        yPosition = addSectionHeader('Operating nexus', yPosition);
+        yPosition -= 10;
+        yPosition = addText(pumpScorecardData.operatingNexus.headline, margin, yPosition, 10, false);
+        const evidence = Array.isArray(pumpScorecardData.operatingNexus.evidence)
+          ? pumpScorecardData.operatingNexus.evidence.slice(0, 3)
+          : [];
+        for (const item of evidence) {
+          if (!item?.excerpt) continue;
+          yPosition = addText(
+            `${item.form || 'Filing'} ${item.filingDate || ''}: ${item.excerpt}`,
+            margin,
+            yPosition,
+            9,
+            false
+          );
+        }
+        yPosition -= sectionSpacing;
+      }
+
       // Fundamentals
       if (pumpScorecardData.marketCap || pumpScorecardData.floatShares) {
         yPosition = addSectionHeader('Fundamentals', yPosition);

@@ -40,6 +40,14 @@ export default function Fundamentals({ result }: Props) {
         >
           <strong>Country:</strong> {flag} {result.country ?? "Unknown"}
         </li>
+        {result.operatingNexus?.headline && (
+          <li className="col-span-2 text-amber-800 dark:text-amber-300">
+            <strong>Operating nexus:</strong>{" "}
+            {Array.isArray(result.operatingNexus.places) && result.operatingNexus.places.length > 0
+              ? result.operatingNexus.places.join(", ")
+              : result.operatingNexus.headline}
+          </li>
+        )}
 
         <li>
           <strong>Shares Outstanding:</strong>{" "}

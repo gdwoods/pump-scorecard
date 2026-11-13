@@ -11,6 +11,7 @@ import { ExtractedData } from "@/lib/shortCheckTypes";
 import { generateRiskSynopsis } from "@/lib/shortCheckHelpers";
 import { generateFormattedSummary } from "@/lib/summaryGenerator";
 import { countryInfo } from "@/utils/countryToFlag";
+import OperatingNexusCallout from "./OperatingNexusCallout";
 import {
   capitalPressureShortCheckNote,
   detectOfferingDisagreement,
@@ -446,6 +447,7 @@ export default function ShortCheckResults({
               </div>
             )}
           </div>
+          <OperatingNexusCallout nexus={pumpScorecardData?.operatingNexus} />
         </Card>
       )}
 

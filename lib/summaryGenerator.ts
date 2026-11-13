@@ -13,6 +13,19 @@ interface SummaryOptions {
   format: 'quick' | 'full';
 }
 
+function appendOperatingNexus(lines: string[], pumpScorecardData?: any) {
+  const nexus = pumpScorecardData?.operatingNexus;
+  if (!nexus?.headline) return;
+  lines.push(nexus.headline);
+  const evidence = Array.isArray(nexus.evidence) ? nexus.evidence.slice(0, 3) : [];
+  for (const item of evidence) {
+    const excerpt = String(item?.excerpt || '').trim();
+    if (!excerpt) continue;
+    lines.push(`• ${item.form || 'Filing'} ${item.filingDate || ''}: ${excerpt}`.trim());
+  }
+  lines.push('');
+}
+
 export function generateFormattedSummary(options: SummaryOptions): string {
   const { ticker, result, extractedData, pumpScorecardData, format } = options;
 
@@ -34,6 +47,7 @@ function generateQuickSummary(
   lines.push(`SHORT CHECK - ${ticker.toUpperCase()}`);
   lines.push(`Rating: ${result.rating.toFixed(1)}% | ${result.category}`);
   lines.push('');
+  appendOperatingNexus(lines, pumpScorecardData);
 
   // Alert Labels
   if (result.alertLabels && result.alertLabels.length > 0) {
@@ -146,6 +160,7 @@ function generateFullSummary(
   lines.push(`${result.rating.toFixed(1)}%`);
   lines.push(`Category: ${result.category}`);
   lines.push('');
+  appendOperatingNexus(lines, pumpScorecardData);
 
   // Alert Labels
   if (result.alertLabels && result.alertLabels.length > 0) {

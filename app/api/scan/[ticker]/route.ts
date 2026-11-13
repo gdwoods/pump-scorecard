@@ -12,6 +12,7 @@ import { persistDroppiness } from "@/lib/droppiness/kv";
 import { runCapitalPressure } from "@/lib/capitalPressure/run";
 import { unavailableCapitalPressure } from "@/lib/capitalPressure/unavailable";
 import { computeLegacyWeightedRiskScore } from "@/lib/scan/legacyWeightedRiskScore";
+import { fetchOperatingNexus } from "@/lib/nexus/fetchOperatingNexus";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -679,9 +680,8 @@ try {
       droppinessVerdict = "Spikes often hold — many large moves remained elevated after the initial run-up.";
     }
 
-    let capitalPressure;
-    try {
-      capitalPressure = await runCapitalPressure({
+    const [capitalPressureResult, operatingNexusResult] = await Promise.allSettled([
+      runCapitalPressure({
         ticker: upperTicker,
         cik: secData.cik,
         submissions: secData.submissions,
@@ -705,13 +705,31 @@ try {
             ? droppinessData.detail.length
             : 0,
         },
-      });
-    } catch (err) {
-      console.error(`[${upperTicker}] Capital pressure failed:`, err);
-      capitalPressure = unavailableCapitalPressure(
-        err instanceof Error ? err.message : 'Capital pressure computation failed'
-      );
+      }),
+      fetchOperatingNexus({
+        country,
+        cik: secData.cik,
+        submissions: secData.submissions,
+      }),
+    ]);
+
+    if (capitalPressureResult.status === 'rejected') {
+      console.error(`[${upperTicker}] Capital pressure failed:`, capitalPressureResult.reason);
     }
+    if (operatingNexusResult.status === 'rejected') {
+      console.error(`[${upperTicker}] Operating nexus check failed:`, operatingNexusResult.reason);
+    }
+
+    const capitalPressure = capitalPressureResult.status === 'fulfilled'
+      ? capitalPressureResult.value
+      : unavailableCapitalPressure(
+          capitalPressureResult.reason instanceof Error
+            ? capitalPressureResult.reason.message
+            : 'Capital pressure computation failed'
+        );
+    const operatingNexus = operatingNexusResult.status === 'fulfilled'
+      ? operatingNexusResult.value
+      : null;
 
     const responseData = {
       ticker: upperTicker,
@@ -752,6 +770,7 @@ try {
       dilution_offering,
       promoted_stock: promotions.length > 0 && promotions[0].type !== "Manual Check",
       risky_country,
+      operatingNexus,
       hasOptions,
       news,
       sentiment: sentimentData,

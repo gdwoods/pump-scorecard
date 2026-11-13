@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import ShortCheckUpload from "@/components/short-check/ShortCheckUpload";
 import ShortCheckResults from "@/components/short-check/ShortCheckResults";
+import OperatingNexusCallout from "@/components/short-check/OperatingNexusCallout";
 import FastVerdictCard from "@/components/short-check/FastVerdictCard";
 import { generateRiskSynopsis } from "@/lib/shortCheckHelpers";
 import {
@@ -644,6 +645,7 @@ export default function ShortCheckPage() {
                 Quick analysis — no DT screenshot
               </span>
             </div>
+            <OperatingNexusCallout nexus={pumpScorecardData?.operatingNexus} />
           </Card>
         )}
 
