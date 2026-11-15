@@ -8,8 +8,6 @@ export type NexusApiResponse = {
   evidenceUrl: string | null;
   asOf: string | null;
   status: NexusApiStatus;
-  attribution: string;
-  attributionUrl: string;
 };
 
 export type NexusCachedPayload = {

@@ -2,15 +2,6 @@ import type { OperatingNexus } from './detectOperatingNexus';
 import { isUsListedCountry } from './locales';
 import type { NexusApiResponse, NexusApiStatus } from './types';
 
-export const NEXUS_ATTRIBUTION = 'Operating nexus · Short Check';
-
-export function nexusAttributionUrl(): string {
-  const base = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '');
-  if (base?.startsWith('http')) return base;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return 'https://short-check.vercel.app';
-}
-
 export type BuildNexusApiInput = {
   ticker: string;
   country?: string | null;
@@ -23,7 +14,6 @@ export type BuildNexusApiInput = {
 
 export function buildNexusApiResponse(input: BuildNexusApiInput): NexusApiResponse {
   const ticker = input.ticker.toUpperCase();
-  const attributionUrl = nexusAttributionUrl();
 
   let status: NexusApiStatus;
   let overseas = false;
@@ -69,7 +59,5 @@ export function buildNexusApiResponse(input: BuildNexusApiInput): NexusApiRespon
     evidenceUrl,
     asOf,
     status,
-    attribution: NEXUS_ATTRIBUTION,
-    attributionUrl,
   };
 }

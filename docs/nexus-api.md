@@ -48,9 +48,7 @@ curl -sS \
   "reason": "Listed in the US. Filings tie operations or control to Taiwan and the Cayman Islands.",
   "evidenceUrl": "https://www.sec.gov/Archives/edgar/data/...",
   "asOf": "2026-11-10",
-  "status": "flagged",
-  "attribution": "Operating nexus · Short Check",
-  "attributionUrl": "https://short-check.vercel.app"
+  "status": "flagged"
 }
 ```
 
@@ -84,13 +82,9 @@ curl -sS \
 
 ---
 
-## Attribution (required in UI)
+## UI hints
 
-When `status === "flagged"`, show a tooltip or footnote such as:
-
-> Overseas operating nexus: Taiwan, Cayman Islands — via [Short Check](https://short-check.vercel.app).
-
-Use `attribution` and `attributionUrl` from the JSON. Link to `attributionUrl` (or `evidenceUrl` for primary SEC source).
+When `status === "flagged"`, you can surface `countries` and `reason` in a tooltip (e.g. overseas operating nexus). Optionally link to `evidenceUrl` for the primary SEC filing.
 
 ---
 
