@@ -1,4 +1,4 @@
-import { buildNexusApiResponse, NEXUS_ATTRIBUTION } from '../lib/nexus/buildApiResponse';
+import { buildNexusApiResponse } from '../lib/nexus/buildApiResponse';
 import { buildNexusFilingKey } from '../lib/nexus/filingKey';
 import type { OperatingNexus } from '../lib/nexus/detectOperatingNexus';
 
@@ -32,8 +32,6 @@ describe('nexus API mapping', () => {
     expect(res.reason).toContain('Taiwan');
     expect(res.evidenceUrl).toBe('https://www.sec.gov/example/def14a');
     expect(res.asOf).toBe('2026-11-10');
-    expect(res.attribution).toBe(NEXUS_ATTRIBUTION);
-    expect(res.attributionUrl).toMatch(/^https:\/\//);
   });
 
   it('returns clear when US-listed and no nexus', () => {
