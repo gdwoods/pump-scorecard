@@ -82,6 +82,50 @@ async function fetchFilingText(url: string): Promise<string | null> {
   }
 }
 
+export type OperatingNexusFetchResult = {
+  nexus: OperatingNexus | null;
+  attemptedDocuments: number;
+  loadedDocuments: number;
+};
+
+export async function fetchOperatingNexusDetailed(
+  args: {
+    country?: string | null;
+    cik?: string | null;
+    submissions?: { filings?: { recent?: RecentFilings } } | null;
+  },
+  options?: { delayBetweenDocumentsMs?: number }
+): Promise<OperatingNexusFetchResult> {
+  if (!isUsListedCountry(args.country)) {
+    return { nexus: null, attemptedDocuments: 0, loadedDocuments: 0 };
+  }
+  const filings = selectNexusFilings(args.cik, args.submissions);
+  if (filings.length === 0) {
+    return { nexus: null, attemptedDocuments: 0, loadedDocuments: 0 };
+  }
+
+  const docs: Array<NexusFilingRef & { text: string }> = [];
+  const delay = options?.delayBetweenDocumentsMs ?? 0;
+
+  for (let i = 0; i < filings.length; i++) {
+    if (i > 0 && delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    const filing = filings[i];
+    const text = await fetchFilingText(filing.documentUrl);
+    if (text) docs.push({ ...filing, text });
+  }
+
+  if (docs.length === 0) {
+    return { nexus: null, attemptedDocuments: filings.length, loadedDocuments: 0 };
+  }
+  return {
+    nexus: detectOperatingNexus(docs),
+    attemptedDocuments: filings.length,
+    loadedDocuments: docs.length,
+  };
+}
+
 export async function fetchOperatingNexus(args: {
   country?: string | null;
   cik?: string | null;

@@ -65,7 +65,12 @@ Additional server-side variables:
 
 - `GROQ_API_KEY` — AI thesis synthesis (`/api/ai-thesis`)
 - `DROPPINESS_WATCHLIST` — comma-separated tickers seeded by `/api/cron/droppiness` (optional)
-- `CRON_SECRET` — auth header for droppiness cron
+- `CRON_SECRET` — auth header for cron routes (droppiness, nexus-warm, wire-news)
+- `NEXUS_API_KEY` — shared secret for partner `GET /api/nexus/[ticker]` (`x-api-key` header)
+- `NEXUS_PARTNER_TICKERS` — optional comma-separated tickers for daily nexus warm cron (e.g. Rob’s gainer watchlist)
+- `NEXUS_RATE_LIMIT_PER_DAY` — optional per-key daily cap (default `2000`)
+- `NEXUS_CACHE_TTL_DAYS` — optional KV TTL in days (default `21`)
+- `NEXUS_SEC_THROTTLE_MS` — optional delay between SEC filing fetches (default `250`)
 - Vercel KV credentials (choose whichever pair your account provides):
   - `KV_REST_API_REDIS_URL` and `KV_REST_API_REDIS_TOKEN`
   - or `KV_REST_API_URL` and `KV_REST_API_TOKEN`
