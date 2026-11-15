@@ -77,7 +77,7 @@ curl -sS \
 
 1. **Cache per ticker for 24 hours** in the partner app (memory or local storage). Filings change quarterly at most.
 2. Responses include CDN cache headers (`s-maxage=3600`); repeated calls within an hour may be served from the edge.
-3. Server-side results are stored in **Vercel KV** with a **21-day TTL**, keyed by ticker **and** the latest annual + proxy filing dates so a new 10-K or DEF 14A automatically invalidates stale entries.
+3. Server-side results are stored in **Vercel KV** with a **180-day TTL** (about six months), keyed by ticker **and** the latest annual + proxy filing dates so a new 10-K or DEF 14A automatically invalidates stale entries.
 4. Do **not** call the API on every table scroll — batch gainers once per session or use a server-side aggregator.
 
 ---

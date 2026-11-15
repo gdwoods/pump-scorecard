@@ -3,10 +3,12 @@ import { edgeKvGet } from '@/lib/kv/edgeRead';
 import type { NexusCachedPayload } from './types';
 import { NEXUS_KV_PREFIX, NEXUS_UNIVERSE_KEY } from './types';
 
+const DEFAULT_NEXUS_CACHE_TTL_DAYS = 180;
+
 export function nexusCacheTtlSeconds(): number {
   const raw = process.env.NEXUS_CACHE_TTL_DAYS?.trim();
-  const days = raw ? Number.parseInt(raw, 10) : 21;
-  if (!Number.isFinite(days) || days < 1) return 21 * 86400;
+  const days = raw ? Number.parseInt(raw, 10) : DEFAULT_NEXUS_CACHE_TTL_DAYS;
+  if (!Number.isFinite(days) || days < 1) return DEFAULT_NEXUS_CACHE_TTL_DAYS * 86400;
   return days * 86400;
 }
 
