@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/droppiness",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/nexus-warm",
+      "schedule": "30 7 * * *"
     }
   ]
 }
