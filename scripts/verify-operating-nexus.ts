@@ -51,6 +51,22 @@ assert.equal(
   null
 );
 
+assert.equal(
+  detectOperatingNexus([
+    doc(
+      '10-K',
+      "The impacts of war and other geopolitical events, including but not limited to Russia's invasion of Ukraine, are difficult to predict. In response to the Russian military actions, many businesses headquartered in the Eurozone and the United States have stopped doing business with Russia, which may negatively affect the profitability of those companies. The international turmoil may continue to have a negative impact on the stock market generally."
+    ),
+  ]),
+  null,
+  'POLA-style Russia risk factor should not count'
+);
+
+assert.deepEqual(
+  detectOperatingNexus([doc('10-K', 'Our headquarters are located in Taipei, Taiwan.')])?.places,
+  ['Taiwan']
+);
+
 const sea = detectOperatingNexus([
   doc(
     '10-K',
@@ -92,21 +108,21 @@ const filings = selectNexusFilings('0001014763', {
 assert.deepEqual(filings.map((filing) => filing.form), ['10-K', 'DEF 14A']);
 assert.ok(filings[0].documentUrl.includes('form10-k.htm'));
 
-const tenKPath = '/tmp/aimd/10k.htm';
-const proxyPath = '/tmp/aimd/def14a.htm';
-if (fs.existsSync(tenKPath) && fs.existsSync(proxyPath)) {
+const aimdTenKPath = '/tmp/aimd/10k.htm';
+const aimdProxyPath = '/tmp/aimd/def14a.htm';
+if (fs.existsSync(aimdTenKPath) && fs.existsSync(aimdProxyPath)) {
   const live = detectOperatingNexus([
     {
       form: '10-K',
       filingDate: '2026-03-30',
       documentUrl: 'https://www.sec.gov/example/10-k',
-      text: fs.readFileSync(tenKPath, 'utf8'),
+      text: fs.readFileSync(aimdTenKPath, 'utf8'),
     },
     {
       form: 'DEF 14A',
       filingDate: '2026-11-10',
       documentUrl: 'https://www.sec.gov/example/def14a',
-      text: fs.readFileSync(proxyPath, 'utf8'),
+      text: fs.readFileSync(aimdProxyPath, 'utf8'),
     },
   ]);
   console.log('AIMD places:', live?.places);
@@ -117,6 +133,27 @@ if (fs.existsSync(tenKPath) && fs.existsSync(proxyPath)) {
   assert.ok(live?.places.includes('Taiwan'), 'AIMD should include Taiwan');
   assert.ok(live?.places.includes('Cayman Islands'), 'AIMD should include Cayman Islands');
   assert.ok((live?.evidence.length ?? 0) > 0 && (live?.evidence.length ?? 0) <= 3);
+}
+
+const polaTenKPath = '/tmp/pola/10k.htm';
+const polaProxyPath = '/tmp/pola/def14a.htm';
+if (fs.existsSync(polaTenKPath) && fs.existsSync(polaProxyPath)) {
+  const pola = detectOperatingNexus([
+    {
+      form: '10-K',
+      filingDate: '2026-04-15',
+      documentUrl: 'https://www.sec.gov/example/pola-10-k',
+      text: fs.readFileSync(polaTenKPath, 'utf8'),
+    },
+    {
+      form: 'DEF 14A',
+      filingDate: '2026-09-16',
+      documentUrl: 'https://www.sec.gov/example/pola-def14a',
+      text: fs.readFileSync(polaProxyPath, 'utf8'),
+    },
+  ]);
+  console.log('POLA places:', pola?.places ?? null);
+  assert.equal(pola, null, 'POLA should not invent a Russia nexus');
 }
 
 console.log('operating nexus checks passed');

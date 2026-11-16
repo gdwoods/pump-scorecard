@@ -21,19 +21,27 @@ export type OperatingNexus = {
   evidence: OperatingNexusEvidence[];
 };
 
-const OFFICE =
-  /\b(offices?|facilit(?:y|ies)|headquarters|headquartered|product development|research and development|r\s*&\s*d)\b/gi;
+/** Physical operating footprint. "Headquarters/headquartered" are handled separately. */
+const OFFICE_PHYSICAL =
+  /\b(offices?|facilit(?:y|ies)|product development|research and development|r\s*&\s*d|branch(?:es)?)\b/gi;
+const HEADQUARTERS = /\b(headquarters|headquartered)\b/gi;
 const EMPLOYEES = /\bemployees?\b/gi;
+const FIRST_PERSON =
+  /\b(our|we|us|the company(?:'s)?|the issuer(?:'s)?|company's|issuer's)\b/gi;
 const CONTROL =
   /\b(incorporated (?:in|under)|organized under|voting agreement|beneficial(?:ly)?\s+owners?|beneficially owned|wholly[- ]owned)\b/gi;
 const HYPHEN_INCORPORATED = /-incorporated\b/gi;
 const MEETING = /\b(annual meeting|special meeting|will be held)\b/i;
 const ADDRESS = /\b(rd\.|road|street|blvd|avenue|ave\.|floor|city|county|no\.)\b/gi;
-const SUBSIDIARY = /\b(subsidiar(?:y|ies)|affiliates?|branches)\b/gi;
+const SUBSIDIARY = /\b(subsidiar(?:y|ies)|affiliates?)\b/gi;
 const OWNERSHIP = /\b(beneficial(?:ly)?\s+owners?|voting agreement|\d+(?:\.\d+)?\s*%)/i;
+/** Risk-factor / market noise that often names a country without an operating nexus. */
 const BOILERPLATE =
-  /\b(compulsory licen[sc]|intellectual property|export controls?|ofac|tariffs?|economic sanctions|many foreign countries)\b/i;
+  /\b(compulsory licen[sc]|intellectual property|export controls?|ofac|tariffs?|economic sanctions|financial sanctions|many foreign countries|invasion of|military (?:actions?|conflicts?|operations?)|geopolitical|doing business with|nord stream|stock market generally|armed conflict|war in)\b/i;
 const MACHINE_TEXT = /us-gaap|iso4217|xmlns|contextref/i;
+/** Prepositions that put a place in a non-location role ("with Russia", "sanctions on"). */
+const NON_LOCATION_PREP = /\b(with|against|from|into|onto)\s+(?:the\s+)?$/i;
+const LOCATION_PREP = /\b(in|at)\s+(?:the\s+)?$/i;
 
 const GEO_NEXT = new Set([
   'island',
@@ -166,6 +174,31 @@ function near(text: string, start: number, end: number, pattern: RegExp, maxDist
   return false;
 }
 
+function placeIntro(text: string, occurrence: Occurrence): string {
+  return text.slice(Math.max(0, occurrence.index - 24), occurrence.index);
+}
+
+function isNonLocationMention(text: string, occurrence: Occurrence): boolean {
+  return NON_LOCATION_PREP.test(placeIntro(text, occurrence));
+}
+
+/** True for "in Taiwan" and "in Taipei, Taiwan", false for "with Russia". */
+function isLocationMention(text: string, occurrence: Occurrence): boolean {
+  if (isNonLocationMention(text, occurrence)) return false;
+  if (LOCATION_PREP.test(placeIntro(text, occurrence))) return true;
+  const window = text.slice(Math.max(0, occurrence.index - 40), occurrence.index);
+  return /\b(?:located\s+)?(?:in|at)\b/i.test(window);
+}
+
+function hasFirstPersonNear(
+  text: string,
+  start: number,
+  end: number,
+  maxDist: number
+): boolean {
+  return near(text, start, end, FIRST_PERSON, maxDist);
+}
+
 function isNamedEntity(text: string, occurrence: Occurrence): boolean {
   const before = text.slice(Math.max(0, occurrence.index - 8), occurrence.index);
   const after = text.slice(
@@ -178,24 +211,71 @@ function isNamedEntity(text: string, occurrence: Occurrence): boolean {
   );
 }
 
+/** "headquartered in Taiwan" / "headquarters are located in Taiwan", not "business with Russia". */
+function hasDirectionalHeadquarters(text: string, occurrence: Occurrence): boolean {
+  if (isNonLocationMention(text, occurrence)) return false;
+  if (!isLocationMention(text, occurrence)) return false;
+  const start = occurrence.index;
+  const end = occurrence.index + occurrence.match.length;
+  if (!near(text, start, end, HEADQUARTERS, 50)) return false;
+  if (!hasFirstPersonNear(text, start, end, 100)) return false;
+  const window = text.slice(Math.max(0, start - 70), start);
+  return (
+    /\b(?:headquartered|headquarters)\b/i.test(window) &&
+    /\b(?:located\s+)?(?:in|at)\b/i.test(window)
+  );
+}
+
+function hasOwnedOfficeOrEmployees(text: string, occurrence: Occurrence): boolean {
+  if (isNonLocationMention(text, occurrence)) return false;
+  const start = occurrence.index;
+  const end = occurrence.index + occurrence.match.length;
+
+  if (hasDirectionalHeadquarters(text, occurrence)) return true;
+
+  if (near(text, start, end, OFFICE_PHYSICAL, 80)) {
+    return hasFirstPersonNear(text, start, end, 100);
+  }
+  if (near(text, start, end, EMPLOYEES, 50)) {
+    return hasFirstPersonNear(text, start, end, 80);
+  }
+  if (near(text, start, end, SUBSIDIARY, 40) && isLocationMention(text, occurrence)) {
+    return hasFirstPersonNear(text, start, end, 100);
+  }
+  return false;
+}
+
+function hasMeetingAddress(text: string, occurrence: Occurrence): boolean {
+  return MEETING.test(text) && near(text, occurrence.index, occurrence.index + occurrence.match.length, ADDRESS, 90);
+}
+
 function qualifies(text: string, occurrence: Occurrence): boolean {
   const start = occurrence.index;
   const end = occurrence.index + occurrence.match.length;
-  if (near(text, start, end, OFFICE, 80)) return true;
-  if (near(text, start, end, EMPLOYEES, 50)) return true;
+  if (hasOwnedOfficeOrEmployees(text, occurrence)) return true;
   if (near(text, start, end, CONTROL, 80)) return true;
   if (near(text, start, end, HYPHEN_INCORPORATED, 20)) return true;
-  if (near(text, start, end, SUBSIDIARY, 32)) return true;
   if (isNamedEntity(text, occurrence)) return true;
-  return MEETING.test(text) && near(text, start, end, ADDRESS, 90);
+  return hasMeetingAddress(text, occurrence);
+}
+
+function isStrongEvidence(text: string, occurrence: Occurrence): boolean {
+  return (
+    hasOwnedOfficeOrEmployees(text, occurrence) ||
+    isNamedEntity(text, occurrence) ||
+    hasMeetingAddress(text, occurrence) ||
+    near(text, occurrence.index, occurrence.index + occurrence.match.length, CONTROL, 80)
+  );
 }
 
 function scoreChunk(text: string, occurrence: Occurrence): number {
-  const start = occurrence.index;
-  const end = occurrence.index + occurrence.match.length;
-  if (near(text, start, end, OFFICE, 80) || near(text, start, end, EMPLOYEES, 50)) return 5;
-  if (MEETING.test(text) && near(text, start, end, ADDRESS, 90)) return 5;
-  if (isNamedEntity(text, occurrence) || near(text, start, end, CONTROL, 80)) return 4;
+  if (hasOwnedOfficeOrEmployees(text, occurrence) || hasMeetingAddress(text, occurrence)) return 5;
+  if (
+    isNamedEntity(text, occurrence) ||
+    near(text, occurrence.index, occurrence.index + occurrence.match.length, CONTROL, 80)
+  ) {
+    return 4;
+  }
   return 2;
 }
 
@@ -229,19 +309,7 @@ function evaluateChunk(chunk: string): { places: string[]; score: number; excerp
   });
   const qualifying = occurrences.filter((occurrence) => qualifies(chunk, occurrence));
   if (qualifying.length === 0) return null;
-  if (
-    BOILERPLATE.test(chunk) &&
-    !qualifying.some((occurrence) => {
-      const start = occurrence.index;
-      const end = start + occurrence.match.length;
-      return (
-        near(chunk, start, end, OFFICE, 80) ||
-        near(chunk, start, end, EMPLOYEES, 50) ||
-        isNamedEntity(chunk, occurrence) ||
-        (MEETING.test(chunk) && near(chunk, start, end, ADDRESS, 90))
-      );
-    })
-  ) {
+  if (BOILERPLATE.test(chunk) && !qualifying.some((occurrence) => isStrongEvidence(chunk, occurrence))) {
     return null;
   }
 

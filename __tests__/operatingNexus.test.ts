@@ -64,6 +64,23 @@ describe('operating nexus', () => {
     expect(result).toBeNull();
   });
 
+  it('ignores geopolitical risk-factor mentions of Russia (POLA pattern)', () => {
+    const result = detectOperatingNexus([
+      doc(
+        '10-K',
+        "The impacts of war and other geopolitical events, including but not limited to Russia's invasion of Ukraine, are difficult to predict. In response to the Russian military actions, many businesses headquartered in the Eurozone and the United States have stopped doing business with Russia, which may negatively affect the profitability of those companies. The international turmoil may continue to have a negative impact on the stock market generally."
+      ),
+    ]);
+    expect(result).toBeNull();
+  });
+
+  it('still flags a first-person headquarters location', () => {
+    const result = detectOperatingNexus([
+      doc('10-K', 'Our headquarters are located in Taipei, Taiwan.'),
+    ]);
+    expect(result?.places).toEqual(['Taiwan']);
+  });
+
   it('flags an office in a listed locale and a named offshore holder', () => {
     const result = detectOperatingNexus([
       doc(
@@ -115,9 +132,9 @@ describe('operating nexus', () => {
   });
 });
 
-const tenKPath = '/tmp/aimd/10k.htm';
-const proxyPath = '/tmp/aimd/def14a.htm';
-const hasAimdFixtures = fs.existsSync(tenKPath) && fs.existsSync(proxyPath);
+const aimdTenKPath = '/tmp/aimd/10k.htm';
+const aimdProxyPath = '/tmp/aimd/def14a.htm';
+const hasAimdFixtures = fs.existsSync(aimdTenKPath) && fs.existsSync(aimdProxyPath);
 
 (hasAimdFixtures ? describe : describe.skip)('AIMD filing fixtures', () => {
   it('reads the saved 10-K and proxy as a Taiwan and Cayman nexus', () => {
@@ -126,18 +143,43 @@ const hasAimdFixtures = fs.existsSync(tenKPath) && fs.existsSync(proxyPath);
         form: '10-K',
         filingDate: '2026-03-30',
         documentUrl: 'https://www.sec.gov/example/10-k',
-        text: fs.readFileSync(tenKPath, 'utf8'),
+        text: fs.readFileSync(aimdTenKPath, 'utf8'),
       },
       {
         form: 'DEF 14A',
         filingDate: '2026-11-10',
         documentUrl: 'https://www.sec.gov/example/def14a',
-        text: fs.readFileSync(proxyPath, 'utf8'),
+        text: fs.readFileSync(aimdProxyPath, 'utf8'),
       },
     ]);
 
     expect(result?.places).toEqual(expect.arrayContaining(['Taiwan', 'Cayman Islands']));
     expect(result?.evidence.length).toBeGreaterThan(0);
     expect(result?.evidence.length).toBeLessThanOrEqual(3);
+  }, 20000);
+});
+
+const polaTenKPath = '/tmp/pola/10k.htm';
+const polaProxyPath = '/tmp/pola/def14a.htm';
+const hasPolaFixtures = fs.existsSync(polaTenKPath) && fs.existsSync(polaProxyPath);
+
+(hasPolaFixtures ? describe : describe.skip)('POLA filing fixtures', () => {
+  it('does not invent a Russia nexus from geopolitical risk factors', () => {
+    const result = detectOperatingNexus([
+      {
+        form: '10-K',
+        filingDate: '2026-04-15',
+        documentUrl: 'https://www.sec.gov/example/pola-10-k',
+        text: fs.readFileSync(polaTenKPath, 'utf8'),
+      },
+      {
+        form: 'DEF 14A',
+        filingDate: '2026-09-16',
+        documentUrl: 'https://www.sec.gov/example/pola-def14a',
+        text: fs.readFileSync(polaProxyPath, 'utf8'),
+      },
+    ]);
+
+    expect(result).toBeNull();
   }, 20000);
 });
