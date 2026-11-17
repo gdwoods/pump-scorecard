@@ -1,7 +1,11 @@
 import fs from 'fs';
 import { detectOperatingNexus } from '../lib/nexus/detectOperatingNexus';
 import { selectNexusFilings } from '../lib/nexus/fetchOperatingNexus';
-import { isUsListedCountry } from '../lib/nexus/locales';
+import {
+  isUsListedCountry,
+  shouldRunOperatingNexus,
+} from '../lib/nexus/locales';
+import { parseSecAddress } from '../utils/normalizeCountry';
 
 const doc = (form: string, text: string, filingDate = '2026-03-30') => ({
   form,
@@ -11,12 +15,27 @@ const doc = (form: string, text: string, filingDate = '2026-03-30') => ({
 });
 
 describe('operating nexus', () => {
-  it('treats SEC USA addresses as US-listed', () => {
+  it('treats SEC USA addresses as US-listed and Cayman as a watched domicile', () => {
     expect(isUsListedCountry('USA')).toBe(true);
     expect(isUsListedCountry('United States')).toBe(true);
     expect(isUsListedCountry('U.S.A.')).toBe(true);
     expect(isUsListedCountry('Taiwan')).toBe(false);
     expect(isUsListedCountry('Cayman Islands')).toBe(false);
+    expect(shouldRunOperatingNexus('USA')).toBe(true);
+    expect(shouldRunOperatingNexus('Cayman Islands')).toBe(true);
+    expect(shouldRunOperatingNexus('United Kingdom')).toBe(false);
+  });
+
+  it('reads SEC explicit country when stateOrCountry is empty (RCT UK pattern)', () => {
+    const parsed = parseSecAddress({
+      street1: '167-169 GREAT PORTLAND STREET,',
+      city: 'LONDON',
+      stateOrCountry: null,
+      stateOrCountryDescription: null,
+      country: 'United Kingdom',
+      countryCode: 'X0',
+    });
+    expect(parsed?.country).toBe('United Kingdom');
   });
 
   it('flags Taiwan operations and a Cayman control vehicle', () => {
@@ -74,11 +93,47 @@ describe('operating nexus', () => {
     expect(result).toBeNull();
   });
 
+  it('ignores compliance facility boilerplate near Nigeria (RCT pattern)', () => {
+    const result = detectOperatingNexus([
+      doc(
+        '10-K',
+        'We will be required to comply with all regulations, rules and directives of governmental authorities and agencies applicable to our services in Nigeria and to operation of any facility in any jurisdiction which we would conduct activities.'
+      ),
+    ]);
+    expect(result).toBeNull();
+  });
+
+  it('ignores historical BVI organization (CBUS pattern)', () => {
+    const result = detectOperatingNexus([
+      doc(
+        '10-K',
+        'Prior to this, Cibus Global was organized as a British Virgin Islands company (Cibus Global, Ltd.), which was formed on September 11, 2008. The Company’s principal executive offices are located at 6455 Nancy Ridge Drive, San Diego, California.'
+      ),
+    ]);
+    expect(result).toBeNull();
+  });
+
   it('still flags a first-person headquarters location', () => {
     const result = detectOperatingNexus([
       doc('10-K', 'Our headquarters are located in Taipei, Taiwan.'),
     ]);
     expect(result?.places).toEqual(['Taiwan']);
+  });
+
+  it('for Cayman domiciles, surfaces Singapore ops and drops redundant Cayman', () => {
+    const result = detectOperatingNexus(
+      [
+        doc(
+          '20-F',
+          'Overview We are a holding company incorporated in the Cayman Islands and headquartered in Singapore. Our principal executive office is located at Level 21, 88 Market Street, CapitaSpring, Singapore 048948. FunVerse Holding Limited, a British Virgin Islands company, wholly owns Yuder.'
+        ),
+      ],
+      { domicileCountry: 'Cayman Islands' }
+    );
+    expect(result?.places).toEqual(expect.arrayContaining(['Singapore', 'British Virgin Islands']));
+    expect(result?.places).not.toContain('Cayman Islands');
+    expect(result?.headline).toMatch(/Domiciled in the Cayman Islands/);
+    expect(result?.headline).toMatch(/Singapore/);
   });
 
   it('flags an office in a listed locale and a named offshore holder', () => {
@@ -181,5 +236,72 @@ const hasPolaFixtures = fs.existsSync(polaTenKPath) && fs.existsSync(polaProxyPa
     ]);
 
     expect(result).toBeNull();
+  }, 20000);
+});
+
+const rctPath = '/tmp/rct/20f.htm';
+const hasRctFixture = fs.existsSync(rctPath);
+
+(hasRctFixture ? describe : describe.skip)('RCT filing fixtures', () => {
+  it('does not invent a Nigeria nexus from compliance boilerplate', () => {
+    const result = detectOperatingNexus(
+      [
+        {
+          form: '20-F',
+          filingDate: '2026-05-15',
+          documentUrl: 'https://www.sec.gov/example/rct-20f',
+          text: fs.readFileSync(rctPath, 'utf8'),
+        },
+      ],
+      { domicileCountry: 'United Kingdom' }
+    );
+    // UK domicile should not be scanned in production; if forced, do not flag Nigeria from weak text.
+    expect(result?.places?.includes('Nigeria') ?? false).toBe(false);
+  }, 20000);
+});
+
+const cbusTenKPath = '/tmp/cbus/10k.htm';
+const cbusProxyPath = '/tmp/cbus/def14a.htm';
+const hasCbusFixtures = fs.existsSync(cbusTenKPath) && fs.existsSync(cbusProxyPath);
+
+(hasCbusFixtures ? describe : describe.skip)('CBUS filing fixtures', () => {
+  it('does not invent a BVI nexus from former corporate history', () => {
+    const result = detectOperatingNexus([
+      {
+        form: '10-K',
+        filingDate: '2026-03-17',
+        documentUrl: 'https://www.sec.gov/example/cbus-10k',
+        text: fs.readFileSync(cbusTenKPath, 'utf8'),
+      },
+      {
+        form: 'DEF 14A',
+        filingDate: '2026-04-20',
+        documentUrl: 'https://www.sec.gov/example/cbus-def14a',
+        text: fs.readFileSync(cbusProxyPath, 'utf8'),
+      },
+    ]);
+    expect(result).toBeNull();
+  }, 20000);
+});
+
+const mpuPath = '/tmp/mpu/20f.htm';
+const hasMpuFixture = fs.existsSync(mpuPath);
+
+(hasMpuFixture ? describe : describe.skip)('MPU filing fixtures', () => {
+  it('surfaces Singapore ops for a Cayman domicile', () => {
+    const result = detectOperatingNexus(
+      [
+        {
+          form: '20-F',
+          filingDate: '2026-04-16',
+          documentUrl: 'https://www.sec.gov/example/mpu-20f',
+          text: fs.readFileSync(mpuPath, 'utf8'),
+        },
+      ],
+      { domicileCountry: 'Cayman Islands' }
+    );
+    expect(result?.places).toEqual(expect.arrayContaining(['Singapore']));
+    expect(result?.places).not.toContain('Cayman Islands');
+    expect(result?.headline).toMatch(/Domiciled in the Cayman Islands/);
   }, 20000);
 });

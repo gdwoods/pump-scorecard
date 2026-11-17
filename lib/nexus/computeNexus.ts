@@ -1,7 +1,7 @@
 import { buildNexusApiResponse } from './buildApiResponse';
 import { buildNexusFilingKey } from './filingKey';
 import { fetchOperatingNexusDetailed, selectNexusFilings } from './fetchOperatingNexus';
-import { isUsListedCountry } from './locales';
+import { shouldRunOperatingNexus } from './locales';
 import { addToNexusUniverse, readNexusCache, readNexusPointer, writeNexusCache } from './kv';
 import { fetchSecContext, secThrottleMs, sleepMs } from './secContext';
 import type { NexusApiResponse, NexusCachedPayload } from './types';
@@ -27,7 +27,7 @@ export async function computeNexusForTicker(
     });
   }
 
-  if (ctx.country && !isUsListedCountry(ctx.country)) {
+  if (ctx.country && !shouldRunOperatingNexus(ctx.country)) {
     const response = buildNexusApiResponse({
       ticker: upper,
       country: ctx.country,

@@ -1,5 +1,5 @@
 import type { OperatingNexus } from './detectOperatingNexus';
-import { isUsListedCountry } from './locales';
+import { shouldRunOperatingNexus } from './locales';
 import type { NexusApiResponse, NexusApiStatus } from './types';
 
 export type BuildNexusApiInput = {
@@ -25,10 +25,10 @@ export function buildNexusApiResponse(input: BuildNexusApiInput): NexusApiRespon
   if (input.secUnavailable) {
     status = 'unknown';
     reason = 'SEC filing index could not be loaded for this ticker.';
-  } else if (input.country && !isUsListedCountry(input.country)) {
+  } else if (input.country && !shouldRunOperatingNexus(input.country)) {
     status = 'not_applicable';
     reason =
-      'Operating nexus applies to US-listed addresses; this issuer is not treated as US-domiciled on SEC records.';
+      'Operating nexus applies to US domiciles and watched offshore/Asia domiciles; this issuer falls outside that set.';
   } else if (input.documentsUnavailable) {
     status = 'unknown';
     reason = 'Could not load the latest annual report or proxy from SEC.';

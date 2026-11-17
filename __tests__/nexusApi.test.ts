@@ -45,13 +45,22 @@ describe('nexus API mapping', () => {
     expect(res.countries).toEqual([]);
   });
 
-  it('returns not_applicable for non-US SEC domicile', () => {
+  it('returns not_applicable for ordinary foreign domiciles outside the watched set', () => {
     const res = buildNexusApiResponse({
-      ticker: 'BABA',
-      country: 'China',
+      ticker: 'RCT',
+      country: 'United Kingdom',
     });
     expect(res.status).toBe('not_applicable');
     expect(res.overseas).toBe(false);
+  });
+
+  it('allows Cayman domiciles through the gate (clear when no deeper nexus)', () => {
+    const res = buildNexusApiResponse({
+      ticker: 'MPU',
+      country: 'Cayman Islands',
+      operatingNexus: null,
+    });
+    expect(res.status).toBe('clear');
   });
 
   it('returns unknown when SEC context is unavailable', () => {

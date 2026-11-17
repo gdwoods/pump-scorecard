@@ -1,8 +1,10 @@
 /**
- * Places that count as an operating or control nexus when the SEC address
- * is in the United States. Ireland, the Netherlands, Luxembourg, the UK,
- * Canada, and Israel are left off: those domiciles show up constantly on
- * ordinary US issuers, so a subsidiary there is not a useful callout.
+ * Places that count as an operating or control nexus beyond the SEC domicile.
+ * Ireland, the Netherlands, Luxembourg, the UK, Canada, and Israel are left
+ * off the locale list: those names show up constantly on ordinary issuers.
+ *
+ * The check runs for US domiciles (AIMD-style shells) and for issuers already
+ * domiciled in a nexus locale (MPU-style Cayman shells with Singapore ops).
  */
 
 export type NexusGroup = 'greater-china' | 'se-asia' | 'offshore' | 'opacity';
@@ -157,6 +159,15 @@ export const GROUP_RANK: Record<NexusGroup, number> = {
   offshore: 3,
 };
 
+function normalizeCountryKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/\./g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function isUsListedCountry(country?: string | null): boolean {
   if (!country) return false;
   const normalized = country.trim().toUpperCase().replace(/\./g, '');
@@ -166,4 +177,26 @@ export function isUsListedCountry(country?: string | null): boolean {
     normalized === 'UNITED STATES' ||
     normalized === 'UNITED STATES OF AMERICA'
   );
+}
+
+/** Map a domicile string to a nexus locale when it matches an alias/label. */
+export function matchNexusLocale(country?: string | null): NexusLocale | null {
+  if (!country) return null;
+  const key = normalizeCountryKey(country);
+  for (const locale of NEXUS_LOCALES) {
+    if (normalizeCountryKey(locale.label) === key) return locale;
+    for (const alias of locale.aliases) {
+      if (normalizeCountryKey(alias) === key) return locale;
+    }
+  }
+  return null;
+}
+
+/**
+ * Run filing nexus detection for US domiciles and for issuers already
+ * domiciled in a watched locale (Cayman, Singapore, China, etc.).
+ */
+export function shouldRunOperatingNexus(country?: string | null): boolean {
+  if (isUsListedCountry(country)) return true;
+  return matchNexusLocale(country) !== null;
 }

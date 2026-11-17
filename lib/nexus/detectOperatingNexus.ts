@@ -1,4 +1,10 @@
-import { GROUP_RANK, NEXUS_LOCALES, type NexusLocale } from './locales';
+import {
+  GROUP_RANK,
+  NEXUS_LOCALES,
+  isUsListedCountry,
+  matchNexusLocale,
+  type NexusLocale,
+} from './locales';
 
 export type NexusDocumentInput = {
   form: string;
@@ -21,6 +27,11 @@ export type OperatingNexus = {
   evidence: OperatingNexusEvidence[];
 };
 
+export type DetectOperatingNexusOptions = {
+  /** SEC/resolved domicile; matching places are dropped from the callout. */
+  domicileCountry?: string | null;
+};
+
 /** Physical operating footprint. "Headquarters/headquartered" are handled separately. */
 const OFFICE_PHYSICAL =
   /\b(offices?|facilit(?:y|ies)|product development|research and development|r\s*&\s*d|branch(?:es)?)\b/gi;
@@ -37,11 +48,14 @@ const SUBSIDIARY = /\b(subsidiar(?:y|ies)|affiliates?)\b/gi;
 const OWNERSHIP = /\b(beneficial(?:ly)?\s+owners?|voting agreement|\d+(?:\.\d+)?\s*%)/i;
 /** Risk-factor / market noise that often names a country without an operating nexus. */
 const BOILERPLATE =
-  /\b(compulsory licen[sc]|intellectual property|export controls?|ofac|tariffs?|economic sanctions|financial sanctions|many foreign countries|invasion of|military (?:actions?|conflicts?|operations?)|geopolitical|doing business with|nord stream|stock market generally|armed conflict|war in)\b/i;
+  /\b(compulsory licen[sc]|intellectual property|export controls?|ofac|tariffs?|economic sanctions|financial sanctions|many foreign countries|invasion of|military (?:actions?|conflicts?|operations?)|geopolitical|doing business with|nord stream|stock market generally|armed conflict|war in|any jurisdiction)\b/i;
 const MACHINE_TEXT = /us-gaap|iso4217|xmlns|contextref/i;
 /** Prepositions that put a place in a non-location role ("with Russia", "sanctions on"). */
 const NON_LOCATION_PREP = /\b(with|against|from|into|onto)\s+(?:the\s+)?$/i;
 const LOCATION_PREP = /\b(in|at)\s+(?:the\s+)?$/i;
+const HISTORICAL_ORG =
+  /\b(?:was|were|formerly|previously)\b[\s\S]{0,50}\b(?:organized|incorporated|formed)\b/i;
+const PRIOR_PHRASE = /\b(?:prior to|immediately prior)\b/i;
 
 const GEO_NEXT = new Set([
   'island',
@@ -211,6 +225,15 @@ function isNamedEntity(text: string, occurrence: Occurrence): boolean {
   );
 }
 
+/** CBUS-style former domicile: "was organized as a British Virgin Islands company". */
+function isHistoricalOrganization(text: string, occurrence: Occurrence): boolean {
+  const start = Math.max(0, occurrence.index - 100);
+  const end = Math.min(text.length, occurrence.index + occurrence.match.length + 24);
+  const window = text.slice(start, end);
+  if (HISTORICAL_ORG.test(window)) return true;
+  return PRIOR_PHRASE.test(text.slice(Math.max(0, occurrence.index - 80), occurrence.index));
+}
+
 /** "headquartered in Taiwan" / "headquarters are located in Taiwan", not "business with Russia". */
 function hasDirectionalHeadquarters(text: string, occurrence: Occurrence): boolean {
   if (isNonLocationMention(text, occurrence)) return false;
@@ -226,18 +249,44 @@ function hasDirectionalHeadquarters(text: string, occurrence: Occurrence): boole
   );
 }
 
+/**
+ * Office/facility must bind to this place ("facility in Taiwan", "Taiwan branch office"),
+ * not merely appear nearby ("services in Nigeria ... any facility in any jurisdiction").
+ */
+function hasBoundPhysicalOffice(text: string, occurrence: Occurrence): boolean {
+  if (isNonLocationMention(text, occurrence)) return false;
+  const start = occurrence.index;
+  const end = occurrence.index + occurrence.match.length;
+  if (!hasFirstPersonNear(text, start, end, 100)) return false;
+
+  const before = text.slice(Math.max(0, start - 90), start);
+  if (
+    isLocationMention(text, occurrence) &&
+    new RegExp(OFFICE_PHYSICAL.source, 'i').test(before) &&
+    /\b(?:located\s+)?(?:in|at)\b/i.test(before) &&
+    !/\bany\s+(?:facility|jurisdiction)\b/i.test(before)
+  ) {
+    return true;
+  }
+
+  // "Taiwan branch office" / "Singapore office"
+  const after = text.slice(end, end + 36);
+  if (/^\s+(?:branch\s+)?(?:offices?|facilit(?:y|ies))\b/i.test(after)) {
+    return true;
+  }
+  return false;
+}
+
 function hasOwnedOfficeOrEmployees(text: string, occurrence: Occurrence): boolean {
   if (isNonLocationMention(text, occurrence)) return false;
   const start = occurrence.index;
   const end = occurrence.index + occurrence.match.length;
 
   if (hasDirectionalHeadquarters(text, occurrence)) return true;
+  if (hasBoundPhysicalOffice(text, occurrence)) return true;
 
-  if (near(text, start, end, OFFICE_PHYSICAL, 80)) {
-    return hasFirstPersonNear(text, start, end, 100);
-  }
   if (near(text, start, end, EMPLOYEES, 50)) {
-    return hasFirstPersonNear(text, start, end, 80);
+    return hasFirstPersonNear(text, start, end, 80) && isLocationMention(text, occurrence);
   }
   if (near(text, start, end, SUBSIDIARY, 40) && isLocationMention(text, occurrence)) {
     return hasFirstPersonNear(text, start, end, 100);
@@ -246,32 +295,42 @@ function hasOwnedOfficeOrEmployees(text: string, occurrence: Occurrence): boolea
 }
 
 function hasMeetingAddress(text: string, occurrence: Occurrence): boolean {
-  return MEETING.test(text) && near(text, occurrence.index, occurrence.index + occurrence.match.length, ADDRESS, 90);
+  return (
+    MEETING.test(text) &&
+    near(text, occurrence.index, occurrence.index + occurrence.match.length, ADDRESS, 90)
+  );
+}
+
+function hasPresentNamedEntity(text: string, occurrence: Occurrence): boolean {
+  return isNamedEntity(text, occurrence) && !isHistoricalOrganization(text, occurrence);
 }
 
 function qualifies(text: string, occurrence: Occurrence): boolean {
   const start = occurrence.index;
   const end = occurrence.index + occurrence.match.length;
   if (hasOwnedOfficeOrEmployees(text, occurrence)) return true;
-  if (near(text, start, end, CONTROL, 80)) return true;
+  if (near(text, start, end, CONTROL, 80) && !isHistoricalOrganization(text, occurrence)) {
+    return true;
+  }
   if (near(text, start, end, HYPHEN_INCORPORATED, 20)) return true;
-  if (isNamedEntity(text, occurrence)) return true;
+  if (hasPresentNamedEntity(text, occurrence)) return true;
   return hasMeetingAddress(text, occurrence);
 }
 
 function isStrongEvidence(text: string, occurrence: Occurrence): boolean {
   return (
     hasOwnedOfficeOrEmployees(text, occurrence) ||
-    isNamedEntity(text, occurrence) ||
+    hasPresentNamedEntity(text, occurrence) ||
     hasMeetingAddress(text, occurrence) ||
-    near(text, occurrence.index, occurrence.index + occurrence.match.length, CONTROL, 80)
+    (near(text, occurrence.index, occurrence.index + occurrence.match.length, CONTROL, 80) &&
+      !isHistoricalOrganization(text, occurrence))
   );
 }
 
 function scoreChunk(text: string, occurrence: Occurrence): number {
   if (hasOwnedOfficeOrEmployees(text, occurrence) || hasMeetingAddress(text, occurrence)) return 5;
   if (
-    isNamedEntity(text, occurrence) ||
+    hasPresentNamedEntity(text, occurrence) ||
     near(text, occurrence.index, occurrence.index + occurrence.match.length, CONTROL, 80)
   ) {
     return 4;
@@ -355,11 +414,21 @@ function formatPlaceList(places: string[]): string {
   return `${labeled.slice(0, -1).join(', ')}, and ${labeled[labeled.length - 1]}`;
 }
 
-function buildHeadline(places: string[]): string {
-  if (places.length <= 4) {
-    return `Listed in the US. Filings tie operations or control to ${formatPlaceList(places)}.`;
+function buildHeadline(places: string[], domicileCountry?: string | null): string {
+  const placeList = formatPlaceList(places);
+  if (isUsListedCountry(domicileCountry) || !domicileCountry) {
+    if (places.length <= 4) {
+      return `Listed in the US. Filings tie operations or control to ${placeList}.`;
+    }
+    return `Listed in the US. Filings tie operations or control to ${formatPlaceList(places.slice(0, 3))}, and other jurisdictions.`;
   }
-  return `Listed in the US. Filings tie operations or control to ${formatPlaceList(places.slice(0, 3))}, and other jurisdictions.`;
+
+  const domicileLocale = matchNexusLocale(domicileCountry);
+  const domicileLabel = withArticle(domicileLocale?.label || domicileCountry);
+  if (places.length <= 4) {
+    return `Domiciled in ${domicileLabel}. Filings also tie operations or control to ${placeList}.`;
+  }
+  return `Domiciled in ${domicileLabel}. Filings also tie operations or control to ${formatPlaceList(places.slice(0, 3))}, and other jurisdictions.`;
 }
 
 function pickEvidence(hits: Hit[]): Hit[] {
@@ -386,8 +455,19 @@ function pickEvidence(hits: Hit[]): Hit[] {
   return picked;
 }
 
-export function detectOperatingNexus(docs: NexusDocumentInput[]): OperatingNexus | null {
+function domicileLabels(domicileCountry?: string | null): Set<string> {
+  const labels = new Set<string>();
+  const locale = matchNexusLocale(domicileCountry);
+  if (locale) labels.add(locale.label);
+  return labels;
+}
+
+export function detectOperatingNexus(
+  docs: NexusDocumentInput[],
+  options: DetectOperatingNexusOptions = {}
+): OperatingNexus | null {
   const hits: Hit[] = [];
+  const excluded = domicileLabels(options.domicileCountry);
 
   for (const doc of docs) {
     if (!doc?.text) continue;
@@ -398,12 +478,14 @@ export function detectOperatingNexus(docs: NexusDocumentInput[]): OperatingNexus
       for (const chunk of chunks) {
         const evaluated = evaluateChunk(chunk);
         if (!evaluated) continue;
+        const places = evaluated.places.filter((place) => !excluded.has(place));
+        if (places.length === 0) continue;
         hits.push({
           form: doc.form,
           filingDate: doc.filingDate,
           documentUrl: doc.documentUrl,
           excerpt: evaluated.excerpt,
-          places: evaluated.places,
+          places,
           score: evaluated.score,
         });
       }
@@ -426,9 +508,11 @@ export function detectOperatingNexus(docs: NexusDocumentInput[]): OperatingNexus
     .sort((a, b) => a[1].group - b[1].group || b[1].count - a[1].count || a[0].localeCompare(b[0]))
     .map(([label]) => label);
 
+  if (places.length === 0) return null;
+
   return {
     places,
-    headline: buildHeadline(places),
+    headline: buildHeadline(places, options.domicileCountry),
     evidence: pickEvidence(hits).map((hit) => ({
       form: hit.form,
       filingDate: hit.filingDate,

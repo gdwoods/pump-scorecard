@@ -1,6 +1,6 @@
 import { buildDocumentUrl, SEC_USER_AGENT } from '../capitalPressure/edgar';
 import { detectOperatingNexus, type OperatingNexus } from './detectOperatingNexus';
-import { isUsListedCountry } from './locales';
+import { shouldRunOperatingNexus } from './locales';
 
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_CHARS = 6_000_000;
@@ -96,7 +96,7 @@ export async function fetchOperatingNexusDetailed(
   },
   options?: { delayBetweenDocumentsMs?: number }
 ): Promise<OperatingNexusFetchResult> {
-  if (!isUsListedCountry(args.country)) {
+  if (!shouldRunOperatingNexus(args.country)) {
     return { nexus: null, attemptedDocuments: 0, loadedDocuments: 0 };
   }
   const filings = selectNexusFilings(args.cik, args.submissions);
@@ -120,7 +120,7 @@ export async function fetchOperatingNexusDetailed(
     return { nexus: null, attemptedDocuments: filings.length, loadedDocuments: 0 };
   }
   return {
-    nexus: detectOperatingNexus(docs),
+    nexus: detectOperatingNexus(docs, { domicileCountry: args.country }),
     attemptedDocuments: filings.length,
     loadedDocuments: docs.length,
   };
@@ -131,7 +131,7 @@ export async function fetchOperatingNexus(args: {
   cik?: string | null;
   submissions?: { filings?: { recent?: RecentFilings } } | null;
 }): Promise<OperatingNexus | null> {
-  if (!isUsListedCountry(args.country)) return null;
+  if (!shouldRunOperatingNexus(args.country)) return null;
   const filings = selectNexusFilings(args.cik, args.submissions);
   if (filings.length === 0) return null;
 
@@ -146,5 +146,5 @@ export async function fetchOperatingNexus(args: {
   ).filter((doc): doc is NexusFilingRef & { text: string } => Boolean(doc));
 
   if (docs.length === 0) return null;
-  return detectOperatingNexus(docs);
+  return detectOperatingNexus(docs, { domicileCountry: args.country });
 }

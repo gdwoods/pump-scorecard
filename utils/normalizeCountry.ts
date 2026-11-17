@@ -10,14 +10,19 @@ export function normalizeCountry(address: any): { state: string; country: string
   if (!address) return { state: "", country: "Unknown" };
 
   const code = address?.stateOrCountry?.toUpperCase() || "";
-  const desc = address?.stateOrCountryDescription || "";
+  const desc = String(address?.stateOrCountryDescription || "").trim();
+  const explicitCountry = String(address?.country || "").trim();
 
   if (US_STATES.has(code)) {
     return { state: code, country: "USA" };
   }
 
-  if (desc && desc.length > 0) {
+  // Prefer human-readable SEC fields over opaque codes (E9, X0, etc.).
+  if (desc.length > 0) {
     return { state: code, country: desc };
+  }
+  if (explicitCountry.length > 0) {
+    return { state: code, country: explicitCountry };
   }
 
   return { state: code, country: code || "Unknown" };
