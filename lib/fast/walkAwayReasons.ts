@@ -35,5 +35,8 @@ export function describeFastWalkAwayFlag(flag: string): string | undefined {
   if (flag.startsWith('Nasdaq noncompliant')) {
     return "Issuer is on Nasdaq's published noncompliant continued-listing list. Soft flag only — not a Framework walk-away.";
   }
+  if (flag.startsWith('TRF short-volume regime')) {
+    return 'Same-day FINRA TRF short volume is large versus float and far above its recent median. Soft flag only — published short interest may be stale. It does not change the Short Check score and is not a walk-away.';
+  }
   return undefined;
 }

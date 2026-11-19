@@ -222,6 +222,11 @@ function formatFastVerdict(fv: FastVerdictPromptSlice): string {
   if (fv.regSho) {
     lines.push(`Reg SHO: ${fv.regSho} (soft flag — not a hard walk-away)`);
   }
+  if (fv.shortVolume) {
+    lines.push(
+      `FINRA daily short volume: ${fv.shortVolume} Context only — do not change the Short Check score and do not treat this as a walk-away.`
+    );
+  }
   if (fv.unavailable?.length) {
     lines.push(`Unavailable inputs: ${fv.unavailable.join(', ')}`);
   }

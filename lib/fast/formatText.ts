@@ -77,6 +77,14 @@ export function formatFastVerdictText(v: FastVerdict): string {
     lines.push('Reg SHO  list unavailable');
   }
 
+  if (v.shortVolume?.status === 'ok' && v.shortVolume.line) {
+    lines.push(`Short vol  ${v.shortVolume.line}`);
+  } else if (v.shortVolume?.status === 'empty') {
+    lines.push('Short vol  no recent TRF prints');
+  } else if (v.shortVolume?.status === 'unavailable') {
+    lines.push('Short vol  unavailable');
+  }
+
   if (v.flags.length) {
     lines.push('FLAGS   ' + v.flags.join('\n        '));
   }

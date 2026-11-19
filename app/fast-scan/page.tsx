@@ -14,6 +14,8 @@ import SecFilings from "@/components/SecFilings";
 import NewsSection from "@/components/NewsSection";
 import BorrowDeskCard from "@/components/BorrowDeskCard";
 import SentimentCard from "@/components/SentimentCard";
+import RegShoShortVolumeCard from "@/components/short-check/RegShoShortVolumeCard";
+import { useRegShoShortVolume } from "@/components/short-check/useRegShoShortVolume";
 import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import CapitalPressureCard from "@/components/CapitalPressureCard";
 import QuickScorecardCard from "@/components/forensic/QuickScorecardCard";
@@ -23,6 +25,11 @@ import { PairGrid } from "@/components/layout/PairGrid";
 import type { FastVerdict } from "@/lib/fast/types";
 import { SHOW_FAST_VERDICT_UI, SHOW_AI_THESIS } from "@/lib/config/features";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
+import {
+  attachRegShoShortVolume,
+  buildRegShoShortVolumeReport,
+  resolveFloatShares,
+} from "@/lib/fast/regShoShortVolume";
 import { buildQuickScorecard, toQuickScorecardInputFromScan } from "@/lib/forensic/quickScorecard";
 import { buildDilutionBrief } from "@/lib/dilution";
 import { PAGE_CONTENT_CLASS } from "@/lib/ui/pageLayout";
@@ -100,6 +107,23 @@ function FastScanInner() {
     }
   }, [initial, didAutoScan, runScan]);
 
+  const shortVolumeQuery = useRegShoShortVolume(ticker);
+  const shortVolumeFloat = resolveFloatShares(
+    fastVerdict?.fundamentals.float,
+    pumpData?.floatShares
+  );
+  const shortVolumeReport = useMemo(
+    () =>
+      shortVolumeQuery.payload
+        ? buildRegShoShortVolumeReport(shortVolumeQuery.payload, { floatShares: shortVolumeFloat })
+        : null,
+    [shortVolumeQuery.payload, shortVolumeFloat]
+  );
+  const displayFastVerdict = useMemo(
+    () => attachRegShoShortVolume(fastVerdict, shortVolumeReport),
+    [fastVerdict, shortVolumeReport]
+  );
+
   const capitalPressureBlock =
     pumpData?.capitalPressure ? (
       <CapitalPressureCard ticker={ticker.toUpperCase()} data={pumpData.capitalPressure} floatShares={pumpData.floatShares ?? null} />
@@ -132,7 +156,7 @@ function FastScanInner() {
 
   const aiThesisBlock =
     SHOW_AI_THESIS && ticker && pumpData ? (
-      <AiThesisCard ticker={ticker} scanData={pumpData} fastVerdict={fastVerdict} />
+      <AiThesisCard ticker={ticker} scanData={pumpData} fastVerdict={displayFastVerdict} />
     ) : null;
 
   const droppinessBlock =
@@ -231,7 +255,11 @@ function FastScanInner() {
         )}
 
         {SHOW_FAST_VERDICT_UI && (loading || fastVerdict) && (
-          <FastVerdictCard verdict={fastVerdict} loading={loading && !fastVerdict} />
+          <FastVerdictCard
+            verdict={displayFastVerdict}
+            loading={loading && !fastVerdict}
+            shortVolumeLoading={shortVolumeQuery.loading}
+          />
         )}
 
         <PairGrid first={droppinessBlock} second={scatterBlock} breakpoint="xl" />
@@ -262,6 +290,13 @@ function FastScanInner() {
                 insiderTransactions={pumpData.insiderTransactions}
               />
             </div>
+
+            <RegShoShortVolumeCard
+              ticker={ticker}
+              report={shortVolumeReport}
+              loading={shortVolumeQuery.loading}
+              error={shortVolumeQuery.error}
+            />
 
             {pumpData.sentiment && (
               <SentimentCard ticker={ticker} sentiment={pumpData.sentiment} />

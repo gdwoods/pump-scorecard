@@ -25,6 +25,8 @@ interface ShortCheckResultsProps {
   onTickerChange?: (newTicker: string) => void; // Callback when ticker is overridden
   afterQuickActions?: ReactNode;
   afterFastVerdict?: ReactNode;
+  /** FINRA daily short-volume sentence appended to the alert card. Does not change the score. */
+  shortVolumeSentence?: string | null;
   /** When true, risk synopsis + walk-aways render in the verdict stack instead. */
   synopsisInVerdictStack?: boolean;
   /** When true, the hero % card is already inside Dilution Brief. */
@@ -39,6 +41,7 @@ export default function ShortCheckResults({
   onTickerChange,
   afterQuickActions,
   afterFastVerdict,
+  shortVolumeSentence,
   synopsisInVerdictStack = false,
   hideRatingHero = false,
 }: ShortCheckResultsProps) {
@@ -130,6 +133,11 @@ export default function ShortCheckResults({
     }
   };
 
+  const resultForExport =
+    shortVolumeSentence && result.alertCard && !result.alertCard.includes(shortVolumeSentence)
+      ? { ...result, alertCard: `${result.alertCard}\n\n${shortVolumeSentence}` }
+      : result;
+
   const handleExportPDF = async () => {
     if (!effectiveTicker || !result) return;
 
@@ -142,7 +150,7 @@ export default function ShortCheckResults({
         },
         body: JSON.stringify({
           ticker: effectiveTicker,
-          result,
+          result: resultForExport,
           extractedData,
           pumpScorecardData,
         }),
@@ -177,7 +185,7 @@ export default function ShortCheckResults({
     try {
       const summary = generateFormattedSummary({
         ticker: effectiveTicker,
-        result,
+        result: resultForExport,
         extractedData,
         pumpScorecardData,
         format: 'full',

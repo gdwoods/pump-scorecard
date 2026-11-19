@@ -12,6 +12,7 @@ const SOFT_FLAG_PATTERNS: RegExp[] = [
   /^unexplained move/i,
   /thin float .* squeeze geometry/i,
   /tickerRecycleWarning/i,
+  /^TRF short-volume regime/i,
 ];
 
 /** Discretionary fast-screen flags — never hard NO_TRADE vetoes on their own. */

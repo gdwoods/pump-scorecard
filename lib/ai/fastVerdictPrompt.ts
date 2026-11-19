@@ -54,5 +54,6 @@ export function fastVerdictToPromptSlice(verdict: FastVerdict): FastVerdictPromp
     unavailable: verdict.unavailable,
     nasdaqListing: nasdaqListingPromptLine(verdict),
     regSho: regShoPromptLine(verdict),
+    shortVolume: verdict.shortVolume?.sentence ?? null,
   };
 }

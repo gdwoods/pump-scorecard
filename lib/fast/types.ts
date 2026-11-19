@@ -1,4 +1,6 @@
 // lib/fast/types.ts
+import type { RegShoShortVolumeReport } from './regShoShortVolume';
+
 export type FastVerdictKind = 'NO_TRADE' | 'WATCH' | 'REVIEW';
 
 export type RunnerClass =
@@ -94,6 +96,8 @@ export type FastVerdict = {
   nasdaqListing?: NasdaqListing;
   /** Nasdaq Trader Regulation SHO threshold list — overlay, not a walk-away. */
   regSho?: RegShoListing;
+  /** FINRA TRF daily short-sale volume — overlay, not a score input or walk-away. */
+  shortVolume?: RegShoShortVolumeReport;
   flags: string[];
   unavailable: string[];
 };

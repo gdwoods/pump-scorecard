@@ -24,6 +24,18 @@ export const T = {
   borrow: { requireAvailable: true },
   volume: { minSharesPerMin: 50_000, anomalyMult: 5 },
   dataQuality: { minCompleteness: 0.70 },
+  /** FINRA TRF daily short-sale volume overlay. Soft flag only — not a score input. */
+  regShoShortVolume: {
+    /** Latest short shares ÷ float required, together with the median multiple. */
+    regimeFloatMultiple: 0.5,
+    /** Latest short shares ÷ prior-session median required, together with the float multiple. */
+    regimeMedianMultiple: 10,
+    medianSessions: 10,
+    /** Prior sessions required before a median multiple can raise the flag. */
+    minPriorSessions: 5,
+    recentDays: 10,
+    lookbackCalendarDays: 32,
+  },
   timeouts: { perSourceMs: 1500, totalMs: 2500 },
   /** Short Check category rating floors (percent). */
   category: {

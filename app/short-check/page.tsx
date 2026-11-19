@@ -25,6 +25,8 @@ import BorrowDeskCard from "@/components/BorrowDeskCard";
 import HistoryCard from "@/components/HistoryCard";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import SentimentCard from "@/components/SentimentCard";
+import RegShoShortVolumeCard from "@/components/short-check/RegShoShortVolumeCard";
+import { useRegShoShortVolume } from "@/components/short-check/useRegShoShortVolume";
 import InsiderTransactionOverlay from "@/components/InsiderTransactionOverlay";
 import AppNav from "@/components/AppNav";
 import { ShortCheckResult, calculateShortRating } from "@/lib/shortCheckScoring";
@@ -33,6 +35,11 @@ import { saveScanToHistory } from "@/lib/history";
 import type { FastVerdict } from "@/lib/fast/types";
 import { enrichFastVerdictFromShortCheck } from "@/lib/fast/enrichFromShortCheck";
 import { enrichFastVerdictFromScan } from "@/lib/fast/enrichFromScan";
+import {
+  attachRegShoShortVolume,
+  buildRegShoShortVolumeReport,
+  resolveFloatShares,
+} from "@/lib/fast/regShoShortVolume";
 import { buildQuickScorecard, toQuickScorecardInputFromScan } from "@/lib/forensic/quickScorecard";
 import { buildDilutionBrief } from "@/lib/dilution";
 import { SHOW_FAST_VERDICT_ON_SHORT_CHECK, SHOW_AI_THESIS } from "@/lib/config/features";
@@ -284,24 +291,49 @@ export default function ShortCheckPage() {
     [fastVerdict, pumpScorecardData, extractedData]
   );
 
+  const shortVolumeQuery = useRegShoShortVolume(ticker);
+  const shortVolumeFloat = resolveFloatShares(
+    enrichedFastVerdict?.fundamentals.float,
+    pumpScorecardData?.floatShares,
+    extractedData?.float
+  );
+  const shortVolumeReport = useMemo(
+    () =>
+      shortVolumeQuery.payload
+        ? buildRegShoShortVolumeReport(shortVolumeQuery.payload, { floatShares: shortVolumeFloat })
+        : null,
+    [shortVolumeQuery.payload, shortVolumeFloat]
+  );
+  const displayFastVerdict = useMemo(
+    () => attachRegShoShortVolume(enrichedFastVerdict, shortVolumeReport),
+    [enrichedFastVerdict, shortVolumeReport]
+  );
+  const shortVolumeSentence = shortVolumeReport?.sentence ?? null;
+
   const verdictStackActive = Boolean(showFastVerdictCard && result && extractedData);
 
   const fundamentalContext = useMemo(() => {
     if (!verdictStackActive || !result || !extractedData) return undefined;
     const cp = pumpScorecardData?.capitalPressure;
     return {
-      synopsis: generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData),
+      synopsis: [
+        generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData),
+        shortVolumeSentence,
+      ]
+        .filter(Boolean)
+        .join(" "),
       secNote: capitalPressureShortCheckNote(cp),
       secFilingUrl: cp?.reasons?.[0]?.evidence?.documentUrl ?? null,
       disagreement: detectOfferingDisagreement(extractedData, cp),
     };
-  }, [verdictStackActive, result, extractedData, pumpScorecardData, ticker]);
+  }, [verdictStackActive, result, extractedData, pumpScorecardData, ticker, shortVolumeSentence]);
 
   const fastVerdictCard = showFastVerdictCard ? (
     <FastVerdictCard
-      verdict={enrichedFastVerdict}
+      verdict={displayFastVerdict}
       loading={loadingFastVerdict}
       error={fastVerdictError}
+      shortVolumeLoading={shortVolumeQuery.loading}
       fundamentalContext={fundamentalContext}
       walkAwayFlags={verdictStackActive ? result?.walkAwayFlags : undefined}
     />
@@ -347,7 +379,12 @@ export default function ShortCheckPage() {
             shortCheck:
               result && extractedData
                 ? {
-                    synopsis: generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData),
+                    synopsis: [
+                      generateRiskSynopsis(ticker, result.scoreBreakdown, extractedData),
+                      shortVolumeSentence,
+                    ]
+                      .filter(Boolean)
+                      .join(" "),
                     secFilingUrl: pumpScorecardData?.capitalPressure?.reasons?.[0]?.evidence?.documentUrl ?? null,
                     extracted: extractedData,
                     rating: result.rating,
@@ -367,7 +404,7 @@ export default function ShortCheckPage() {
                   : null,
           })
         : null,
-    [ticker, enrichedFastVerdict, quickScorecard, pumpScorecardData, result, extractedData]
+    [ticker, enrichedFastVerdict, quickScorecard, pumpScorecardData, result, extractedData, shortVolumeSentence]
   );
 
   const dilutionBriefBlock = dilutionBrief ? <DilutionBrief brief={dilutionBrief} /> : null;
@@ -382,7 +419,7 @@ export default function ShortCheckPage() {
         result={result}
         extractedData={extractedData}
         scanData={pumpScorecardData}
-        fastVerdict={enrichedFastVerdict}
+        fastVerdict={displayFastVerdict}
       />
     ) : null;
 
@@ -614,6 +651,7 @@ export default function ShortCheckPage() {
             }
             afterFastVerdict={dilutionBriefBlock}
             synopsisInVerdictStack={verdictStackActive}
+            shortVolumeSentence={shortVolumeSentence}
             hideRatingHero={Boolean(dilutionBrief?.shortRating)}
             onTickerChange={(newTicker) => {
               setTicker(newTicker);
@@ -673,6 +711,13 @@ export default function ShortCheckPage() {
                 insiderTransactions={pumpScorecardData.insiderTransactions}
               />
             </div>
+
+            <RegShoShortVolumeCard
+              ticker={ticker}
+              report={shortVolumeReport}
+              loading={shortVolumeQuery.loading}
+              error={shortVolumeQuery.error}
+            />
 
             {pumpScorecardData.sentiment && (
               <SentimentCard ticker={ticker.toUpperCase()} sentiment={pumpScorecardData.sentiment} />

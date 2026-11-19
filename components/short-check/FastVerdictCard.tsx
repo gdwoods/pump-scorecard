@@ -171,6 +171,7 @@ export default function FastVerdictCard({
   error,
   fundamentalContext,
   walkAwayFlags,
+  shortVolumeLoading,
 }: {
   verdict: FastVerdict | null;
   loading?: boolean;
@@ -179,6 +180,8 @@ export default function FastVerdictCard({
   fundamentalContext?: FastVerdictFundamentalContext;
   /** Short Check scoring walk-aways (distinct from fast `verdict.flags`). */
   walkAwayFlags?: string[];
+  /** FINRA daily short-volume fetch is still in flight. */
+  shortVolumeLoading?: boolean;
 }) {
   const nasdaqListing = useResolvedNasdaqListing(
     verdict?.ticker ?? "",
@@ -331,6 +334,23 @@ export default function FastVerdictCard({
               "not on threshold list"
             ) : (
               <RegShoThresholdValue listing={regSho} />
+            )}
+          </div>
+          <div className="sm:col-span-2">
+            <span className="text-gray-500 dark:text-gray-400">Short vol </span>
+            {shortVolumeLoading && !verdict.shortVolume ? (
+              <span className="text-gray-500 dark:text-gray-400">loading…</span>
+            ) : !verdict.shortVolume || verdict.shortVolume.status === "unavailable" ? (
+              <span className="text-amber-700 dark:text-amber-400">unavailable</span>
+            ) : verdict.shortVolume.status === "empty" || !verdict.shortVolume.line ? (
+              "no recent TRF prints"
+            ) : (
+              <Tooltip
+                content="FINRA trade-reporting-facility short-sale volume for the latest session. This is not bi-monthly short interest and not the Reg SHO threshold list. It does not change the score."
+                side="bottom"
+              >
+                <span className="underline decoration-dotted cursor-help">{verdict.shortVolume.line}</span>
+              </Tooltip>
             )}
           </div>
         </div>

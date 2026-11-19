@@ -171,6 +171,8 @@ export interface FastVerdictPromptSlice {
   nasdaqListing?: string | null;
   /** Soft overlay from Nasdaq Trader Regulation SHO threshold list. */
   regSho?: string | null;
+  /** FINRA TRF daily short-sale volume. Context only — not a score input. */
+  shortVolume?: string | null;
 }
 
 /** What the client sends to /api/ai-thesis. All sections optional except ticker. */
