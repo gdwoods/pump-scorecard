@@ -36,6 +36,27 @@ export type RegShoListing = {
   sourceUrl: string;
 };
 
+/** AskEdgar symbol-change history. Overlay only — not a walk-away. */
+export type TickerChangeEvent = {
+  oldTicker: string;
+  newTicker: string;
+  effectiveDate: string;
+};
+
+export type TickerChangesStatus = 'changed' | 'none' | 'ambiguous' | 'unavailable';
+
+export type TickerChanges = {
+  status: TickerChangesStatus;
+  queryTicker: string;
+  /** Latest symbol in the recorded history. Null when there is no change, or the chain ends on two symbols the same day. */
+  currentTicker: string | null;
+  history: TickerChangeEvent[];
+  warnings: string[];
+  /** Symbols named when the chain is too long to trust (HTTP 409). */
+  involvedTickers?: string[];
+  reason?: string;
+};
+
 export type FastVerdict = {
   ticker: string;
   verdict: FastVerdictKind;
@@ -98,6 +119,8 @@ export type FastVerdict = {
   regSho?: RegShoListing;
   /** FINRA TRF daily short-sale volume — overlay, not a score input or walk-away. */
   shortVolume?: RegShoShortVolumeReport;
+  /** AskEdgar symbol-change history — overlay, not a walk-away. */
+  tickerChanges?: TickerChanges;
   flags: string[];
   unavailable: string[];
 };

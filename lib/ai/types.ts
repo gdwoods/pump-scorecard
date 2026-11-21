@@ -173,6 +173,8 @@ export interface FastVerdictPromptSlice {
   regSho?: string | null;
   /** FINRA TRF daily short-sale volume. Context only — not a score input. */
   shortVolume?: string | null;
+  /** AskEdgar symbol-change history. Context only — not a walk-away. */
+  tickerChanges?: string | null;
 }
 
 /** What the client sends to /api/ai-thesis. All sections optional except ticker. */

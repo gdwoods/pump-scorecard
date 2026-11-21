@@ -8,8 +8,12 @@ import {
   describeFastWalkAwayFlag,
   describeFastWalkAwayReason,
 } from "@/lib/fast/walkAwayReasons";
-import type { FastVerdict, FastVerdictKind, NasdaqListing, RegShoListing } from "@/lib/fast/types";
+import type { FastVerdict, FastVerdictKind, NasdaqListing, RegShoListing, TickerChanges } from "@/lib/fast/types";
 import { formatRegShoSummary } from "@/lib/fast/fetchRegSho";
+import {
+  formatTickerChangeSummary,
+  tickerChangeTooltip,
+} from "@/lib/fast/fetchTickerChanges";
 import { T } from "@/lib/config/thresholds";
 import RiskSynopsisSection from "./RiskSynopsisSection";
 
@@ -44,6 +48,33 @@ function RegShoThresholdValue({ listing }: { listing: RegShoListing }) {
       </a>
       {summary ? ` — ${summary}` : ""}
     </>
+  );
+}
+
+function TickerChangeValue({ changes }: { changes: TickerChanges | null | undefined }) {
+  if (!changes || changes.status === "unavailable") {
+    return (
+      <span className="text-amber-700 dark:text-amber-400">
+        {formatTickerChangeSummary(
+          changes ?? {
+            status: "unavailable",
+            queryTicker: "",
+            currentTicker: null,
+            history: [],
+            warnings: [],
+          }
+        )}
+      </span>
+    );
+  }
+  if (changes.status === "none") return <>no recorded changes</>;
+  const summary = formatTickerChangeSummary(changes);
+  return (
+    <Tooltip content={tickerChangeTooltip(changes)} side="bottom">
+      <span className="text-amber-700 dark:text-amber-400 font-semibold underline decoration-dotted cursor-help">
+        {summary}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -335,6 +366,10 @@ export default function FastVerdictCard({
             ) : (
               <RegShoThresholdValue listing={regSho} />
             )}
+          </div>
+          <div className="sm:col-span-2">
+            <span className="text-gray-500 dark:text-gray-400">Ticker chg </span>
+            <TickerChangeValue changes={verdict.tickerChanges} />
           </div>
           <div className="sm:col-span-2">
             <span className="text-gray-500 dark:text-gray-400">Short vol </span>
