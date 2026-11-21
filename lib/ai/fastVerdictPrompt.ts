@@ -6,6 +6,7 @@ import type { FastVerdict } from '@/lib/fast/types';
 import type { FastVerdictPromptSlice } from './types';
 import { formatNasdaqDeficiencySummary } from '@/lib/fast/fetchNasdaqDeficient';
 import { formatRegShoSummary } from '@/lib/fast/fetchRegSho';
+import { tickerChangeFlag } from '@/lib/fast/fetchTickerChanges';
 
 function nasdaqListingPromptLine(verdict: FastVerdict): string | null {
   const listing = verdict.nasdaqListing;
@@ -29,6 +30,16 @@ function regShoPromptLine(verdict: FastVerdict): string | null {
   }
   if (listing.status === 'not_listed') return 'not on Reg SHO threshold list';
   return 'Reg SHO list unavailable';
+}
+
+function tickerChangesPromptLine(verdict: FastVerdict): string | null {
+  const changes = verdict.tickerChanges;
+  if (!changes) return null;
+  if (changes.status === 'changed' || changes.status === 'ambiguous') {
+    return tickerChangeFlag(changes);
+  }
+  if (changes.status === 'unavailable') return 'ticker-change history unavailable';
+  return null;
 }
 
 export function fastVerdictToPromptSlice(verdict: FastVerdict): FastVerdictPromptSlice {
@@ -55,5 +66,6 @@ export function fastVerdictToPromptSlice(verdict: FastVerdict): FastVerdictPromp
     nasdaqListing: nasdaqListingPromptLine(verdict),
     regSho: regShoPromptLine(verdict),
     shortVolume: verdict.shortVolume?.sentence ?? null,
+    tickerChanges: tickerChangesPromptLine(verdict),
   };
 }

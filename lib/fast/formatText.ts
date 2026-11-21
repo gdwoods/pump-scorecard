@@ -2,6 +2,7 @@
 import type { FastVerdict } from './types';
 import { formatNasdaqDeficiencySummary } from './fetchNasdaqDeficient';
 import { formatRegShoSummary } from './fetchRegSho';
+import { formatTickerChangeSummary } from './fetchTickerChanges';
 
 function pct(n: number | null, digits = 0): string {
   if (n == null || Number.isNaN(n)) return 'n/a';
@@ -66,6 +67,10 @@ export function formatFastVerdictText(v: FastVerdict): string {
     lines.push('Nasdaq  not on noncompliant list');
   } else if (v.nasdaqListing) {
     lines.push('Nasdaq  list unavailable');
+  }
+
+  if (v.tickerChanges) {
+    lines.push(`Ticker  ${formatTickerChangeSummary(v.tickerChanges)}`);
   }
 
   if (v.regSho?.status === 'threshold') {

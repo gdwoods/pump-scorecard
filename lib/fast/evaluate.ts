@@ -10,6 +10,10 @@ import {
   nasdaqListingUnavailable,
 } from './fetchNasdaqDeficient';
 import { appendRegShoFlag, regShoUnavailable } from './fetchRegSho';
+import {
+  appendTickerChangeFlag,
+  tickerChangesUnavailable,
+} from './fetchTickerChanges';
 import type { Tier2Bundle } from './fetchTier2';
 import type { FastVerdict } from './types';
 
@@ -45,6 +49,9 @@ export function buildFastVerdict(
     ? tier2.nasdaq.value
     : nasdaqListingUnavailable();
   const regSho = tier2.regSho?.ok ? tier2.regSho.value : regShoUnavailable();
+  const tickerChanges = tier2.tickerChanges?.ok
+    ? tier2.tickerChanges.value
+    : tickerChangesUnavailable(ticker);
 
   const session = snap?.session ?? 'closed';
   let todayMovePct = snap?.todayMovePct ?? null;
@@ -148,9 +155,9 @@ export function buildFastVerdict(
     derivedOfferingAbility,
   });
 
-  const flags = appendRegShoFlag(
-    appendNasdaqListingFlag([...walk.flags], nasdaqListing),
-    regSho
+  const flags = appendTickerChangeFlag(
+    appendRegShoFlag(appendNasdaqListingFlag([...walk.flags], nasdaqListing), regSho),
+    tickerChanges
   );
   if (newsBundle?.tickerRecycleWarning) {
     flags.push('tickerRecycleWarning — old news may be from prior ticker occupant');
@@ -203,6 +210,7 @@ export function buildFastVerdict(
     },
     nasdaqListing,
     regSho,
+    tickerChanges,
     flags,
     unavailable,
   };

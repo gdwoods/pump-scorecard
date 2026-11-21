@@ -9,7 +9,14 @@ import { settleSource, withTimeout, type SettledSource } from './withTimeout';
 import { fetchBurnRunway, type BurnRunwayData } from './fetchBurn';
 import { lookupNasdaqDeficient } from './fetchNasdaqDeficient';
 import { lookupRegSho } from './fetchRegSho';
-import type { DailyBar, FilingSignal, NasdaqListing, RegShoListing } from './types';
+import { fetchTickerChanges } from './fetchTickerChanges';
+import type {
+  DailyBar,
+  FilingSignal,
+  NasdaqListing,
+  RegShoListing,
+  TickerChanges,
+} from './types';
 
 const SEC_UA = 'pump-scorecard short-check (garthwoods@gmail.com)';
 
@@ -384,11 +391,12 @@ export type Tier2Bundle = {
   burn: SettledSource<BurnRunwayData>;
   nasdaq: SettledSource<NasdaqListing>;
   regSho: SettledSource<RegShoListing>;
+  tickerChanges: SettledSource<TickerChanges>;
 };
 
 export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
   const ms = T.timeouts.perSourceMs;
-  const [snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn, nasdaq, regSho] =
+  const [snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn, nasdaq, regSho, tickerChanges] =
     await Promise.all([
       settleSource('polygon-snapshot', Math.min(ms, 800), () => fetchPolygonSnapshot(ticker)),
       settleSource('polygon-aggs', Math.min(ms, 1000), () => fetchPolygonDailyBars(ticker)),
@@ -402,7 +410,20 @@ export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
       settleSource('burn-runway', Math.min(ms, 1200), () => fetchBurnRunway(ticker)),
       settleSource('nasdaq-deficient', 4000, () => lookupNasdaqDeficient(ticker)),
       settleSource('regsho-threshold', 8000, () => lookupRegSho(ticker)),
+      settleSource('ticker-changes', 4000, () => fetchTickerChanges(ticker)),
     ]);
 
-  return { snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn, nasdaq, regSho };
+  return {
+    snapshot,
+    bars,
+    fundamentals,
+    filings,
+    borrow,
+    news,
+    droppiness,
+    burn,
+    nasdaq,
+    regSho,
+    tickerChanges,
+  };
 }
