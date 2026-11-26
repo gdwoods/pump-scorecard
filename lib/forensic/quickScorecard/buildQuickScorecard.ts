@@ -117,10 +117,23 @@ function scoreDelisting(input: QuickScorecardInput, now: Date): QuickScoreMetric
   const deficiency = events.filter((e) => e.type === 'nasdaq_deficiency');
   const compliance = events.filter((e) => e.type === 'nasdaq_compliance');
   const splits = events.filter((e) => e.type === 'reverse_split' && !e.isRetrospective);
+  const official = input.fastVerdict?.nasdaqListing;
+  const officialNoncompliant = official?.status === 'noncompliant';
 
-  if (deficiency.length) {
+  // Official Nasdaq list and CP deficiency notices are the same risk class —
+  // count once, but prefer the official list for verification.
+  if (officialNoncompliant || deficiency.length) {
     value += 7;
-    notes.push(`${deficiency.length} Nasdaq deficiency notice(s) in CP window`);
+    if (officialNoncompliant) {
+      notes.push(
+        official.summary
+          ? `Nasdaq noncompliant list — ${official.summary}`
+          : 'On Nasdaq official noncompliant list'
+      );
+    }
+    if (deficiency.length) {
+      notes.push(`${deficiency.length} Nasdaq deficiency notice(s) in CP window`);
+    }
   }
   if (splits.length) {
     const recent = splits.some((e) => e.eventDate && daysAgo(e.eventDate, now) <= 365);
@@ -131,21 +144,25 @@ function scoreDelisting(input: QuickScorecardInput, now: Date): QuickScoreMetric
     value += 1;
     notes.push('Upcoming reverse split detected');
   }
-  if (compliance.length && !deficiency.length) {
+  if (compliance.length && !officialNoncompliant && !deficiency.length) {
     value = Math.max(0, value - 2);
     notes.push('Recent compliance regained — reduced delisting pressure');
   }
-  if (!notes.length && cp?.available === false) {
+  if (!notes.length && cp?.available === false && official?.status !== 'not_listed') {
     return metric('delisting', 'Delisting', null, 'unknown', 'Capital Pressure unavailable.');
   }
   if (!notes.length) {
-    return metric('delisting', 'Delisting', 1, 'estimated', 'No deficiency or split signals in CP window.');
+    const cleanSummary =
+      official?.status === 'not_listed'
+        ? 'Not on Nasdaq noncompliant list; no deficiency or split signals in CP window.'
+        : 'No deficiency or split signals in CP window.';
+    return metric('delisting', 'Delisting', 1, 'estimated', cleanSummary);
   }
   return metric(
     'delisting',
     'Delisting',
     clamp10(value),
-    deficiency.length ? 'verified' : 'estimated',
+    officialNoncompliant || deficiency.length ? 'verified' : 'estimated',
     notes.join('; ')
   );
 }

@@ -347,4 +347,36 @@ describe('buildDilutionBrief', () => {
       dataCompleteness: 0.8,
     });
   });
+
+  it('surfaces Nasdaq noncompliant as a status pill, incentive row, and source', () => {
+    const brief = buildDilutionBrief({
+      ticker: 'ADGM',
+      fastVerdict: baseVerdict({
+        ticker: 'ADGM',
+        nasdaqListing: {
+          status: 'noncompliant',
+          issuerName: 'Adagio Medical',
+          market: 'NASDAQ Capital Market',
+          deficiencies: [{ type: 'Bid Price', notificationDate: '6/12/2026' }],
+          sourceUrl: 'https://www.nasdaq.com/market-activity/stocks/non-compliant-company-list',
+        },
+      }),
+      quickScorecard: scorecardFrom({
+        ticker: 'ADGM',
+        fastVerdict: {
+          nasdaqListing: {
+            status: 'noncompliant',
+            summary: 'Bid Price (6/12/2026)',
+          },
+        },
+      }),
+    });
+
+    expect(brief!.pills.some((p) => p.id === 'nasdaq' && p.tone === 'risk')).toBe(true);
+    const incentive = brief!.pillars.find((p) => p.id === 'incentive');
+    expect(incentive?.rows.find((r) => r.label === 'Nasdaq listing')?.value).toMatch(/Noncompliant/);
+    expect(
+      brief!.sources.some((s) => /Nasdaq noncompliant/i.test(s.label))
+    ).toBe(true);
+  });
 });

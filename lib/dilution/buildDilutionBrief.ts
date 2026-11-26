@@ -124,6 +124,17 @@ function buildPills(input: DilutionBriefInput): DilutionStatusPill[] {
   const qs = input.quickScorecard;
   const extracted = input.shortCheck?.extracted;
 
+  const listing = fv?.nasdaqListing;
+  if (listing?.status === 'noncompliant') {
+    const firstNotice = listing.deficiencies[0]?.notificationDate ?? null;
+    pills.push({
+      id: 'nasdaq',
+      label: 'Nasdaq noncompliant',
+      asOf: formatDilutionAsOf(firstNotice),
+      tone: 'risk',
+    });
+  }
+
   const atmEvent = cp?.events?.find((e) => e.type === 'atm_program' && !e.isRetrospective);
   const shelfEvent = cp?.events?.find((e) => e.type === 'shelf_registration' && !e.isRetrospective);
   const dtAtm = (extracted?.atmShelfStatus ?? '').toLowerCase();
@@ -356,6 +367,21 @@ function incentiveRows(input: DilutionBriefInput): DilutionPillar['rows'] {
   const qs = input.quickScorecard;
   const extracted = input.shortCheck?.extracted;
   const rows: DilutionPillar['rows'] = [];
+
+  const listing = fv?.nasdaqListing;
+  if (listing?.status === 'noncompliant') {
+    const summary = listing.deficiencies
+      .map((d) => (d.notificationDate ? `${d.type} (${d.notificationDate})` : d.type))
+      .filter(Boolean)
+      .join('; ');
+    rows.push({
+      label: 'Nasdaq listing',
+      value: summary ? `Noncompliant — ${summary}` : 'On official noncompliant list',
+      asOf: formatDilutionAsOf(listing.deficiencies[0]?.notificationDate),
+    });
+  } else if (listing?.status === 'not_listed') {
+    rows.push({ label: 'Nasdaq listing', value: 'Not on noncompliant list' });
+  }
 
   if (fv?.news.class) {
     rows.push({
@@ -704,6 +730,15 @@ function buildSources(input: DilutionBriefInput): DilutionSource[] {
     pushSource(sources, seen, {
       label: 'Capital Pressure evidence',
       url: input.shortCheck.secFilingUrl,
+    });
+  }
+
+  const nasdaq = input.fastVerdict?.nasdaqListing;
+  if (nasdaq?.status === 'noncompliant' && nasdaq.sourceUrl) {
+    pushSource(sources, seen, {
+      label: 'Nasdaq noncompliant company list',
+      url: nasdaq.sourceUrl,
+      asOf: formatDilutionAsOf(nasdaq.deficiencies[0]?.notificationDate),
     });
   }
 

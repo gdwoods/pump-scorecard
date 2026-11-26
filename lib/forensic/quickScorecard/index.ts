@@ -1,6 +1,7 @@
 import type { FastVerdict } from '@/lib/fast/types';
 import type { CapitalPressureResult } from '@/lib/capitalPressure/types';
 import type { ThesisPromptInput } from '@/lib/ai/types';
+import { formatNasdaqDeficiencySummary } from '@/lib/fast/fetchNasdaqDeficient';
 import { buildQuickScorecard, formatQuickScorecardForPrompt } from './buildQuickScorecard';
 import { mapCapitalPressureSlice } from './mapCapitalPressureSlice';
 import type { QuickScorecard, QuickScorecardInput } from './types';
@@ -14,6 +15,34 @@ export type {
 } from './types';
 export { buildQuickScorecard, formatQuickScorecardForPrompt };
 export { mapCapitalPressureSlice };
+
+function nasdaqListingSliceFromFast(
+  listing: FastVerdict['nasdaqListing']
+): NonNullable<NonNullable<QuickScorecardInput['fastVerdict']>['nasdaqListing']> | undefined {
+  if (!listing) return undefined;
+  return {
+    status: listing.status,
+    summary:
+      listing.status === 'noncompliant' ? formatNasdaqDeficiencySummary(listing) || null : null,
+    market: listing.market ?? null,
+  };
+}
+
+/** Map thesis prompt line back into a structured soft listing status. */
+export function nasdaqListingSliceFromPromptLine(
+  line: string | null | undefined
+): NonNullable<NonNullable<QuickScorecardInput['fastVerdict']>['nasdaqListing']> | undefined {
+  if (!line) return undefined;
+  if (line.includes('not on Nasdaq')) return { status: 'not_listed' };
+  if (/unavailable/i.test(line)) return { status: 'unavailable' };
+  if (/noncompliant/i.test(line)) {
+    const summary = line.includes('—')
+      ? line.split('—').slice(1).join('—').trim() || null
+      : null;
+    return { status: 'noncompliant', summary };
+  }
+  return { status: 'unavailable' };
+}
 
 export function toQuickScorecardInputFromScan(
   ticker: string,
@@ -41,6 +70,7 @@ export function toQuickScorecardInputFromScan(
           priorDayPct: fastVerdict.runner.priorDayPct,
           threeDayRunPct: fastVerdict.runner.threeDayRunPct,
           dataCompleteness: fastVerdict.dataCompleteness,
+          nasdaqListing: nasdaqListingSliceFromFast(fastVerdict.nasdaqListing),
         }
       : undefined,
     fundamentals: {
@@ -78,6 +108,7 @@ export function toQuickScorecardInputFromThesis(
           priorDayPct: fv.priorDayPct,
           threeDayRunPct: fv.threeDayRunPct,
           dataCompleteness: fv.dataCompleteness,
+          nasdaqListing: nasdaqListingSliceFromPromptLine(fv.nasdaqListing),
         }
       : undefined,
     fundamentals: {
