@@ -371,6 +371,26 @@ export default function FastVerdictCard({
             <span className="text-gray-500 dark:text-gray-400">Ticker chg </span>
             <TickerChangeValue changes={verdict.tickerChanges} />
           </div>
+          {verdict.dilutionTrackerRunway?.status === "ok" &&
+            (verdict.dilutionTrackerRunway.runwayMonths != null ||
+              verdict.dilutionTrackerRunway.cashMillions != null) && (
+              <div className="sm:col-span-2">
+                <span className="text-gray-500 dark:text-gray-400">Runway (DilutionTracker) </span>
+                {[
+                  verdict.dilutionTrackerRunway.runwayMonths != null
+                    ? `~${verdict.dilutionTrackerRunway.runwayMonths.toFixed(1)} mo`
+                    : null,
+                  verdict.dilutionTrackerRunway.cashMillions != null
+                    ? `cash $${verdict.dilutionTrackerRunway.cashMillions.toFixed(1)}M`
+                    : null,
+                  verdict.dilutionTrackerRunway.asOf
+                    ? `last report ${verdict.dilutionTrackerRunway.asOf.slice(0, 10)}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
+              </div>
+            )}
           <div className="sm:col-span-2">
             <span className="text-gray-500 dark:text-gray-400">Short vol </span>
             {shortVolumeLoading && !verdict.shortVolume ? (

@@ -73,6 +73,16 @@ export function formatFastVerdictText(v: FastVerdict): string {
     lines.push(`Ticker  ${formatTickerChangeSummary(v.tickerChanges)}`);
   }
 
+  const dtRunway = v.dilutionTrackerRunway;
+  if (dtRunway?.status === 'ok' && (dtRunway.runwayMonths != null || dtRunway.cashMillions != null)) {
+    const parts = [
+      dtRunway.runwayMonths != null ? `~${num(dtRunway.runwayMonths, 1)}mo runway` : null,
+      dtRunway.cashMillions != null ? `cash $${num(dtRunway.cashMillions, 1)}M` : null,
+      dtRunway.asOf ? `last report ${dtRunway.asOf.slice(0, 10)}` : null,
+    ].filter(Boolean);
+    lines.push(`Runway  DilutionTracker ${parts.join(', ')}`);
+  }
+
   if (v.regSho?.status === 'threshold') {
     const summary = formatRegShoSummary(v.regSho);
     lines.push(`Reg SHO  THRESHOLD${summary ? ` — ${summary}` : ''}`);

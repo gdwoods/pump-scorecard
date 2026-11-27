@@ -68,6 +68,7 @@ function skipBundle(
     nasdaq: skip,
     regSho: skip,
     tickerChanges,
+    dtCash: skip,
   };
 }
 

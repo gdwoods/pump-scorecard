@@ -16,6 +16,7 @@ import {
 } from './fetchTickerChanges';
 import type { Tier2Bundle } from './fetchTier2';
 import type { FastVerdict } from './types';
+import { toRunwayContext } from '../dilutiontracker/fetchers';
 
 export function buildFastVerdict(
   ticker: string,
@@ -52,6 +53,9 @@ export function buildFastVerdict(
   const tickerChanges = tier2.tickerChanges?.ok
     ? tier2.tickerChanges.value
     : tickerChangesUnavailable(ticker);
+  const dilutionTrackerRunway = toRunwayContext(
+    tier2.dtCash?.ok ? tier2.dtCash.value : { status: 'unavailable', reason: 'network' }
+  );
 
   const session = snap?.session ?? 'closed';
   let todayMovePct = snap?.todayMovePct ?? null;
@@ -84,7 +88,10 @@ export function buildFastVerdict(
     classified.matchedTerms.weasel.length > 0;
 
   const burnData = tier2.burn.ok ? tier2.burn.value : null;
-  const runwayMonths = burnData?.runwayMonths ?? null;
+  // Walk-away runway: Polygon/Finnhub burn first; DilutionTracker cash runway only fills a gap.
+  const dtRunwayMonths =
+    dilutionTrackerRunway.status === 'ok' ? dilutionTrackerRunway.runwayMonths : null;
+  const runwayMonths = burnData?.runwayMonths ?? dtRunwayMonths;
   const quarterlyBurn = burnData?.quarterlyBurn ?? null;
   const positiveFcf = burnData?.positiveFcf ?? false;
 
@@ -211,6 +218,7 @@ export function buildFastVerdict(
     nasdaqListing,
     regSho,
     tickerChanges,
+    dilutionTrackerRunway,
     flags,
     unavailable,
   };

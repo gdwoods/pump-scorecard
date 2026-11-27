@@ -10,6 +10,11 @@ import { tickerCache, getTickerCacheKey, isCacheValid, getCachedData, setCachedD
 import { computeDroppiness } from "@/lib/droppiness/compute";
 import { persistDroppiness } from "@/lib/droppiness/kv";
 import { runCapitalPressure } from "@/lib/capitalPressure/run";
+import {
+  fetchDtCompanyProfile,
+  fetchDtMajorDevelopments,
+  fetchDtReverseSplits,
+} from "@/lib/dilutiontracker/fetchers";
 import { unavailableCapitalPressure } from "@/lib/capitalPressure/unavailable";
 import { computeLegacyWeightedRiskScore } from "@/lib/scan/legacyWeightedRiskScore";
 import { fetchOperatingNexus } from "@/lib/nexus/fetchOperatingNexus";
@@ -308,6 +313,18 @@ export async function GET(
         return [];
 }
     })();
+
+    // DilutionTracker reverse splits: fallback when EDGAR and Polygon have none. Never rejects.
+    const dtSplitsTask = fetchDtReverseSplits(upperTicker).then((r) =>
+      r.status === 'ok' ? r.data : []
+    );
+    // DilutionTracker company profile and "Our Take" articles (full Short Check only). Never reject.
+    const dtProfileTask = fetchDtCompanyProfile(upperTicker).then((r) =>
+      r.status === 'ok' ? r.data : null
+    );
+    const dtDevelopmentsTask = fetchDtMajorDevelopments(upperTicker).then((r) =>
+      r.status === 'ok' ? r.data : []
+    );
 
     const polygonMetaTask = (async () => {
 try {
@@ -686,6 +703,7 @@ try {
         cik: secData.cik,
         submissions: secData.submissions,
         polygonSplits: filteredSplits,
+        dilutionTrackerSplits: await dtSplitsTask,
         context: {
           floatShares,
           shortFloat: toPercent(shortFloat),
@@ -776,6 +794,10 @@ try {
       sentiment: sentimentData,
       insiderTransactions,
       capitalPressure,
+      dilutionTracker: {
+        profile: await dtProfileTask,
+        developments: await dtDevelopmentsTask,
+      },
     };
     
     // Cache the response data before returning (cacheKey already defined at top of try block)
