@@ -1,10 +1,11 @@
 import { inferEventCertainty } from './certainty';
 import type { CapitalEvent, EventCertainty } from './types';
+import type { DtSplit } from '../dilutiontracker/fetchers';
 
 export type UpcomingReverseSplitInfo = {
   effectiveDate: string;
   ratio?: string;
-  source: 'edgar' | 'polygon';
+  source: 'edgar' | 'polygon' | 'dilutiontracker';
   summary: string;
   documentUrl?: string;
   certainty?: EventCertainty;
@@ -79,13 +80,43 @@ export function detectUpcomingReverseSplitFromPolygon(
   };
 }
 
+export function detectUpcomingReverseSplitFromDilutionTracker(
+  splits: DtSplit[] | undefined,
+  asOf: string
+): UpcomingReverseSplitInfo | null {
+  if (!splits?.length) return null;
+  const today = asOf.slice(0, 10);
+  const next = splits
+    .filter((s) => s.status !== 'completed' && s.date > today)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  if (!next) return null;
+  if (next.ratio) {
+    return {
+      effectiveDate: next.date,
+      ratio: next.ratio,
+      source: 'dilutiontracker',
+      summary: `Scheduled reverse split (${next.ratio}) per DilutionTracker.`,
+      certainty: 'set',
+    };
+  }
+  return {
+    effectiveDate: next.date,
+    source: 'dilutiontracker',
+    summary: 'Shareholder-approved reverse split per DilutionTracker; ratio not yet set.',
+    certainty: 'possible',
+  };
+}
+
 export function mergeUpcomingReverseSplit(
   events: CapitalEvent[],
   polygonSplits: Array<{ date: string; ratio: string }> | undefined,
-  asOf: string
+  asOf: string,
+  dilutionTrackerSplits?: DtSplit[]
 ): UpcomingReverseSplitInfo | null {
+  // DilutionTracker is a fallback only, so existing EDGAR/Polygon results are unchanged.
   return (
     detectUpcomingReverseSplitFromEvents(events, asOf) ??
-    detectUpcomingReverseSplitFromPolygon(polygonSplits, asOf)
+    detectUpcomingReverseSplitFromPolygon(polygonSplits, asOf) ??
+    detectUpcomingReverseSplitFromDilutionTracker(dilutionTrackerSplits, asOf)
   );
 }

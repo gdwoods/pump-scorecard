@@ -124,7 +124,7 @@ export type CapitalPressureResult = {
   upcomingReverseSplit?: {
     effectiveDate: string;
     ratio?: string;
-    source: 'edgar' | 'polygon';
+    source: 'edgar' | 'polygon' | 'dilutiontracker';
     summary: string;
     documentUrl?: string;
   } | null;

@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import ShortCheckScoreBreakdown from "./ShortCheckScoreBreakdown";
 import DtBadgeGrid from "./DtBadgeGrid";
+import DilutionTrackerCompanyCard from "./DilutionTrackerCompanyCard";
 import ScoringGuideModal from "./ScoringGuideModal";
 import { ShortCheckResult } from "@/lib/shortCheckScoring";
 import { ExtractedData } from "@/lib/shortCheckTypes";
@@ -461,6 +462,7 @@ export default function ShortCheckResults({
 
       {/* DilutionTracker badge grid (above Fast Verdict) */}
       {extractedData && <DtBadgeGrid extractedData={extractedData} />}
+      <DilutionTrackerCompanyCard data={pumpScorecardData?.dilutionTracker} />
 
       {afterQuickActions}
 

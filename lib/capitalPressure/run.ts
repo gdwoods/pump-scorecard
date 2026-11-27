@@ -15,6 +15,7 @@ import {
   type IndexedFiling,
 } from './edgar';
 import { mergeUpcomingReverseSplit } from './upcomingReverseSplit';
+import type { DtSplit } from '../dilutiontracker/fetchers';
 import { parseCapitalPressureDocuments } from './parse';
 import { scoreCapitalPressure } from '../capitalPressureScoring';
 import type {
@@ -45,6 +46,8 @@ export type RunCapitalPressureArgs = {
   submissions?: SubmissionsJson | null;
   /** Polygon split history for upcoming reverse-split detection. */
   polygonSplits?: Array<{ date: string; ratio: string }>;
+  /** DilutionTracker reverse splits (fallback for upcoming-split detection). */
+  dilutionTrackerSplits?: DtSplit[];
   context?: CapitalPressureScanContext;
   fetchBudgetMs?: number;
 };
@@ -174,7 +177,8 @@ export async function runCapitalPressure(
     const upcomingReverseSplit = mergeUpcomingReverseSplit(
       parsed.events,
       args.polygonSplits,
-      asOf
+      asOf,
+      args.dilutionTrackerSplits
     );
 
     return {

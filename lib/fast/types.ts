@@ -1,5 +1,6 @@
 // lib/fast/types.ts
 import type { RegShoShortVolumeReport } from './regShoShortVolume';
+import type { DtRunwayContext } from '../dilutiontracker/fetchers';
 
 export type FastVerdictKind = 'NO_TRADE' | 'WATCH' | 'REVIEW';
 
@@ -121,6 +122,8 @@ export type FastVerdict = {
   shortVolume?: RegShoShortVolumeReport;
   /** AskEdgar symbol-change history — overlay, not a walk-away. */
   tickerChanges?: TickerChanges;
+  /** DilutionTracker cash runway — display context only; walk-aways use fundamentals.runwayMonths. */
+  dilutionTrackerRunway?: DtRunwayContext;
   flags: string[];
   unavailable: string[];
 };

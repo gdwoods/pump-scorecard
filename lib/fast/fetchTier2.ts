@@ -10,6 +10,11 @@ import { fetchBurnRunway, type BurnRunwayData } from './fetchBurn';
 import { lookupNasdaqDeficient } from './fetchNasdaqDeficient';
 import { lookupRegSho } from './fetchRegSho';
 import { fetchTickerChanges } from './fetchTickerChanges';
+import {
+  fetchDtCashPosition,
+  type DtCashPosition,
+} from '../dilutiontracker/fetchers';
+import type { DtResult } from '../dilutiontracker/client';
 import type {
   DailyBar,
   FilingSignal,
@@ -392,11 +397,12 @@ export type Tier2Bundle = {
   nasdaq: SettledSource<NasdaqListing>;
   regSho: SettledSource<RegShoListing>;
   tickerChanges: SettledSource<TickerChanges>;
+  dtCash: SettledSource<DtResult<DtCashPosition>>;
 };
 
 export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
   const ms = T.timeouts.perSourceMs;
-  const [snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn, nasdaq, regSho, tickerChanges] =
+  const [snapshot, bars, fundamentals, filings, borrow, news, droppiness, burn, nasdaq, regSho, tickerChanges, dtCash] =
     await Promise.all([
       settleSource('polygon-snapshot', Math.min(ms, 800), () => fetchPolygonSnapshot(ticker)),
       settleSource('polygon-aggs', Math.min(ms, 1000), () => fetchPolygonDailyBars(ticker)),
@@ -411,6 +417,7 @@ export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
       settleSource('nasdaq-deficient', 4000, () => lookupNasdaqDeficient(ticker)),
       settleSource('regsho-threshold', 8000, () => lookupRegSho(ticker)),
       settleSource('ticker-changes', 4000, () => fetchTickerChanges(ticker)),
+      settleSource('dilutiontracker-cash', Math.min(ms, 2000), () => fetchDtCashPosition(ticker)),
     ]);
 
   return {
@@ -425,5 +432,6 @@ export async function fetchAllTier(ticker: string): Promise<Tier2Bundle> {
     nasdaq,
     regSho,
     tickerChanges,
+    dtCash,
   };
 }
